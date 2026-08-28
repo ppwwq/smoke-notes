@@ -1,0 +1,16 @@
+{
+  "name": "@smoke-notes/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@dnd-kit/core": "latest",
+    "@dnd-kit/sortable": "latest",
+    "@dnd-kit/utilities": "latest",
+    "@smoke-notes/core": "workspace:*",
+    "lucide-react": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  }
+}
