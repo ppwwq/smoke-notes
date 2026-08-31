@@ -97,4 +97,7 @@ corepack pnpm --filter @smoke-notes/desktop package
 - Windows 安装包尚未进行代码签名。
 - 云端部署需要使用者自行准备 Supabase 与静态网站托管环境。
 - 开机启动应在实际安装后通过一次 Windows 注销或重启完成最终确认。
-- 仓库目前尚未附带开源许可证。
+
+## 开源许可证
+
+本项目使用 [MIT License](LICENSE)。你可以使用、修改、分发或商用本项目，但需要保留原始版权及许可证声明。
