@@ -1,0 +1,13 @@
+project_id = "smoke-notes"
+
+[auth]
+enable_anonymous_sign_ins = true
+
+[functions.create-pairing]
+verify_jwt = true
+
+[functions.redeem-pairing]
+verify_jwt = true
+
+[functions.apply-mutation]
+verify_jwt = true

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="120" fill="#111519"/>
+  <circle cx="256" cy="256" r="168" fill="none" stroke="#2d3941" stroke-width="3"/>
+  <circle cx="256" cy="256" r="132" fill="#1b2227" stroke="#8fb9cf" stroke-opacity=".45" stroke-width="2"/>
+  <text x="256" y="316" text-anchor="middle" font-family="serif" font-size="188" font-weight="600" fill="#edf3f6">烟</text>
+</svg>

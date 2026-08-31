@@ -13,10 +13,30 @@ export interface Notebook extends SyncFields {
   rank: number;
 }
 
+export type NoteColor =
+  "amber" | "rose" | "sage" | "sky" | "violet" | "graphite";
+export type NoteKind = "note" | "todo";
+
+export interface RichTextNode {
+  type?: string;
+  text?: string;
+  attrs?: Record<string, unknown>;
+  marks?: Array<{ type: string; attrs?: Record<string, unknown> }>;
+  content?: RichTextNode[];
+}
+
+export interface RichTextDocument extends RichTextNode {
+  type: "doc";
+  content: RichTextNode[];
+}
+
 export interface Note extends SyncFields {
   notebookId: EntityId;
+  kind: NoteKind;
   title: string;
+  contentJson: RichTextDocument;
   body: string;
+  color: NoteColor;
   rank: number;
   conflictOf: EntityId | null;
 }
@@ -28,8 +48,8 @@ export interface Todo extends SyncFields {
   rank: number;
 }
 
-export type SyncEntity = 'notebook' | 'note' | 'todo';
-export type SyncAction = 'upsert' | 'delete';
+export type SyncEntity = "notebook" | "note" | "todo";
+export type SyncAction = "upsert" | "delete";
 
 export interface SyncOperation {
   id: EntityId;
@@ -45,11 +65,23 @@ export interface SyncOperation {
 }
 
 export interface WindowState {
-  opacity: number;
+  backgroundOpacity: number;
   alwaysOnTop: boolean;
   width: number;
   height: number;
   x?: number;
   y?: number;
-  lastView: 'notes' | 'todos';
+  lastView: "notes" | "todos";
+}
+
+export interface NoteWindowState {
+  noteId: EntityId;
+  x?: number;
+  y?: number;
+  width: number;
+  height: number;
+  backgroundOpacity: number;
+  alwaysOnTop: boolean;
+  isOpen: boolean;
+  lastOpenedAt?: string;
 }

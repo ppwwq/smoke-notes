@@ -2,10 +2,13 @@ node_modules/
 .pnpm-store/
 .worktrees/
 dist/
+dist-electron/
 release/
+release-*/
 coverage/
 playwright-report/
 test-results/
+*.tsbuildinfo
 .env
 .env.*
 !.env.example

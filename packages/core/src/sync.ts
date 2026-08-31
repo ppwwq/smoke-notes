@@ -1,13 +1,12 @@
-import type { Table } from 'dexie';
-import { createConflictCopy } from './domain';
-import { SmokeNotesDatabase } from './database';
-import type { Note, Notebook, SyncEntity, SyncOperation, Todo } from './types';
+import type { Table } from "dexie";
+import { createConflictCopy } from "./domain";
+import { SmokeNotesDatabase } from "./database";
+import type { Note, Notebook, SyncEntity, SyncOperation, Todo } from "./types";
 
 export type RemoteRecord = Notebook | Note | Todo;
 
 export type PushResult =
-  | { status: 'applied' }
-  | { status: 'conflict'; record: RemoteRecord };
+  { status: "applied" } | { status: "conflict"; record: RemoteRecord };
 
 export interface RemoteChange {
   entity: SyncEntity;
@@ -16,7 +15,9 @@ export interface RemoteChange {
 
 export interface RemoteSyncAdapter {
   push(operation: SyncOperation): Promise<PushResult>;
-  pull(cursor: string | null): Promise<{ changes: RemoteChange[]; cursor: string }>;
+  pull(
+    cursor: string | null,
+  ): Promise<{ changes: RemoteChange[]; cursor: string }>;
 }
 
 export interface SyncEngineContext {
@@ -46,15 +47,15 @@ export class SyncEngine {
 
   async flush(): Promise<FlushResult> {
     const now = this.now();
-    const pending = (await this.database.operations.orderBy('createdAt').toArray()).filter(
-      (operation) => new Date(operation.nextAttemptAt) <= now,
-    );
+    const pending = (
+      await this.database.operations.orderBy("createdAt").toArray()
+    ).filter((operation) => new Date(operation.nextAttemptAt) <= now);
     const result: FlushResult = { applied: 0, conflicts: 0, failed: 0 };
 
     for (const operation of pending) {
       try {
         const pushed = await this.adapter.push(operation);
-        if (pushed.status === 'applied') {
+        if (pushed.status === "applied") {
           await this.database.operations.delete(operation.id);
           result.applied += 1;
         } else {
@@ -79,25 +80,37 @@ export class SyncEngine {
     const response = await this.adapter.pull(cursor);
     for (const change of response.changes) {
       const hasPendingLocalChange =
-        (await this.database.operations.where('entityId').equals(change.record.id).count()) > 0;
-      if (!hasPendingLocalChange) await this.tableFor(change.entity).put(change.record);
+        (await this.database.operations
+          .where("entityId")
+          .equals(change.record.id)
+          .count()) > 0;
+      if (!hasPendingLocalChange)
+        await this.tableFor(change.entity).put(change.record);
     }
     return response.cursor;
   }
 
-  private async preserveConflict(operation: SyncOperation, serverRecord: RemoteRecord): Promise<void> {
+  private async preserveConflict(
+    operation: SyncOperation,
+    serverRecord: RemoteRecord,
+  ): Promise<void> {
     const table = this.tableFor(operation.entity);
-    if (operation.entity !== 'note') {
-      await this.database.transaction('rw', table, this.database.operations, async () => {
-        await table.put(serverRecord);
-        await this.database.operations.delete(operation.id);
-      });
+    if (operation.entity !== "note") {
+      await this.database.transaction(
+        "rw",
+        table,
+        this.database.operations,
+        async () => {
+          await table.put(serverRecord);
+          await this.database.operations.delete(operation.id);
+        },
+      );
       return;
     }
 
     const local = await this.database.notes.get(operation.entityId);
     await this.database.transaction(
-      'rw',
+      "rw",
       this.database.notes,
       this.database.operations,
       async () => {
@@ -115,9 +128,9 @@ export class SyncEngine {
         await this.database.operations.add({
           id: this.createId(),
           deviceId: this.context.deviceId,
-          entity: 'note',
+          entity: "note",
           entityId: copy.id,
-          action: 'upsert',
+          action: "upsert",
           baseVersion: 0,
           payload: { ...copy },
           attempts: 0,
@@ -129,10 +142,11 @@ export class SyncEngine {
   }
 
   private tableFor(entity: SyncEntity): Table<RemoteRecord, string> {
-    if (entity === 'notebook') {
+    if (entity === "notebook") {
       return this.database.notebooks as unknown as Table<RemoteRecord, string>;
     }
-    if (entity === 'note') return this.database.notes as unknown as Table<RemoteRecord, string>;
+    if (entity === "note")
+      return this.database.notes as unknown as Table<RemoteRecord, string>;
     return this.database.todos as unknown as Table<RemoteRecord, string>;
   }
 }

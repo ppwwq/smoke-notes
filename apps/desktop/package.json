@@ -1,28 +1,27 @@
 {
   "name": "@smoke-notes/desktop",
   "version": "0.1.0",
+  "description": "Windows 便笺式烟雾玻璃便签与待办",
+  "author": "Smoke Notes",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.cjs",
   "scripts": {
     "dev": "concurrently -k \"vite --port 5173\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "build:renderer": "vite build",
-    "build:electron": "tsup electron/main.ts electron/preload.ts --format cjs --out-dir dist-electron --clean",
+    "build:electron": "tsup --config tsup.config.ts",
     "build": "pnpm build:renderer && pnpm build:electron",
     "package": "pnpm build && electron-builder --win nsis"
   },
-  "dependencies": {
+  "devDependencies": {
     "@smoke-notes/core": "workspace:*",
     "@smoke-notes/ui": "workspace:*",
-    "electron-store": "latest",
-    "react": "latest",
-    "react-dom": "latest"
-  },
-  "devDependencies": {
     "@vitejs/plugin-react": "latest",
     "concurrently": "latest",
     "electron": "latest",
     "electron-builder": "latest",
+    "react": "latest",
+    "react-dom": "latest",
     "tsup": "latest",
     "vite": "latest",
     "wait-on": "latest"
@@ -33,9 +32,16 @@
     "directories": {
       "output": "release"
     },
-    "files": ["dist/**/*", "dist-electron/**/*", "package.json"],
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png",
       "artifactName": "SmokeNotes-Setup-${version}.${ext}"
     },
     "nsis": {
