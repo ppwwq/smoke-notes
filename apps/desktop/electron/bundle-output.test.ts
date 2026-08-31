@@ -29,6 +29,17 @@ describe("packaged main-process bundle", () => {
     expect(source).not.toContain('require("@smoke-notes/core")');
   });
 
+  it("uses the same app identity artwork for the installer and tray", () => {
+    const installerIcon = readFileSync(
+      resolve(process.cwd(), "apps/desktop/build/icon.png"),
+    );
+    const trayIcon = readFileSync(
+      resolve(process.cwd(), "apps/desktop/public/icon-32.png"),
+    );
+
+    expect(trayIcon.equals(installerIcon)).toBe(true);
+  });
+
   it("exposes only the validated background, window, and note-switch IPC", () => {
     const main = readFileSync(
       resolve(process.cwd(), "apps/desktop/dist-electron/main.cjs"),
