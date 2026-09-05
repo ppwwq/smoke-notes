@@ -1,10 +1,11 @@
 {
   "name": "smoke-notes",
-  "version": "0.1.2",
+  "version": "0.1.5",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.19.0",
   "scripts": {
+    "pretest": "pnpm --filter @smoke-notes/desktop build:electron",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -b",

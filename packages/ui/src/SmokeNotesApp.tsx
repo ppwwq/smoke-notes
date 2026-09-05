@@ -28,7 +28,10 @@ import { NotesWorkspace } from "./components/NotesWorkspace";
 import { TodoWorkspace } from "./components/TodoWorkspace";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { PairingDialog } from "./components/PairingDialog";
-import { RichNoteEditor } from "./components/RichNoteEditor";
+import {
+  RichNoteEditor,
+  type RichNoteEditorHandle,
+} from "./components/RichNoteEditor";
 import type { AppPlatform, DesktopBridge, PairingController } from "./types";
 import "./styles.css";
 
@@ -69,6 +72,7 @@ export function SmokeNotesApp({
     () => typeof navigator === "undefined" || navigator.onLine,
   );
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.82);
+  const editorRef = useRef<RichNoteEditorHandle>(null);
 
   const refresh = useCallback(
     async (preferredNotebookId?: string | null) => {
@@ -142,7 +146,23 @@ export function SmokeNotesApp({
     return () => window.clearTimeout(timer);
   }, [lastTrashed]);
 
+  async function saveBeforeLeaving() {
+    try {
+      await editorRef.current?.flushSave();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function showTodos() {
+    if (!(await saveBeforeLeaving())) return;
+    setView("todos");
+    setMobileNavOpen(false);
+  }
+
   async function selectNotebook(id: string) {
+    if (!(await saveBeforeLeaving())) return;
     setView("notes");
     selectedNotebookIdRef.current = id;
     setSelectedNotebookId(id);
@@ -203,11 +223,9 @@ export function SmokeNotesApp({
           selectedNotebookId={selectedNotebookId}
           view={view}
           onSelectNotebook={(id) => void selectNotebook(id)}
-          onShowTodos={() => {
-            setView("todos");
-            setMobileNavOpen(false);
-          }}
+          onShowTodos={() => void showTodos()}
           onCreateNotebook={async (name) => {
+            if (!(await saveBeforeLeaving())) return;
             const created = await repository.createNotebook(name);
             setView("notes");
             await refreshAfterMutation(created.id);
@@ -221,6 +239,7 @@ export function SmokeNotesApp({
             await refreshAfterMutation(selectedNotebookId);
           }}
           onTrashNotebook={async (id) => {
+            if (!(await saveBeforeLeaving())) return;
             const notebook = notebooks.find((item) => item.id === id);
             await repository.trashNotebook(id);
             setLastTrashed({
@@ -278,7 +297,9 @@ export function SmokeNotesApp({
               <button
                 type="button"
                 aria-label="返回便签列表"
-                onClick={() => setSelectedNoteId(null)}
+                onClick={async () => {
+                  if (await saveBeforeLeaving()) setSelectedNoteId(null);
+                }}
               >
                 <ArrowLeft size={18} />
               </button>
@@ -287,6 +308,7 @@ export function SmokeNotesApp({
                 type="button"
                 aria-label="删除便签"
                 onClick={async () => {
+                  if (!(await saveBeforeLeaving())) return;
                   await repository.trashNote(selectedNote.id);
                   setLastTrashed({
                     entity: "note",
@@ -301,6 +323,7 @@ export function SmokeNotesApp({
               </button>
             </header>
             <RichNoteEditor
+              ref={editorRef}
               note={selectedNote}
               onSave={async (changes) => {
                 const updated = await repository.updateNote(
@@ -370,7 +393,7 @@ export function SmokeNotesApp({
         <button
           type="button"
           className={view === "todos" ? "active" : ""}
-          onClick={() => setView("todos")}
+          onClick={() => void showTodos()}
         >
           <CheckCircle2 size={19} />
           <span>待办</span>

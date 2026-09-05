@@ -26,6 +26,7 @@
 ### Task 1: 登录启动领域适配器
 
 **Files:**
+
 - Create: `apps/desktop/electron/launch-at-login.ts`
 - Create: `apps/desktop/electron/launch-at-login.test.ts`
 
@@ -61,7 +62,9 @@ describe("launch at login", () => {
     const { app } = fakeApp(true);
     expect(readLaunchAtLogin(app)).toBe(false);
     expect(writeLaunchAtLogin(app, true)).toBe(true);
-    expect(app.setLoginItemSettings).toHaveBeenCalledWith({ openAtLogin: true });
+    expect(app.setLoginItemSettings).toHaveBeenCalledWith({
+      openAtLogin: true,
+    });
     expect(readLaunchAtLogin(app)).toBe(true);
   });
 
@@ -123,6 +126,7 @@ git commit -m "feat: add launch at login adapter"
 ### Task 2: 安全 IPC 与 preload 桥接
 
 **Files:**
+
 - Modify: `apps/desktop/electron/main.ts`
 - Modify: `apps/desktop/electron/preload.ts`
 - Modify: `apps/desktop/electron/bundle-output.test.ts`
@@ -221,6 +225,7 @@ git commit -m "feat: expose launch at login setting"
 ### Task 3: 设置界面开关与失败回退
 
 **Files:**
+
 - Modify: `packages/ui/tests/SmokeNotesApp.test.tsx`
 - Modify: `packages/ui/src/components/SettingsPanel.tsx`
 - Modify: `packages/ui/src/styles.css`
@@ -305,10 +310,9 @@ void bridge
       const previous = launchAtLogin;
       const requested = !previous;
       setLaunchAtLogin(requested);
-      void bridge.setLaunchAtLogin(requested).then(
-        setLaunchAtLogin,
-        () => setLaunchAtLogin(previous),
-      );
+      void bridge
+        .setLaunchAtLogin(requested)
+        .then(setLaunchAtLogin, () => setLaunchAtLogin(previous));
     }}
   >
     <span />
@@ -348,6 +352,7 @@ git commit -m "feat: add launch at login toggle"
 ### Task 4: 全量验证与安装包
 
 **Files:**
+
 - Verify only; do not edit source unless a check exposes a defect.
 
 - [ ] **Step 1: 运行全量测试**

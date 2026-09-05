@@ -1,13 +1,13 @@
 {
   "name": "@smoke-notes/desktop",
-  "version": "0.1.2",
+  "version": "0.1.5",
   "description": "Windows 便笺式烟雾玻璃便签与待办",
   "author": "Smoke Notes",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.cjs",
   "scripts": {
-    "dev": "concurrently -k \"vite --port 5173\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "dev": "pnpm build:electron && concurrently -k \"vite --host 127.0.0.1 --port 5173 --strictPort\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "build:renderer": "vite build",
     "build:electron": "tsup --config tsup.config.ts",
     "build": "pnpm build:renderer && pnpm build:electron",

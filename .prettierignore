@@ -1,7 +1,12 @@
 **/dist/
 **/dist-electron/
 **/release/
+**/release-*/
 **/node_modules/
 **/*.tsbuildinfo
 .smoke-test-profile-*/
 pnpm-lock.yaml
+work/
+outputs/
+@smoke-notesdesktop/
+.worktrees/

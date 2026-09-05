@@ -19,6 +19,8 @@ supabase functions deploy apply-mutation
 
 ## 2. 配置构建变量
 
+两个应用均读取仓库根目录的 `.env`，不要只在 `apps/web` 或 `apps/desktop` 中填写配置。托管平台提供的同名环境变量优先于文件。
+
 在本地 `.env` 以及 Cloudflare Pages 的 Production/Preview 环境中设置：
 
 ```text
@@ -28,6 +30,14 @@ VITE_WEB_APP_URL=https://YOUR_PROJECT.pages.dev
 ```
 
 不要把 Service Role Key 放进 `.env` 或前端。Supabase 托管边缘函数会提供其运行所需的服务端环境变量。
+
+生成二维码的服务器还需要单独设置正式网页地址（`VITE_WEB_APP_URL` 不会自动传到边缘函数）：
+
+```powershell
+supabase secrets set WEB_APP_URL=https://YOUR_PROJECT.pages.dev
+```
+
+将示例地址替换为实际 HTTPS 地址。网页域名改变时也要更新此值，否则二维码仍会指向旧地址。参考 [Supabase 环境变量文档](https://supabase.com/docs/guides/functions/secrets)。
 
 ## 3. 发布手机 PWA 到 Cloudflare Pages
 
@@ -49,7 +59,7 @@ VITE_WEB_APP_URL=https://YOUR_PROJECT.pages.dev
 pnpm --filter @smoke-notes/desktop package
 ```
 
-输出文件为 `apps/desktop/release/SmokeNotes-Setup-0.1.0.exe`。当前构建没有商业代码签名；正式分发前应配置 Windows 代码签名证书。
+输出文件为 `apps/desktop/release/SmokeNotes-Setup-<版本号>.exe`，版本由桌面应用的 package.json 决定。当前构建没有商业代码签名；正式分发前应配置 Windows 代码签名证书。
 
 ## 5. 上线验收
 

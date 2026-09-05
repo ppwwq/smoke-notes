@@ -96,6 +96,36 @@ export function mapRemoteRecord(
   };
 }
 
+const syncTables = [
+  ["notebook", "notebooks"],
+  ["note", "notes"],
+  ["todo", "todos"],
+] as const;
+
+type PullCursor = Record<SyncEntity, string> & { v: 1 };
+
+function readPullCursor(cursor: string | null): PullCursor {
+  try {
+    const parsed = JSON.parse(cursor ?? "null") as Partial<PullCursor> | null;
+    if (
+      parsed?.v === 1 &&
+      syncTables.every(([entity]) => {
+        const value = parsed[entity];
+        return typeof value === "string" && Number.isFinite(Date.parse(value));
+      })
+    )
+      return parsed as PullCursor;
+  } catch {
+    // Old cursors used the device clock and may already have skipped records.
+  }
+  return {
+    v: 1,
+    notebook: "1970-01-01T00:00:00.000Z",
+    note: "1970-01-01T00:00:00.000Z",
+    todo: "1970-01-01T00:00:00.000Z",
+  };
+}
+
 class SupabaseSyncAdapter implements RemoteSyncAdapter {
   constructor(private readonly client: SupabaseClient) {}
 
@@ -124,32 +154,60 @@ class SupabaseSyncAdapter implements RemoteSyncAdapter {
   async pull(
     cursor: string | null,
   ): Promise<{ changes: RemoteChange[]; cursor: string }> {
-    const startedAt = new Date().toISOString();
-    const since = cursor ?? "1970-01-01T00:00:00.000Z";
-    const [notebooks, notes, todos] = await Promise.all([
-      this.client.from("notebooks").select("*").gt("updated_at", since),
-      this.client.from("notes").select("*").gt("updated_at", since),
-      this.client.from("todos").select("*").gt("updated_at", since),
-    ]);
-    const firstError = notebooks.error ?? notes.error ?? todos.error;
-    if (firstError) throw firstError;
+    const next = readPullCursor(cursor);
+    const results = await Promise.all(
+      syncTables.map(async ([entity, table]) => {
+        const result = await this.pullTable(entity, table, next[entity]);
+        next[entity] = result.cursor;
+        return result.changes;
+      }),
+    );
     return {
-      cursor: startedAt,
-      changes: [
-        ...(notebooks.data ?? []).map((row) => ({
-          entity: "notebook" as const,
-          record: mapRemoteRecord("notebook", row),
-        })),
-        ...(notes.data ?? []).map((row) => ({
-          entity: "note" as const,
-          record: mapRemoteRecord("note", row),
-        })),
-        ...(todos.data ?? []).map((row) => ({
-          entity: "todo" as const,
-          record: mapRemoteRecord("todo", row),
-        })),
-      ],
+      cursor: JSON.stringify(next),
+      changes: results.flat(),
     };
+  }
+
+  private async pullTable(entity: SyncEntity, table: string, since: string) {
+    // Freeze each table's upper bound before paging. Later writes must not move
+    // this pull past edits to rows already read, or advance another table.
+    const { data: head, error: headError } = await this.client
+      .from(table)
+      .select("updated_at")
+      .gte("updated_at", since)
+      .order("updated_at", { ascending: false })
+      .limit(1);
+    if (headError) throw headError;
+    const until = head?.[0]?.updated_at as string | undefined;
+    const changes: RemoteChange[] = [];
+    if (!until) return { changes, cursor: since };
+
+    let after: { updatedAt: string; id: string } | null = null;
+    for (;;) {
+      let query = this.client
+        .from(table)
+        .select("*")
+        // Replay the boundary timestamp across pulls, including newly visible
+        // rows with an equal timestamp and an id earlier than the last page.
+        .gte("updated_at", since)
+        .lte("updated_at", until)
+        .order("updated_at", { ascending: true })
+        .order("id", { ascending: true })
+        .limit(500);
+      if (after)
+        query = query.or(
+          `updated_at.gt.${after.updatedAt},and(updated_at.eq.${after.updatedAt},id.gt.${after.id})`,
+        );
+      const { data, error } = await query;
+      if (error) throw error;
+      // The server may enforce a lower row cap than our requested page size.
+      if (!data?.length) break;
+      for (const row of data)
+        changes.push({ entity, record: mapRemoteRecord(entity, row) });
+      const last = data[data.length - 1];
+      after = { updatedAt: String(last.updated_at), id: String(last.id) };
+    }
+    return { changes, cursor: until };
   }
 }
 
@@ -200,6 +258,15 @@ export class SupabaseCloud {
       expiresAt: String(data.expiresAt),
       url: String(data.url),
     };
+  }
+
+  async enrollLocalWorkspace(workspaceId: string): Promise<void> {
+    await this.ensureAnonymousSession();
+    const { data, error } = await this.client.rpc("enroll_local_workspace", {
+      p_workspace_id: workspaceId,
+    });
+    if (error || data !== workspaceId)
+      throw error ?? new Error("无法连接现有便签空间");
   }
 
   async redeemPairing(input: string): Promise<string> {

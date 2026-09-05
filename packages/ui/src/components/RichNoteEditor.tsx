@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useRef,
   useState,
   type CSSProperties,
 } from "react";
@@ -48,16 +49,60 @@ function editableTitle(title: string): string {
   return title === "主标题" || title === "无标题" ? "" : title;
 }
 
+function noteEdit(note: Note): NoteEdit {
+  return {
+    title: editableTitle(note.title),
+    body: note.body,
+    contentJson: note.contentJson,
+    color: note.color,
+  };
+}
+
+function sameContent(left: RichTextDocument, right: RichTextDocument) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function sameEdit(left: NoteEdit, right: NoteEdit) {
+  return (
+    left.title === right.title &&
+    left.body === right.body &&
+    left.color === right.color &&
+    sameContent(left.contentJson, right.contentJson)
+  );
+}
+
+interface EditingSession {
+  noteId: string;
+  incoming: NoteEdit;
+  persisted: NoteEdit;
+  draft: NoteEdit;
+  onSave: RichNoteEditorProps["onSave"];
+  saving?: Promise<void>;
+}
+
 export const RichNoteEditor = forwardRef<
   RichNoteEditorHandle,
   RichNoteEditorProps
 >(function RichNoteEditor({ note, onSave, className = "" }, ref) {
-  const [title, setTitle] = useState(() => editableTitle(note.title));
-  const [color, setColor] = useState(note.color);
-  const [contentJson, setContentJson] = useState<RichTextDocument>(
-    note.contentJson,
-  );
+  const [draft, setDraft] = useState(() => noteEdit(note));
+  const { title, color } = draft;
+  const [saveStatus, setSaveStatus] = useState("已自动保存");
+  const sessionRef = useRef<EditingSession>({
+    noteId: note.id,
+    incoming: draft,
+    persisted: draft,
+    draft,
+    onSave,
+  });
   const [markMenu, setMarkMenu] = useState<"text" | "highlight" | null>(null);
+  const updateDraft = useCallback((changes: Partial<NoteEdit>) => {
+    const session = sessionRef.current;
+    session.draft = { ...session.draft, ...changes };
+    setDraft(session.draft);
+    setSaveStatus(
+      sameEdit(session.draft, session.persisted) ? "已自动保存" : "待保存",
+    );
+  }, []);
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -79,65 +124,105 @@ export const RichNoteEditor = forwardRef<
         spellcheck: "true",
       },
     },
-    onUpdate: ({ editor: current }) =>
-      setContentJson(current.getJSON() as RichTextDocument),
+    onUpdate: ({ editor: current }) => {
+      const contentJson = current.getJSON() as RichTextDocument;
+      updateDraft({ contentJson, body: richTextToPlainText(contentJson) });
+    },
   });
-  const currentEdit = useCallback<() => NoteEdit>(
-    () => ({
-      title,
-      body: richTextToPlainText(contentJson),
-      contentJson,
-      color,
-    }),
-    [color, contentJson, title],
-  );
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      async flushSave() {
-        const changes = currentEdit();
-        if (
-          changes.title === editableTitle(note.title) &&
-          changes.body === note.body &&
-          changes.color === note.color &&
-          JSON.stringify(changes.contentJson) ===
-            JSON.stringify(note.contentJson)
-        )
-          return;
-        await onSave(changes);
-      },
-    }),
-    [currentEdit, note, onSave],
-  );
+  const flushSave = useCallback(async () => {
+    const session = sessionRef.current;
+    if (session.saving) return session.saving;
+    if (sameEdit(session.draft, session.persisted)) return;
+    setSaveStatus("保存中…");
+    // Serialize writes and include any edits made while a save was pending.
+    const save = async () => {
+      while (
+        sessionRef.current === session &&
+        !sameEdit(session.draft, session.persisted)
+      ) {
+        const changes = session.draft;
+        await session.onSave(changes);
+        session.persisted = changes;
+      }
+    };
+    session.saving = save();
+    try {
+      await session.saving;
+      if (sessionRef.current === session) setSaveStatus("已自动保存");
+    } catch (error) {
+      if (sessionRef.current === session) setSaveStatus("保存失败");
+      throw error;
+    } finally {
+      session.saving = undefined;
+    }
+  }, []);
+
+  useImperativeHandle(ref, () => ({ flushSave }), [flushSave]);
 
   useEffect(() => {
-    setTitle(editableTitle(note.title));
-    setColor(note.color);
-    setContentJson(note.contentJson);
+    const incoming = noteEdit(note);
+    const session = sessionRef.current;
+    session.onSave = onSave;
+    let next = incoming;
+    if (session.noteId === note.id) {
+      // Database refreshes produce fresh objects even when nothing changed.
+      if (sameEdit(session.incoming, incoming)) return;
+      // Merge remote changes only into fields the user has not edited locally.
+      const contentJson = sameContent(
+        session.draft.contentJson,
+        session.persisted.contentJson,
+      )
+        ? incoming.contentJson
+        : session.draft.contentJson;
+      next = {
+        title:
+          session.draft.title === session.persisted.title
+            ? incoming.title
+            : session.draft.title,
+        color:
+          session.draft.color === session.persisted.color
+            ? incoming.color
+            : session.draft.color,
+        contentJson,
+        body: richTextToPlainText(contentJson),
+      };
+      session.incoming = incoming;
+      session.persisted = incoming;
+      session.draft = next;
+      if (!session.saving) {
+        setSaveStatus(sameEdit(next, incoming) ? "已自动保存" : "待保存");
+      }
+    } else {
+      sessionRef.current = {
+        noteId: note.id,
+        incoming,
+        persisted: incoming,
+        draft: incoming,
+        onSave,
+      };
+      setMarkMenu(null);
+      setSaveStatus("已自动保存");
+    }
+    setDraft(next);
     if (
       editor &&
-      JSON.stringify(editor.getJSON()) !== JSON.stringify(note.contentJson)
+      !sameContent(editor.getJSON() as RichTextDocument, next.contentJson)
     ) {
-      editor.commands.setContent(note.contentJson, { emitUpdate: false });
+      editor.commands.setContent(next.contentJson, { emitUpdate: false });
     }
-  }, [editor, note.color, note.contentJson, note.id, note.title]);
+  }, [editor, note, onSave]);
 
   useEffect(() => {
     if (!editor) return;
-    const body = richTextToPlainText(contentJson);
-    if (
-      title === editableTitle(note.title) &&
-      body === note.body &&
-      color === note.color &&
-      JSON.stringify(contentJson) === JSON.stringify(note.contentJson)
-    )
-      return;
+    const session = sessionRef.current;
+    if (sameEdit(session.draft, session.persisted)) return;
     const timer = window.setTimeout(() => {
-      void onSave({ title, body, contentJson, color });
+      // Failed saves retain the draft, and explicit navigation can retry them.
+      void flushSave().catch(() => {});
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [title, color, contentJson, editor, note, onSave]);
+  }, [draft, editor, flushSave, note.id]);
 
   if (!editor) return <div className="rich-editor-loading">正在打开便签…</div>;
 
@@ -152,7 +237,7 @@ export const RichNoteEditor = forwardRef<
             type="button"
             className={`note-color-dot note-color-dot-${item}${color === item ? " active" : ""}`}
             aria-label={`便签颜色：${item}`}
-            onClick={() => setColor(item)}
+            onClick={() => updateDraft({ color: item })}
           >
             {color === item && <Check size={11} />}
           </button>
@@ -163,7 +248,7 @@ export const RichNoteEditor = forwardRef<
         aria-label="便签标题"
         value={title}
         placeholder="输入标题"
-        onChange={(event) => setTitle(event.target.value)}
+        onChange={(event) => updateDraft({ title: event.target.value })}
       />
       <EditorContent editor={editor} className="rich-note-body" />
       <footer className="format-toolbar" aria-label="文字格式">
@@ -284,7 +369,9 @@ export const RichNoteEditor = forwardRef<
             </div>
           )}
         </div>
-        <span className="format-status">已自动保存</span>
+        <span className="format-status" aria-live="polite">
+          {saveStatus}
+        </span>
       </footer>
     </section>
   );

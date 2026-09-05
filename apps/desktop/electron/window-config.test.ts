@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createContentSecurityPolicy,
   createNoteWindowOptions,
   createWindowOptions,
   normalizeWindowState,
@@ -7,6 +8,16 @@ import {
 } from "./window-config";
 
 describe("desktop window configuration", () => {
+  it("allows Vite refresh and its local websocket only in development", () => {
+    const development = createContentSecurityPolicy(false);
+    const production = createContentSecurityPolicy(true);
+    expect(development).toContain("script-src 'self' 'unsafe-inline'");
+    expect(development).toContain("ws://127.0.0.1:5173");
+    expect(production).toContain("script-src 'self';");
+    expect(production).not.toContain("ws://127.0.0.1:5173");
+    expect(production).toContain("https://*.supabase.co");
+  });
+
   it("creates a frameless transparent and isolated renderer", () => {
     expect(
       createWindowOptions("C:/app/preload.cjs", { backgroundOpacity: 0.82 }),

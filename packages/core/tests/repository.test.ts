@@ -47,6 +47,26 @@ describe("LocalRepository", () => {
     expect(await repository.listPendingOperations()).toHaveLength(2);
   });
 
+  it("preserves concurrent todo edits and completion changes", async () => {
+    const todo = await repository.createTodo("旧文字");
+
+    await Promise.all([
+      repository.updateTodo(todo.id, { text: "新文字" }),
+      repository.toggleTodo(todo.id),
+    ]);
+
+    expect(await database.todos.get(todo.id)).toMatchObject({
+      text: "新文字",
+      completed: true,
+      version: 3,
+    });
+    expect(
+      (await repository.listPendingOperations())
+        .map((operation) => operation.baseVersion)
+        .sort((a, b) => a - b),
+    ).toEqual([0, 1, 2]);
+  });
+
   it("moves a note using only the moved note rank", async () => {
     const notebook = await repository.createNotebook("灵感");
     const first = await repository.createNote(notebook.id, {

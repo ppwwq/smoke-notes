@@ -28,6 +28,7 @@ import {
 import { registerSingleInstance, shouldShowMainWindow } from "./app-lifecycle";
 import { registerNoteMousePassthrough } from "./note-mouse-passthrough";
 import {
+  createContentSecurityPolicy,
   createNoteWindowOptions,
   createWindowOptions,
   normalizeWindowState,
@@ -415,7 +416,7 @@ if (registerSingleInstance(app, activateMainWindow)) {
         responseHeaders: {
           ...details.responseHeaders,
           "Content-Security-Policy": [
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+            createContentSecurityPolicy(app.isPackaged),
           ],
         },
       }),

@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LocalRepository, SmokeNotesDatabase } from "@smoke-notes/core";
@@ -85,6 +86,123 @@ describe("SmokeNotesApp", () => {
     cleanup();
     await database.delete();
   });
+
+  const mobileNavigations = [
+    "back",
+    "bottom-todos",
+    "sidebar-todos",
+    "notebook",
+    "create-notebook",
+    "trash-notebook",
+    "trash-note",
+  ] as const;
+
+  async function leaveMobileEditor(
+    destination: (typeof mobileNavigations)[number],
+  ) {
+    if (destination === "back") {
+      fireEvent.click(screen.getByRole("button", { name: "返回便签列表" }));
+    } else if (destination === "bottom-todos") {
+      fireEvent.click(
+        within(
+          screen.getByRole("navigation", { name: "手机主导航" }),
+        ).getByRole("button", { name: "待办" }),
+      );
+    } else if (destination === "sidebar-todos") {
+      fireEvent.click(
+        within(
+          screen.getByRole("complementary", { name: "便签导航" }),
+        ).getByRole("button", { name: "待办固定" }),
+      );
+    } else if (destination === "notebook") {
+      fireEvent.click(screen.getByRole("button", { name: "生活" }));
+    } else if (destination === "create-notebook") {
+      fireEvent.click(screen.getByRole("button", { name: "新建便签本" }));
+      fireEvent.change(screen.getByRole("textbox", { name: "便签本名称" }), {
+        target: { value: "新本" },
+      });
+      fireEvent.keyDown(screen.getByRole("textbox", { name: "便签本名称" }), {
+        key: "Enter",
+      });
+    } else if (destination === "trash-notebook") {
+      fireEvent.click(screen.getByRole("button", { name: "删除便签本：工作" }));
+    } else {
+      fireEvent.click(screen.getByRole("button", { name: "删除便签" }));
+    }
+  }
+
+  it.each(mobileNavigations)(
+    "saves pending mobile edits before %s navigation",
+    async (destination) => {
+      const work = (await repository.listNotebooks()).find(
+        (item) => item.name === "工作",
+      )!;
+      const current = (await repository.listNotes(work.id))[0]!;
+      const pending = deferred<void>();
+      const update = repository.updateNote.bind(repository);
+      const save = vi
+        .spyOn(repository, "updateNote")
+        .mockImplementation(async (id, changes) => {
+          await pending.promise;
+          return update(id, changes);
+        });
+      render(<SmokeNotesApp repository={repository} platform="web" />);
+      fireEvent.click(
+        await screen.findByRole("button", { name: "打开便签：周会记录" }),
+      );
+      fireEvent.change(
+        await screen.findByRole("textbox", { name: "便签标题" }),
+        {
+          target: { value: "立即离开前的修改" },
+        },
+      );
+
+      await leaveMobileEditor(destination);
+
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole("textbox", { name: "便签标题" })).toHaveValue(
+        "立即离开前的修改",
+      );
+      await act(async () => {
+        pending.resolve();
+        await pending.promise;
+      });
+      await waitFor(() =>
+        expect(
+          screen.queryByRole("textbox", { name: "便签标题" }),
+        ).not.toBeInTheDocument(),
+      );
+      const saved = await database.notes.get(current.id);
+      expect(saved?.title).toBe("立即离开前的修改");
+    },
+  );
+
+  it.each(mobileNavigations)(
+    "keeps mobile drafts visible when saving before %s fails",
+    async (destination) => {
+      const save = vi
+        .spyOn(repository, "updateNote")
+        .mockRejectedValue(new Error("disk full"));
+      render(<SmokeNotesApp repository={repository} platform="web" />);
+      fireEvent.click(
+        await screen.findByRole("button", { name: "打开便签：周会记录" }),
+      );
+      fireEvent.change(
+        await screen.findByRole("textbox", { name: "便签标题" }),
+        {
+          target: { value: "保留失败草稿" },
+        },
+      );
+
+      await leaveMobileEditor(destination);
+      await act(async () => {});
+
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole("textbox", { name: "便签标题" })).toHaveValue(
+        "保留失败草稿",
+      );
+    },
+  );
 
   it("switches between notebooks and the fixed todo view", async () => {
     const user = userEvent.setup();

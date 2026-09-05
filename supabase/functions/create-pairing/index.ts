@@ -26,16 +26,20 @@ Deno.serve(async (request) => {
     if (membership.error || !membership.data)
       return json({ error: "workspace_forbidden" }, 403);
 
+    const webUrl = Deno.env.get("WEB_APP_URL");
+    if (!webUrl) throw new Error("WEB_APP_URL is not configured");
+    const pairingUrl = new URL(webUrl);
     const random = new Uint32Array(1);
     crypto.getRandomValues(random);
     const code = String(random[0] % 1_000_000).padStart(6, "0");
     const codeHash = await sha256Hex(code);
     const expiresAt = new Date(Date.now() + 5 * 60_000).toISOString();
-    await client
+    const retired = await client
       .from("pairing_codes")
       .update({ redeemed_at: new Date().toISOString() })
       .eq("workspace_id", workspaceId)
       .is("redeemed_at", null);
+    if (retired.error) throw retired.error;
     const inserted = await client.from("pairing_codes").insert({
       workspace_id: workspaceId,
       code_hash: codeHash,
@@ -44,9 +48,6 @@ Deno.serve(async (request) => {
     });
     if (inserted.error) throw inserted.error;
 
-    const webUrl = Deno.env.get("WEB_APP_URL");
-    if (!webUrl) throw new Error("WEB_APP_URL is not configured");
-    const pairingUrl = new URL(webUrl);
     pairingUrl.searchParams.set("pair", code);
     return json({ code, expiresAt, url: pairingUrl.toString() });
   } catch (error) {

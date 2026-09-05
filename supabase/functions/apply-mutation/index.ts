@@ -89,7 +89,7 @@ function mapPayload(
     return {
       ...shared,
       notebook_id: String(payload.notebookId),
-      title: text(payload.title, 200, "无标题"),
+      title: text(payload.title, 200, ""),
       body,
       content_json: richContent(payload.contentJson, body),
       color: noteColor(payload.color),
@@ -124,7 +124,12 @@ Deno.serve(async (request) => {
 
     const { operation } = await request.json();
     const entity = operation?.entity as Entity;
-    if (!tableFor[entity] || !operation?.id || !operation?.entityId)
+    if (
+      !["notebook", "note", "todo"].includes(entity) ||
+      !operation?.id ||
+      !operation?.entityId ||
+      operation?.payload?.id !== operation.entityId
+    )
       return json({ error: "invalid_operation" }, 400);
     const prior = await service
       .from("applied_operations")
@@ -132,6 +137,7 @@ Deno.serve(async (request) => {
       .eq("id", operation.id)
       .eq("user_id", auth.data.user.id)
       .maybeSingle();
+    if (prior.error) throw prior.error;
     if (prior.data) return json(prior.data.result);
 
     const payload = operation.payload as Record<string, unknown>;
@@ -178,6 +184,8 @@ Deno.serve(async (request) => {
       }
     }
     const baseVersion = Number(operation.baseVersion);
+    if (!Number.isInteger(baseVersion) || baseVersion < 0)
+      return json({ error: "invalid_version" }, 400);
     if (existing.data && Number(existing.data.version) !== baseVersion) {
       const result = { status: "conflict", record: existing.data };
       await service
@@ -193,8 +201,17 @@ Deno.serve(async (request) => {
       payload,
       existing.data ? Number(existing.data.version) + 1 : 1,
     );
-    const saved = await service.from(table).upsert(row).select("*").single();
+    const saved = existing.data
+      ? await service
+          .from(table)
+          .update(row)
+          .eq("id", operation.entityId)
+          .eq("version", baseVersion)
+          .select("*")
+          .maybeSingle()
+      : await service.from(table).insert(row).select("*").single();
     if (saved.error) throw saved.error;
+    if (!saved.data) return json({ error: "concurrent_change_retry" }, 409);
     const result = { status: "applied", record: saved.data };
     await service
       .from("applied_operations")

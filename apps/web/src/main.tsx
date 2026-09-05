@@ -34,24 +34,21 @@ async function bootstrap() {
   let workspaceId = localStorage.getItem("smoke-notes:workspace-id");
   const linkCode = pairingCodeFromUrl(window.location.href);
 
-  if (cloud) {
-    await cloud.ensureAnonymousSession();
-    if (!workspaceId) {
-      root.render(
-        <StrictMode>
-          <PairingGate
-            initialCode={linkCode}
-            onRedeem={async (code) => {
-              workspaceId = await cloud.redeemPairing(code);
-              localStorage.setItem("smoke-notes:workspace-id", workspaceId);
-              window.history.replaceState({}, "", window.location.pathname);
-              window.location.reload();
-            }}
-          />
-        </StrictMode>,
-      );
-      return;
-    }
+  if (cloud && !workspaceId) {
+    root.render(
+      <StrictMode>
+        <PairingGate
+          initialCode={linkCode}
+          onRedeem={async (code) => {
+            workspaceId = await cloud.redeemPairing(code);
+            localStorage.setItem("smoke-notes:workspace-id", workspaceId);
+            window.history.replaceState({}, "", window.location.pathname);
+            window.location.reload();
+          }}
+        />
+      </StrictMode>,
+    );
+    return;
   }
 
   workspaceId ??= persistentId("smoke-notes:workspace-id");
@@ -67,7 +64,13 @@ async function bootstrap() {
   if (cloud) {
     const engine = new SyncEngine(database, cloud.syncAdapter, { deviceId });
     const runtime = createSyncRuntime({
-      engine,
+      engine: {
+        async flush() {
+          await cloud.ensureAnonymousSession();
+          return engine.flush();
+        },
+        pull: (cursor) => engine.pull(cursor),
+      },
       cloud,
       storage: localStorage,
       notify: () =>

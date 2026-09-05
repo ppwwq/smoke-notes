@@ -160,34 +160,18 @@ export class LocalRepository {
   }
 
   async toggleTodo(id: string): Promise<Todo> {
-    const current = await this.requireRecord(this.database.todos, id);
-    const updated = this.updatedRecord(current, {
+    return this.persistMutation(this.database.todos, "todo", id, (current) => ({
       completed: !current.completed,
-    });
-    await this.database.transaction(
-      "rw",
-      this.database.todos,
-      this.database.operations,
-      async () => {
-        await this.database.todos.put(updated);
-        await this.enqueue("todo", updated, current.version);
-      },
-    );
-    return updated;
+    }));
   }
 
   async renameNotebook(id: string, name: string): Promise<Notebook> {
-    const current = await this.requireRecord(this.database.notebooks, id);
-    const updated = this.updatedRecord(current, {
-      name: name.trim() || "未命名便签本",
-    });
-    await this.persistMutation(
+    return this.persistMutation(
       this.database.notebooks,
       "notebook",
-      current,
-      updated,
+      id,
+      () => ({ name: name.trim() || "未命名便签本" }),
     );
-    return updated;
   }
 
   async updateNote(
@@ -195,35 +179,31 @@ export class LocalRepository {
     changes: Pick<Note, "title"> &
       Partial<Pick<Note, "body" | "contentJson" | "color">>,
   ): Promise<Note> {
-    const current = await this.requireRecord(this.database.notes, id);
-    const contentJson = changes.contentJson
-      ? normalizeRichTextDocument(
-          changes.contentJson,
-          changes.body ?? current.body,
-        )
-      : changes.body === undefined
-        ? current.contentJson
-        : migrateLegacyNoteContent(changes.body);
-    const updated = this.updatedRecord(current, {
-      title: changes.title.trim(),
-      contentJson,
-      body: richTextToPlainText(contentJson),
-      color:
-        changes.color === undefined
-          ? current.color
-          : normalizeNoteColor(changes.color),
+    return this.persistMutation(this.database.notes, "note", id, (current) => {
+      const contentJson = changes.contentJson
+        ? normalizeRichTextDocument(
+            changes.contentJson,
+            changes.body ?? current.body,
+          )
+        : changes.body === undefined
+          ? current.contentJson
+          : migrateLegacyNoteContent(changes.body);
+      return {
+        title: changes.title.trim(),
+        contentJson,
+        body: richTextToPlainText(contentJson),
+        color:
+          changes.color === undefined
+            ? current.color
+            : normalizeNoteColor(changes.color),
+      };
     });
-    await this.persistMutation(this.database.notes, "note", current, updated);
-    return updated;
   }
 
   async updateTodo(id: string, changes: Pick<Todo, "text">): Promise<Todo> {
-    const current = await this.requireRecord(this.database.todos, id);
-    const updated = this.updatedRecord(current, {
+    return this.persistMutation(this.database.todos, "todo", id, () => ({
       text: changes.text.trim() || "新待办",
-    });
-    await this.persistMutation(this.database.todos, "todo", current, updated);
-    return updated;
+    }));
   }
 
   async moveNote(
@@ -231,20 +211,9 @@ export class LocalRepository {
     previousRank: number | null,
     nextRank: number | null,
   ): Promise<Note> {
-    const current = await this.requireRecord(this.database.notes, id);
-    const updated = this.updatedRecord(current, {
+    return this.persistMutation(this.database.notes, "note", id, () => ({
       rank: rankBetween(previousRank, nextRank),
-    });
-    await this.database.transaction(
-      "rw",
-      this.database.notes,
-      this.database.operations,
-      async () => {
-        await this.database.notes.put(updated);
-        await this.enqueue("note", updated, current.version);
-      },
-    );
-    return updated;
+    }));
   }
 
   async moveNotebook(
@@ -252,17 +221,12 @@ export class LocalRepository {
     previousRank: number | null,
     nextRank: number | null,
   ): Promise<Notebook> {
-    const current = await this.requireRecord(this.database.notebooks, id);
-    const updated = this.updatedRecord(current, {
-      rank: rankBetween(previousRank, nextRank),
-    });
-    await this.persistMutation(
+    return this.persistMutation(
       this.database.notebooks,
       "notebook",
-      current,
-      updated,
+      id,
+      () => ({ rank: rankBetween(previousRank, nextRank) }),
     );
-    return updated;
   }
 
   async moveTodo(
@@ -270,12 +234,9 @@ export class LocalRepository {
     previousRank: number | null,
     nextRank: number | null,
   ): Promise<Todo> {
-    const current = await this.requireRecord(this.database.todos, id);
-    const updated = this.updatedRecord(current, {
+    return this.persistMutation(this.database.todos, "todo", id, () => ({
       rank: rankBetween(previousRank, nextRank),
-    });
-    await this.persistMutation(this.database.todos, "todo", current, updated);
-    return updated;
+    }));
   }
 
   async trashNote(id: string): Promise<Note> {
@@ -283,18 +244,18 @@ export class LocalRepository {
   }
 
   async trashNotebook(id: string): Promise<Notebook> {
-    const current = await this.requireRecord(this.database.notebooks, id);
-    const deletedAt = this.now().toISOString();
-    const updated = this.updatedRecord(current, { deletedAt });
-    const childNotes = (
-      await this.database.notes.where("notebookId").equals(id).toArray()
-    ).filter((note) => !note.deletedAt);
-    await this.database.transaction(
+    return this.database.transaction(
       "rw",
       this.database.notebooks,
       this.database.notes,
       this.database.operations,
       async () => {
+        const current = await this.requireRecord(this.database.notebooks, id);
+        const deletedAt = this.now().toISOString();
+        const updated = this.updatedRecord(current, { deletedAt });
+        const childNotes = (
+          await this.database.notes.where("notebookId").equals(id).toArray()
+        ).filter((note) => !note.deletedAt);
         await this.database.notebooks.put(updated);
         await this.enqueue("notebook", updated, current.version, "delete");
         for (const note of childNotes) {
@@ -302,9 +263,9 @@ export class LocalRepository {
           await this.database.notes.put(deletedNote);
           await this.enqueue("note", deletedNote, note.version, "delete");
         }
+        return updated;
       },
     );
-    return updated;
   }
 
   async trashTodo(id: string): Promise<Todo> {
@@ -319,17 +280,17 @@ export class LocalRepository {
     id: string,
   ): Promise<Notebook | Note | Todo> {
     if (entity === "notebook") {
-      const current = await this.requireRecord(this.database.notebooks, id);
-      const updated = this.updatedRecord(current, { deletedAt: null });
-      const childNotes = (
-        await this.database.notes.where("notebookId").equals(id).toArray()
-      ).filter((note) => note.deletedAt);
-      await this.database.transaction(
+      return this.database.transaction(
         "rw",
         this.database.notebooks,
         this.database.notes,
         this.database.operations,
         async () => {
+          const current = await this.requireRecord(this.database.notebooks, id);
+          const updated = this.updatedRecord(current, { deletedAt: null });
+          const childNotes = (
+            await this.database.notes.where("notebookId").equals(id).toArray()
+          ).filter((note) => note.deletedAt);
           await this.database.notebooks.put(updated);
           await this.enqueue("notebook", updated, current.version);
           for (const note of childNotes) {
@@ -337,23 +298,13 @@ export class LocalRepository {
             await this.database.notes.put(restoredNote);
             await this.enqueue("note", restoredNote, note.version);
           }
+          return updated;
         },
       );
-      return updated;
     }
-    const table = this.tableFor(entity);
-    const current = await this.requireRecord(table, id);
-    const updated = this.updatedRecord(current, { deletedAt: null });
-    await this.database.transaction(
-      "rw",
-      table,
-      this.database.operations,
-      async () => {
-        await table.put(updated);
-        await this.enqueue(entity, updated, current.version);
-      },
-    );
-    return updated;
+    return this.persistMutation(this.tableFor(entity), entity, id, () => ({
+      deletedAt: null,
+    }));
   }
 
   async listTrash(): Promise<TrashRecord[]> {
@@ -428,16 +379,21 @@ export class LocalRepository {
   private async persistMutation<T extends Notebook | Note | Todo>(
     table: Table<T, string>,
     entity: SyncEntity,
-    current: T,
-    updated: T,
-  ): Promise<void> {
-    await this.database.transaction(
+    id: string,
+    changes: (current: T) => Partial<T>,
+    action: SyncOperation["action"] = "upsert",
+  ): Promise<T> {
+    // Read and enqueue in the same transaction so compaction cannot rebase between them.
+    return this.database.transaction(
       "rw",
       table,
       this.database.operations,
       async () => {
+        const current = await this.requireRecord(table, id);
+        const updated = this.updatedRecord(current, changes(current));
         await table.put(updated);
-        await this.enqueue(entity, updated, current.version);
+        await this.enqueue(entity, updated, current.version, action);
+        return updated;
       },
     );
   }
@@ -447,20 +403,13 @@ export class LocalRepository {
     entity: SyncEntity,
     id: string,
   ): Promise<T> {
-    const current = await this.requireRecord(table, id);
-    const updated = this.updatedRecord(current, {
-      deletedAt: this.now().toISOString(),
-    } as Partial<T>);
-    await this.database.transaction(
-      "rw",
+    return this.persistMutation(
       table,
-      this.database.operations,
-      async () => {
-        await table.put(updated);
-        await this.enqueue(entity, updated, current.version, "delete");
-      },
+      entity,
+      id,
+      () => ({ deletedAt: this.now().toISOString() }) as Partial<T>,
+      "delete",
     );
-    return updated;
   }
 
   private async enqueue(

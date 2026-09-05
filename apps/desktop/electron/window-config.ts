@@ -16,6 +16,12 @@ export const DEFAULT_WINDOW_STATE: WindowState = {
 
 export const NOTE_WINDOW_TAB_GUTTER = 70;
 
+export function createContentSecurityPolicy(isPackaged: boolean): string {
+  const scripts = isPackaged ? "'self'" : "'self' 'unsafe-inline'";
+  const developmentSocket = isPackaged ? "" : " ws://127.0.0.1:5173";
+  return `default-src 'self'; script-src ${scripts}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co${developmentSocket}`;
+}
+
 interface WindowBounds {
   x: number;
   y: number;

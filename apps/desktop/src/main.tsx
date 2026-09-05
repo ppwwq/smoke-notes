@@ -35,15 +35,7 @@ function cloudConfig(): CloudConfig | null {
 async function bootstrap() {
   const config = cloudConfig();
   const cloud = config ? new SupabaseCloud(config) : null;
-  let workspaceId = localStorage.getItem("smoke-notes:workspace-id");
-  if (cloud) {
-    await cloud.ensureAnonymousSession();
-    if (!workspaceId) {
-      workspaceId = await cloud.bootstrapWorkspace();
-      localStorage.setItem("smoke-notes:workspace-id", workspaceId);
-    }
-  }
-  workspaceId ??= persistentId("smoke-notes:workspace-id");
+  const workspaceId = persistentId("smoke-notes:workspace-id");
   const deviceId = persistentId("smoke-notes:device-id");
   const database = new SmokeNotesDatabase("smoke-notes-desktop");
   const repository = new LocalRepository(database, { workspaceId, deviceId });
@@ -58,7 +50,12 @@ async function bootstrap() {
       dataChannel.postMessage("changed");
   });
   const pairingController: PairingController | undefined = cloud
-    ? { createPairing: () => cloud.createPairing(workspaceId!) }
+    ? {
+        createPairing: async () => {
+          await cloud.enrollLocalWorkspace(workspaceId);
+          return cloud.createPairing(workspaceId);
+        },
+      }
     : undefined;
 
   createRoot(document.getElementById("root")!).render(
@@ -82,8 +79,15 @@ async function bootstrap() {
 
   if (cloud && !noteId) {
     const engine = new SyncEngine(database, cloud.syncAdapter, { deviceId });
+    // Enrollment retries with each sync cycle; offline startup never blocks rendering.
     const runtime = createSyncRuntime({
-      engine,
+      engine: {
+        async flush() {
+          await cloud.enrollLocalWorkspace(workspaceId);
+          return engine.flush();
+        },
+        pull: (cursor) => engine.pull(cursor),
+      },
       cloud,
       storage: localStorage,
       notify: () =>
