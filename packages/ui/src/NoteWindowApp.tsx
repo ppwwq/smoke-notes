@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import type { DesktopBridge } from "./types";
+import { attachNoteMousePassthrough } from "./note-mouse-passthrough";
 import {
   RichNoteEditor,
   type NoteEdit,
@@ -46,6 +47,11 @@ export function NoteWindowApp({
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const createControlRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<RichNoteEditorHandle>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (rootRef.current)
+      return attachNoteMousePassthrough(rootRef.current, bridge);
+  }, [bridge, noteId]);
   const refresh = useCallback(
     async () => setNote(await repository.getNote(noteId)),
     [repository, noteId],
@@ -101,7 +107,7 @@ export function NoteWindowApp({
 
   if (!note)
     return (
-      <div className="note-window missing-note">
+      <div ref={rootRef} className="note-window missing-note">
         <p>这张便签已被删除或无法读取。</p>
         <button type="button" onClick={() => void bridge.closeNote(noteId)}>
           关闭
@@ -124,6 +130,7 @@ export function NoteWindowApp({
 
   return (
     <div
+      ref={rootRef}
       className={`note-window note-window-${note.color}`}
       onFocusCapture={(event) => {
         if (!createControlRef.current?.contains(event.target)) {

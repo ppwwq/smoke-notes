@@ -40,6 +40,8 @@ function desktopBridge(): DesktopBridge {
     closeNote: vi.fn(async () => undefined),
     getRecentNoteIds: vi.fn(async () => []),
     switchNote: vi.fn(async () => undefined),
+    setNoteWindowMousePassthrough: vi.fn(async () => undefined),
+    getNoteWindowPointer: vi.fn(async () => ({ x: 200, y: 100 })),
     getNoteWindowState: vi.fn(async (noteId) => ({
       noteId,
       width: 360,
@@ -236,6 +238,9 @@ describe("SmokeNotesApp", () => {
     const launchAtLogin = screen.getByRole("switch", {
       name: "开机时启动",
     });
+    expect(
+      screen.getByText("登录 Windows 后只恢复已打开便签，主页面保持隐藏"),
+    ).toBeInTheDocument();
     await waitFor(() =>
       expect(launchAtLogin).toHaveAttribute("aria-checked", "true"),
     );

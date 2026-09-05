@@ -29,6 +29,18 @@ describe("packaged main-process bundle", () => {
     expect(source).not.toContain('require("@smoke-notes/core")');
   });
 
+  it("keeps one data-owning process and restores notes without showing the main window at login", () => {
+    const main = readFileSync(
+      resolve(process.cwd(), "apps/desktop/dist-electron/main.cjs"),
+      "utf8",
+    );
+
+    expect(main).toContain("requestSingleInstanceLock");
+    expect(main).toContain("second-instance");
+    expect(main).toContain("--background");
+    expect(main).toContain("restoreOpen");
+  });
+
   it("uses the same app identity artwork for the installer and tray", () => {
     const installerIcon = readFileSync(
       resolve(process.cwd(), "apps/desktop/build/icon.png"),
@@ -58,6 +70,8 @@ describe("packaged main-process bundle", () => {
       "app:set-launch-at-login",
       "note-window:get-recent",
       "note-window:switch",
+      "note-window:mouse-passthrough",
+      "note-window:pointer",
     ]) {
       expect(main).toContain(channel);
       expect(preload).toContain(channel);

@@ -127,7 +127,7 @@ export function SettingsPanel({
                 <Power size={15} />
                 <span className="setting-copy">
                   开机时启动
-                  <small>登录 Windows 后自动显示主窗口</small>
+                  <small>登录 Windows 后只恢复已打开便签，主页面保持隐藏</small>
                 </span>
               </span>
               <button

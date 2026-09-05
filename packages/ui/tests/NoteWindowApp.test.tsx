@@ -17,6 +17,13 @@ describe("NoteWindowApp", () => {
   let bridge: DesktopBridge;
 
   beforeEach(async () => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
     database = new SmokeNotesDatabase(`note-window-ui-${crypto.randomUUID()}`);
     repository = new LocalRepository(database, {
       workspaceId: "workspace-1",
@@ -42,6 +49,8 @@ describe("NoteWindowApp", () => {
       closeNote: vi.fn(async () => undefined),
       getRecentNoteIds: vi.fn(async () => [noteId]),
       switchNote: vi.fn(async () => undefined),
+      setNoteWindowMousePassthrough: vi.fn(async () => undefined),
+      getNoteWindowPointer: vi.fn(async () => ({ x: 200, y: 100 })),
       getNoteWindowState: vi.fn(async (id) => ({
         noteId: id,
         width: 360,
@@ -64,6 +73,7 @@ describe("NoteWindowApp", () => {
 
   afterEach(async () => {
     cleanup();
+    vi.unstubAllGlobals();
     await database.delete();
   });
 
@@ -78,6 +88,36 @@ describe("NoteWindowApp", () => {
 
     expect(bridge.closeNote).toHaveBeenCalledWith(noteId);
     expect(await repository.getNote(noteId)).not.toBeNull();
+  });
+
+  it("passes transparent gutter clicks through but keeps tabs and the body interactive", async () => {
+    const setPassthrough = vi.fn(async () => undefined);
+    Object.assign(bridge, {
+      setNoteWindowMousePassthrough: setPassthrough,
+      getNoteWindowPointer: vi.fn(async () => ({ x: 200, y: 100 })),
+    });
+    const { container } = render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    await screen.findByDisplayValue("桌面便签");
+    const root = container.querySelector(".note-window")!;
+    vi.spyOn(root, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(0, 0, 460, 420),
+    );
+    const tab = await screen.findByRole("button", {
+      name: "切换便签：桌面便签",
+    });
+    vi.spyOn(tab, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(70, 52, 30, 30),
+    );
+    fireEvent.mouseMove(document, { clientX: 20, clientY: 120 });
+    await waitFor(() => expect(setPassthrough).toHaveBeenLastCalledWith(true));
+    fireEvent.mouseMove(document, { clientX: 80, clientY: 60 });
+    await waitFor(() => expect(setPassthrough).toHaveBeenLastCalledWith(false));
+    fireEvent.mouseMove(document, { clientX: 80, clientY: 85 });
+    await waitFor(() => expect(setPassthrough).toHaveBeenLastCalledWith(true));
+    fireEvent.mouseMove(document, { clientX: 200, clientY: 120 });
+    await waitFor(() => expect(setPassthrough).toHaveBeenLastCalledWith(false));
   });
 
   it("opens a newly created note and broadcasts it to the main list", async () => {

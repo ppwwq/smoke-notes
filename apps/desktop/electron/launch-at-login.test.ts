@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { readLaunchAtLogin, writeLaunchAtLogin } from "./launch-at-login";
+import { BACKGROUND_LAUNCH_ARGUMENT } from "./app-lifecycle";
+import {
+  ensureBackgroundLaunchAtLogin,
+  readLaunchAtLogin,
+  writeLaunchAtLogin,
+} from "./launch-at-login";
 
 describe("launch at login", () => {
   it("stays disabled without calling Electron in development", () => {
@@ -29,8 +34,33 @@ describe("launch at login", () => {
     expect(writeLaunchAtLogin(app, true)).toBe(true);
     expect(app.setLoginItemSettings).toHaveBeenCalledWith({
       openAtLogin: true,
+      args: [BACKGROUND_LAUNCH_ARGUMENT],
     });
     expect(readLaunchAtLogin(app)).toBe(true);
+    expect(app.getLoginItemSettings).toHaveBeenLastCalledWith({
+      args: [BACKGROUND_LAUNCH_ARGUMENT],
+    });
+  });
+
+  it("upgrades an existing login item to use background mode", () => {
+    let backgroundRegistration = false;
+    const app = {
+      isPackaged: true,
+      getLoginItemSettings: vi.fn((options?: { args: string[] }) =>
+        options
+          ? { openAtLogin: backgroundRegistration }
+          : { openAtLogin: false, executableWillLaunchAtLogin: true },
+      ),
+      setLoginItemSettings: vi.fn(() => {
+        backgroundRegistration = true;
+      }),
+    };
+
+    expect(ensureBackgroundLaunchAtLogin(app)).toBe(true);
+    expect(app.setLoginItemSettings).toHaveBeenCalledWith({
+      openAtLogin: true,
+      args: [BACKGROUND_LAUNCH_ARGUMENT],
+    });
   });
 
   it("returns the system state after writing instead of the requested value", () => {
@@ -43,6 +73,7 @@ describe("launch at login", () => {
     expect(writeLaunchAtLogin(app, true)).toBe(false);
     expect(app.setLoginItemSettings).toHaveBeenCalledWith({
       openAtLogin: true,
+      args: [BACKGROUND_LAUNCH_ARGUMENT],
     });
     expect(app.getLoginItemSettings).toHaveBeenCalledTimes(1);
   });

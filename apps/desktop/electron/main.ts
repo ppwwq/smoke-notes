@@ -4,6 +4,7 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  screen,
   session,
   Tray,
 } from "electron";
@@ -19,7 +20,13 @@ import {
   NoteWindowManager,
   type NoteWindowStateStore,
 } from "./note-window-manager";
-import { readLaunchAtLogin, writeLaunchAtLogin } from "./launch-at-login";
+import {
+  ensureBackgroundLaunchAtLogin,
+  readLaunchAtLogin,
+  writeLaunchAtLogin,
+} from "./launch-at-login";
+import { registerSingleInstance, shouldShowMainWindow } from "./app-lifecycle";
+import { registerNoteMousePassthrough } from "./note-mouse-passthrough";
 import {
   createNoteWindowOptions,
   createWindowOptions,
@@ -119,6 +126,13 @@ const noteWindowManager = new NoteWindowManager(
     );
     noteIdByWebContents.set(window.webContents.id, state.noteId);
     configureRenderer(window);
+    // A new document must never inherit the previous document's ignored-input state.
+    window.webContents.on("did-start-loading", () =>
+      window.setIgnoreMouseEvents(false),
+    );
+    window.webContents.on("render-process-gone", () =>
+      window.setIgnoreMouseEvents(false),
+    );
     const persist = () => {
       const currentNoteId = noteIdByWebContents.get(window.webContents.id);
       if (currentNoteId) scheduleNoteStateSave(currentNoteId, window);
@@ -201,6 +215,15 @@ function validNoteId(value: unknown): value is string {
 }
 
 function registerIpc() {
+  registerNoteMousePassthrough(
+    ipcMain,
+    (senderId) =>
+      BrowserWindow.getAllWindows().find(
+        (window) => window.webContents.id === senderId,
+      ),
+    noteIdByWebContents,
+    () => screen.getCursorScreenPoint(),
+  );
   ipcMain.handle("window:get-state", (event) => {
     trustedWindow(event);
     return readMainState();
@@ -333,7 +356,7 @@ function createTray() {
   tray.setToolTip("烟笺");
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: "显示便签列表", click: () => mainWindow?.show() },
+      { label: "显示便签列表", click: activateMainWindow },
       { type: "separator" },
       {
         label: "退出",
@@ -344,10 +367,10 @@ function createTray() {
       },
     ]),
   );
-  tray.on("double-click", () => mainWindow?.show());
+  tray.on("double-click", activateMainWindow);
 }
 
-async function createMainWindow() {
+async function createMainWindow(showOnReady = true) {
   const state = readMainState();
   mainWindow = new BrowserWindow(
     createWindowOptions(join(__dirname, "preload.cjs"), state),
@@ -361,38 +384,54 @@ async function createMainWindow() {
       mainWindow?.hide();
     }
   });
-  mainWindow.once("ready-to-show", () => mainWindow?.show());
+  if (showOnReady) mainWindow.once("ready-to-show", () => mainWindow?.show());
   await loadRenderer(mainWindow);
 }
 
-app.whenReady().then(async () => {
-  session.defaultSession.setPermissionRequestHandler(
-    (_webContents, _permission, callback) => callback(false),
-  );
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) =>
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        "Content-Security-Policy": [
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co",
-        ],
-      },
-    }),
-  );
-  registerIpc();
-  await createMainWindow();
-  createTray();
-  await noteWindowManager.restoreOpen();
-});
+function activateMainWindow() {
+  void app.whenReady().then(async () => {
+    if (!mainWindow) {
+      await createMainWindow(true);
+      return;
+    }
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
+}
 
-app.on("before-quit", () => {
-  quitting = true;
-  saveMainState();
-});
-app.on("activate", () => {
-  if (mainWindow) mainWindow.show();
-  else void createMainWindow();
-});
-app.on("window-all-closed", () => {
-  /* Windows tray keeps the process alive. */
-});
+if (registerSingleInstance(app, activateMainWindow)) {
+  app.whenReady().then(async () => {
+    try {
+      ensureBackgroundLaunchAtLogin(app);
+    } catch (error) {
+      console.warn("Could not update the login launch mode", error);
+    }
+    session.defaultSession.setPermissionRequestHandler(
+      (_webContents, _permission, callback) => callback(false),
+    );
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) =>
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          "Content-Security-Policy": [
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+          ],
+        },
+      }),
+    );
+    registerIpc();
+    await createMainWindow(shouldShowMainWindow(process.argv));
+    createTray();
+    await noteWindowManager.restoreOpen();
+  });
+
+  app.on("before-quit", () => {
+    quitting = true;
+    saveMainState();
+  });
+  app.on("activate", activateMainWindow);
+  app.on("window-all-closed", () => {
+    /* Windows tray keeps the process alive. */
+  });
+}

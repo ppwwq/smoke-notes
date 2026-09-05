@@ -84,7 +84,7 @@ corepack pnpm --filter @smoke-notes/desktop package
 
 安装包输出到 `apps/desktop/release/`。当前未配置代码签名证书，因此 Windows SmartScreen 可能显示未知发布者提示。
 
-安装完成后，可进入“设置与同步 → 窗口 → 开机时启动”，控制烟笺是否随 Windows 登录自动显示主窗口。
+安装完成后，可进入“设置与同步 → 窗口 → 开机时启动”。随 Windows 登录启动时，烟笺只恢复上次仍打开的便签子窗口，主页面保持隐藏；用户主动启动应用或从托盘打开时仍显示主页面。
 
 ## 数据与隐私
 

@@ -31,6 +31,10 @@ contextBridge.exposeInMainWorld("smokeDesktop", {
     ipcRenderer.invoke("note-window:get-recent", currentNoteId, limit),
   switchNote: (targetNoteId: string): Promise<void> =>
     ipcRenderer.invoke("note-window:switch", targetNoteId),
+  setNoteWindowMousePassthrough: (ignore: boolean): Promise<void> =>
+    ipcRenderer.invoke("note-window:mouse-passthrough", ignore),
+  getNoteWindowPointer: (): Promise<{ x: number; y: number }> =>
+    ipcRenderer.invoke("note-window:pointer"),
   getNoteWindowState: (noteId: string): Promise<NoteWindowState> =>
     ipcRenderer.invoke("note-window:get-state", noteId),
   saveNoteWindowState: (
