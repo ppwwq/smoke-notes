@@ -97,6 +97,46 @@ describe("note mouse regions", () => {
     expect(setIgnore).toHaveBeenLastCalledWith(true);
   });
 
+  it("recovers input when a mouse move back into the note is not forwarded", async () => {
+    vi.useFakeTimers();
+    getPointer.mockResolvedValue({ x: 20, y: 120 });
+    attach();
+    await Promise.resolve();
+    expect(setIgnore).toHaveBeenLastCalledWith(true);
+
+    getPointer.mockResolvedValue({ x: 200, y: 100 });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(setIgnore).toHaveBeenLastCalledWith(false);
+
+    disconnect!();
+    disconnect = undefined;
+    getPointer.mockClear();
+    await vi.advanceTimersByTimeAsync(600);
+    expect(getPointer).not.toHaveBeenCalled();
+  });
+
+  it("does not pile up pointer requests or let a delayed reply override mouse input", async () => {
+    vi.useFakeTimers();
+    attach();
+    await vi.advanceTimersByTimeAsync(600);
+    expect(getPointer).toHaveBeenCalledTimes(1);
+    let resolvePointer!: (point: { x: number; y: number }) => void;
+    getPointer.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolvePointer = resolve;
+        }),
+    );
+    move(20, 120);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(getPointer).toHaveBeenCalledTimes(2);
+    move(200, 100);
+    resolvePointer({ x: 20, y: 120 });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(setIgnore).toHaveBeenLastCalledWith(false);
+    expect(getPointer).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps a drag interactive until release, including release outside the document", () => {
     attach();
     document.dispatchEvent(

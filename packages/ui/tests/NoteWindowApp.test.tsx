@@ -340,4 +340,33 @@ describe("NoteWindowApp", () => {
 
     expect(screen.getByDisplayValue("桌面便签")).toBeInTheDocument();
   });
+
+  it("allows only one switch at a time and lets the user retry a failed switch", async () => {
+    const notebook = (await repository.listNotebooks())[0]!;
+    const other = await repository.createNote(notebook.id, {
+      title: "另一张",
+      body: "",
+    });
+    vi.mocked(bridge.getRecentNoteIds).mockResolvedValue([noteId, other.id]);
+    let rejectSwitch!: (error: Error) => void;
+    vi.mocked(bridge.switchNote).mockImplementationOnce(
+      () =>
+        new Promise<void>((_, reject) => {
+          rejectSwitch = reject;
+        }),
+    );
+    render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    const tab = await screen.findByRole("button", { name: "切换便签：另一张" });
+    fireEvent.click(tab);
+    await waitFor(() => expect(bridge.switchNote).toHaveBeenCalledTimes(1));
+    fireEvent.click(tab);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(bridge.switchNote).toHaveBeenCalledTimes(1);
+    rejectSwitch(new Error("load failed"));
+    await screen.findByRole("alert");
+    fireEvent.click(tab);
+    await waitFor(() => expect(bridge.switchNote).toHaveBeenCalledTimes(2));
+  });
 });

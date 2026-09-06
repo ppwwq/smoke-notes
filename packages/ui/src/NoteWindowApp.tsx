@@ -45,6 +45,9 @@ export function NoteWindowApp({
   const [windowState, setWindowState] = useState<NoteWindowState | null>(null);
   const [recentNotes, setRecentNotes] = useState<Note[]>([]);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
+  const [switchError, setSwitchError] = useState<string | null>(null);
+  const switchingRef = useRef(false);
   const createControlRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<RichNoteEditorHandle>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -143,7 +146,11 @@ export function NoteWindowApp({
         } as CSSProperties
       }
     >
-      <nav className="recent-note-tabs" aria-label="最近便签">
+      <nav
+        className="recent-note-tabs"
+        aria-label="最近便签"
+        aria-busy={switching}
+      >
         {recentNotes.map((item) => {
           const displayTitle = item.title || "无标题便签";
           return (
@@ -153,20 +160,28 @@ export function NoteWindowApp({
               aria-label={`切换便签：${displayTitle}`}
               className={`recent-note-tab note-color-${item.color}${item.id === noteId ? " active" : ""}`}
               title={displayTitle}
+              disabled={switching}
               onClick={async () => {
-                if (item.id === noteId) return;
-                const target = await repository.getNote(item.id);
-                if (!target) {
-                  setRecentNotes((current) =>
-                    current.filter((candidate) => candidate.id !== item.id),
-                  );
-                  return;
-                }
+                if (item.id === noteId || switchingRef.current) return;
+                switchingRef.current = true;
+                setSwitching(true);
+                setSwitchError(null);
                 try {
+                  const target = await repository.getNote(item.id);
+                  if (!target) {
+                    setRecentNotes((current) =>
+                      current.filter((candidate) => candidate.id !== item.id),
+                    );
+                    setSwitchError("这张便签已不存在，请选择另一张。");
+                    return;
+                  }
                   await editorRef.current?.flushSave();
                   await bridge.switchNote(item.id);
                 } catch {
-                  /* Keep the current note visible when navigation fails. */
+                  setSwitchError("切换失败，当前内容已保留，请重试。");
+                } finally {
+                  switchingRef.current = false;
+                  setSwitching(false);
                 }
               }}
             >
@@ -266,6 +281,7 @@ export function NoteWindowApp({
           <X size={17} />
         </button>
       </header>
+      {switchError && <p role="alert">{switchError}</p>}
       <RichNoteEditor
         ref={editorRef}
         note={note}

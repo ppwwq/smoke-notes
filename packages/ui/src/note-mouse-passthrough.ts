@@ -35,6 +35,7 @@ export function attachNoteMousePassthrough(
   let disposed = false;
   let revision = 0;
   let frame = 0;
+  let pointerPending = false;
   const transitions = new Set<EventTarget>();
 
   const setIgnored = (value: boolean) => {
@@ -49,6 +50,8 @@ export function attachNoteMousePassthrough(
     setIgnored(Boolean(point && !held && !isNoteInteractive(root, point)));
   };
   const refreshPointer = () => {
+    if (pointerPending || disposed) return;
+    pointerPending = true;
     const requested = ++revision;
     void bridge
       .getNoteWindowPointer()
@@ -59,6 +62,9 @@ export function attachNoteMousePassthrough(
       })
       .catch(() => {
         /* A closing window no longer needs a position update. */
+      })
+      .finally(() => {
+        pointerPending = false;
       });
   };
   const move = (event: MouseEvent) => {
@@ -125,9 +131,15 @@ export function attachNoteMousePassthrough(
   root.addEventListener("transitionend", transitionEnd);
   root.addEventListener("transitioncancel", transitionEnd);
   refreshPointer();
+  // Forwarded mouse events can be lost across native focus/navigation changes.
+  // Only poll while input is ignored, so returning to the note can recover it.
+  const recoveryTimer = window.setInterval(() => {
+    if (ignored) refreshPointer();
+  }, 150);
 
   return () => {
     disposed = true;
+    window.clearInterval(recoveryTimer);
     observer.disconnect();
     mutations.disconnect();
     cancelAnimationFrame(frame);
