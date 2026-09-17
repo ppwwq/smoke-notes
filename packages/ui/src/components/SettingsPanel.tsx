@@ -9,9 +9,13 @@ import {
   X,
 } from "lucide-react";
 import type { DesktopBridge } from "../types";
+import type { WebBackground } from "../useWebBackground";
 
 interface SettingsPanelProps {
   bridge?: DesktopBridge;
+  webBackground?: WebBackground;
+  onWebBackgroundChange?: (value: WebBackground) => void;
+  backgroundNotice?: string;
   trash: TrashRecord[];
   onClose: () => void;
   onRestore: (item: TrashRecord) => Promise<void>;
@@ -21,6 +25,9 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({
   bridge,
+  webBackground,
+  onWebBackgroundChange,
+  backgroundNotice,
   trash,
   onClose,
   onRestore,
@@ -77,6 +84,38 @@ export function SettingsPanel({
             <X size={18} />
           </button>
         </header>
+
+        {webBackground !== undefined && (
+          <div className="settings-group">
+            <h3>外观</h3>
+            <fieldset className="web-background-options">
+              <legend>背景</legend>
+              {(["default", "paper"] as const).map((value) => (
+                <label className="web-background-option" key={value}>
+                  <input
+                    type="radio"
+                    name="web-background"
+                    value={value}
+                    checked={webBackground === value}
+                    onChange={() => onWebBackgroundChange?.(value)}
+                  />
+                  <span
+                    className={`background-preview background-preview-${value}`}
+                    aria-hidden="true"
+                  />
+                  <span>
+                    {value === "paper" ? "纸面模式" : "默认模式"}
+                    <small>
+                      {value === "paper" ? "米黄色横线纸" : "深色烟雾背景"}
+                    </small>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            <p>应用于整个网页界面，记住此浏览器的选择。</p>
+            {backgroundNotice && <p role="status">{backgroundNotice}</p>}
+          </div>
+        )}
 
         {bridge && (
           <div className="settings-group">

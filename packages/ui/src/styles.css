@@ -42,6 +42,7 @@ button {
   position: relative;
   display: grid;
   grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   width: 100vw;
   height: 100vh;
   min-width: 560px;
@@ -136,7 +137,12 @@ button {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
+  overflow: hidden;
   padding: 30px 16px 16px;
+}
+.sidebar > :not(.notebook-scroll) {
+  flex-shrink: 0;
 }
 
 .brand-block {
@@ -246,9 +252,10 @@ button {
 }
 .notebook-scroll {
   position: relative;
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   padding: 4px 0 24px;
   mask-image: linear-gradient(
     to bottom,
@@ -375,6 +382,7 @@ button {
 }
 .settings-link {
   display: flex;
+  margin-top: auto;
   align-items: center;
   gap: 10px;
   padding: 11px 10px;
@@ -1676,6 +1684,9 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.recent-note-tab.active {
+  width: 42px;
+}
 .recent-note-tab:hover,
 .recent-note-tab:focus-visible {
   width: 100px;
@@ -2113,4 +2124,15 @@ button {
   .format-toolbar {
     overflow: visible;
   }
+}
+
+.rich-note-scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.format-toolbar[hidden] {
+  display: none;
 }

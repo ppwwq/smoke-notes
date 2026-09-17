@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import type { DesktopBridge } from "./types";
+import { useNoteTabs } from "./useNoteTabs";
 import { attachNoteMousePassthrough } from "./note-mouse-passthrough";
 import {
   RichNoteEditor,
@@ -43,7 +44,11 @@ export function NoteWindowApp({
 }: NoteWindowAppProps) {
   const [note, setNote] = useState<Note | null>(null);
   const [windowState, setWindowState] = useState<NoteWindowState | null>(null);
-  const [recentNotes, setRecentNotes] = useState<Note[]>([]);
+  const { notes: recentNotes, setNotes: setRecentNotes } = useNoteTabs(
+    repository,
+    noteId,
+    bridge,
+  );
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
@@ -69,23 +74,6 @@ export function NoteWindowApp({
     window.addEventListener("smoke-notes:data-changed", reload);
     return () => window.removeEventListener("smoke-notes:data-changed", reload);
   }, [refresh, bridge, noteId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void bridge.getRecentNoteIds(noteId, 20).then(async (ids) => {
-      const uniqueIds = [...new Set([noteId, ...ids])];
-      const records = await Promise.all(
-        uniqueIds.map((id) => repository.getNote(id)),
-      );
-      if (!cancelled)
-        setRecentNotes(
-          records.filter((item): item is Note => item !== null).slice(0, 4),
-        );
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [bridge, noteId, repository]);
 
   useEffect(() => {
     if (!createMenuOpen) return;
@@ -160,6 +148,7 @@ export function NoteWindowApp({
               aria-label={`切换便签：${displayTitle}`}
               className={`recent-note-tab note-color-${item.color}${item.id === noteId ? " active" : ""}`}
               title={displayTitle}
+              aria-current={item.id === noteId ? "page" : undefined}
               disabled={switching}
               onClick={async () => {
                 if (item.id === noteId || switchingRef.current) return;

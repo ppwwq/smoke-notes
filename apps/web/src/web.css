@@ -12,3 +12,689 @@ body,
   border-radius: 0;
   border: 0;
 }
+
+.platform-web.web-editing {
+  position: absolute;
+  top: var(--web-viewport-top, 0px);
+  left: 0;
+  width: 100%;
+  height: var(--web-viewport-height, 100dvh);
+  min-height: 0;
+}
+.platform-web.web-editing .workspace-shell {
+  padding-bottom: 0;
+}
+.platform-web .mobile-note-screen {
+  inset: 0;
+  min-height: 0;
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.platform-web .mobile-note-header {
+  flex-shrink: 0;
+  height: auto;
+  min-height: 54px;
+  gap: 4px;
+}
+.platform-web .mobile-note-header button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: auto;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 8px;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.platform-web .mobile-note-header .mobile-save-button {
+  color: var(--accent-bright);
+}
+.platform-web .mobile-note-header button:disabled {
+  opacity: 0.5;
+}
+.platform-web .mobile-note-header .mobile-save-status {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0;
+}
+.platform-web .rich-note-content {
+  font-size: 18px;
+  line-height: 1.7;
+}
+.platform-web .format-toolbar {
+  flex-shrink: 0;
+  padding-bottom: max(6px, env(safe-area-inset-bottom, 0px));
+}
+.platform-web .format-status {
+  display: none;
+}
+.platform-web .mark-palette {
+  left: auto;
+  right: 0;
+}
+.platform-web .rich-note-body {
+  overscroll-behavior-y: contain;
+  scroll-padding-block: 16px;
+}
+
+/* Browser-local paper preference; note content and desktop colors stay intact. */
+.web-background-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.web-background-options legend {
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.web-background-option {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.web-background-option:has(input:checked) {
+  border-color: var(--accent-bright);
+  background: rgba(183, 142, 65, 0.08);
+}
+.web-background-option:has(input:focus-visible) {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 3px;
+}
+.web-background-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.web-background-option small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.background-preview {
+  flex: 0 0 36px;
+  height: 44px;
+  border: 1px solid rgba(183, 142, 65, 0.3);
+  border-radius: 5px;
+}
+.background-preview-default {
+  background: #121519;
+}
+.background-preview-paper {
+  background: repeating-linear-gradient(
+    to bottom,
+    #f4ecd8 0 10px,
+    #d9cdb5 10px 11px
+  );
+}
+/* Solid paper surfaces surround the ruled note body. */
+html[data-web-background="paper"],
+body[data-web-background="paper"],
+body[data-web-background="paper"] #root {
+  background: #f4ecd8;
+  color-scheme: light;
+}
+.platform-web[data-web-background="paper"] {
+  --paper: #f4ecd8;
+  --paper-surface: #fbf5e7;
+  --paper-inset: #ece2cc;
+  --paper-ink: #3f372b;
+  --paper-muted: #716452;
+  --paper-rule: rgba(121, 100, 65, 0.2);
+  --paper-line-height: 32px;
+  --ink: var(--paper-ink);
+  --muted: var(--paper-muted);
+  --dim: #7b6c56;
+  --line: var(--paper-rule);
+  --line-strong: #c7b99e;
+  --glass: var(--paper-surface);
+  --glass-soft: var(--paper-inset);
+  --accent: #82652e;
+  --accent-bright: #75551b;
+  --danger: #a33f48;
+  color: var(--paper-ink);
+  background: var(--paper);
+  color-scheme: light;
+}
+.platform-web[data-web-background="paper"]::before {
+  opacity: 1;
+  background: var(--paper);
+  border-color: var(--paper-rule);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.platform-web[data-web-background="paper"] .noise-layer {
+  display: none;
+}
+.platform-web[data-web-background="paper"]
+  :is(.sidebar, .note-index, .mobile-bottom-nav) {
+  background: var(--paper-inset);
+}
+.platform-web[data-web-background="paper"] .sidebar-shell {
+  background: transparent;
+}
+.platform-web[data-web-background="paper"]
+  :is(.mobile-note-screen, .editor-pane, .empty-workspace, .todo-workspace) {
+  background: var(--paper);
+}
+.platform-web[data-web-background="paper"]
+  :is(
+    .settings-panel,
+    .pairing-dialog,
+    .create-note-menu,
+    .undo-toast,
+    .mobile-menu
+  ) {
+  color: var(--paper-ink);
+  background: var(--paper-surface);
+  box-shadow: 0 8px 28px rgba(69, 50, 20, 0.16);
+}
+.platform-web[data-web-background="paper"]
+  :is(.settings-backdrop, .pairing-backdrop, .mobile-scrim) {
+  background: rgba(69, 50, 20, 0.28);
+}
+.platform-web[data-web-background="paper"]
+  :is(
+    .primary-nav,
+    .notebook-link,
+    .note-card,
+    .todo-row input,
+    .trash-row,
+    .slider-setting span,
+    .switch-setting,
+    .note-body-input
+  ) {
+  color: var(--paper-ink);
+}
+.platform-web[data-web-background="paper"]
+  :is(
+    .sticky-card p,
+    .sticky-card time,
+    .note-preview,
+    .note-card time,
+    .connection-chip,
+    .editor-toolbar,
+    .editor-footer,
+    .editor-empty,
+    .search-field kbd,
+    .mobile-bottom-nav button
+  ) {
+  color: var(--paper-muted);
+}
+.platform-web[data-web-background="paper"] :is(input, textarea)::placeholder {
+  color: var(--paper-muted);
+  opacity: 1;
+}
+.platform-web[data-web-background="paper"]
+  :is(
+    .inline-create input,
+    .notebook-item-controls > input,
+    .note-card,
+    .todo-composer,
+    .blank-note-card,
+    .icon-button,
+    .brand-mark
+  ) {
+  background: var(--paper-surface);
+}
+.platform-web[data-web-background="paper"]
+  :is(
+    .primary-nav:hover,
+    .primary-nav.active,
+    .note-card:hover,
+    .note-card.active,
+    .create-note-menu button:hover,
+    .create-note-menu button:focus-visible
+  ) {
+  color: var(--paper-ink);
+  background: #e4d7bc;
+  border-color: var(--line-strong);
+}
+.platform-web[data-web-background="paper"] .notebook-link:is(:hover, .active) {
+  background: rgba(var(--notebook-tint), 0.18);
+}
+.platform-web[data-web-background="paper"] .sticky-card {
+  background: color-mix(
+    in srgb,
+    rgb(var(--note-tint)) 13%,
+    var(--paper-surface)
+  );
+  box-shadow: 0 6px 18px rgba(69, 50, 20, 0.09);
+}
+.platform-web[data-web-background="paper"] .sticky-card:hover {
+  box-shadow: 0 10px 24px rgba(69, 50, 20, 0.15);
+}
+.platform-web[data-web-background="paper"]
+  :is(.note-kind-marker, .sticky-card-grid > .sortable-row > .drag-handle) {
+  background: var(--paper-surface);
+}
+.platform-web[data-web-background="paper"]
+  :is(
+    .sticky-card:hover .sticky-card-delete,
+    .sticky-card-delete:focus-visible
+  ) {
+  color: var(--paper-muted);
+  background: var(--paper-inset);
+}
+.platform-web[data-web-background="paper"] .sticky-card-delete:hover,
+.platform-web[data-web-background="paper"] .pairing-error {
+  color: var(--danger);
+}
+.platform-web[data-web-background="paper"]
+  :is(
+    .todo-row,
+    .completion-ring,
+    .progress-orbit,
+    .pairing-icon,
+    .pairing-action,
+    .todo-composer button,
+    .create-note-button
+  ) {
+  border-color: var(--line-strong);
+}
+.platform-web[data-web-background="paper"]
+  :is(
+    .pairing-action,
+    .pairing-retry,
+    .todo-composer button,
+    .create-note-button
+  ) {
+  background: var(--paper-inset);
+}
+.platform-web[data-web-background="paper"] .todo-row.completed input {
+  color: var(--paper-muted);
+  text-decoration-color: var(--paper-muted);
+}
+.platform-web[data-web-background="paper"] .completion-ring {
+  background: var(--paper-surface);
+}
+.platform-web[data-web-background="paper"]
+  .todo-row.completed
+  .completion-ring {
+  border-color: var(--accent);
+  box-shadow: none;
+}
+.platform-web[data-web-background="paper"] .qr-shell {
+  background: var(--paper-surface);
+}
+.platform-web[data-web-background="paper"] .qr-shell svg path[fill="#eaf4f8"] {
+  fill: var(--paper-ink);
+}
+.platform-web[data-web-background="paper"] .mobile-bottom-nav button.active {
+  color: var(--accent-bright);
+}
+.platform-web[data-web-background="paper"] .mark-palette .clear-mark {
+  color: var(--paper-ink);
+  background: var(--paper-inset);
+}
+.platform-web .sidebar {
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+}
+.platform-web[data-web-background="paper"] .rich-note-editor {
+  background: var(--paper);
+}
+.platform-web[data-web-background="paper"] .mobile-note-header,
+.platform-web[data-web-background="paper"] .rich-note-title,
+.platform-web[data-web-background="paper"] .format-toolbar {
+  border-color: var(--paper-rule);
+}
+.platform-web[data-web-background="paper"] .mobile-note-header button,
+.platform-web[data-web-background="paper"] .mobile-note-header span,
+.platform-web[data-web-background="paper"] .format-toolbar button {
+  color: var(--paper-muted);
+}
+.platform-web[data-web-background="paper"]
+  .mobile-note-header
+  .mobile-save-button {
+  color: #75551b;
+}
+.platform-web[data-web-background="paper"] .rich-note-title {
+  color: var(--paper-ink);
+}
+.platform-web[data-web-background="paper"] .rich-note-title::placeholder {
+  color: var(--paper-muted);
+}
+.platform-web[data-web-background="paper"] .rich-note-content {
+  padding: 16px 24px 32px;
+  color: var(--paper-ink);
+  font-size: 18px;
+  line-height: var(--paper-line-height);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0 calc(var(--paper-line-height) - 1px),
+    var(--paper-rule) calc(var(--paper-line-height) - 1px)
+      var(--paper-line-height)
+  );
+  background-origin: content-box;
+  background-clip: content-box;
+}
+/* Whole-line spacing keeps wrapped paragraphs and nested checklists on the rules. */
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  :is(p, ul, ol, li.task-list-item) {
+  margin-block: 0;
+}
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  :is(h1, h2, h3, h4, h5, h6, blockquote, pre) {
+  margin-block: var(--paper-line-height);
+  line-height: var(--paper-line-height);
+}
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  li.task-list-item
+  > label {
+  padding-top: 8px;
+}
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  li.task-list-item
+  input[type="checkbox"] {
+  border-color: #897a63;
+}
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  li.task-list-item
+  input[type="checkbox"]:checked {
+  background: #756044;
+  box-shadow: inset 0 0 0 3px var(--paper);
+}
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  li.task-list-item[data-checked="true"]
+  > div {
+  color: var(--paper-muted);
+}
+.platform-web[data-web-background="paper"] .format-toolbar {
+  background: var(--paper);
+}
+.platform-web[data-web-background="paper"] .format-toolbar > button,
+.platform-web[data-web-background="paper"] .mark-control > button {
+  min-width: 36px;
+  min-height: 44px;
+}
+.platform-web[data-web-background="paper"]
+  .format-toolbar
+  button:is(:hover, .active) {
+  color: var(--paper-ink);
+  background: #e4d7bc;
+}
+.platform-web[data-web-background="paper"] .format-divider {
+  background: var(--paper-rule);
+}
+.platform-web[data-web-background="paper"] .mark-palette {
+  background: #fbf5e7;
+  border-color: #c7b99e;
+  box-shadow: 0 8px 24px rgba(69, 50, 20, 0.16);
+}
+.platform-web[data-web-background="paper"] .note-color-dot.active {
+  box-shadow: 0 0 0 2px #5f513f;
+}
+
+/* Override inline palette styles for display only, preserving their stored values. */
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  span[style*="color: rgb(217, 221, 225)"],
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  span[style*="color: #d9dde1"] {
+  color: #3f372b !important;
+}
+.platform-web[data-web-background="paper"]
+  .mark-palette
+  button[aria-label="字体色 #d9dde1"] {
+  background: #3f372b;
+}
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  span[style*="color: rgb(233, 130, 134)"],
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  span[style*="color: #e98286"] {
+  color: #a33f48 !important;
+}
+.platform-web[data-web-background="paper"]
+  .mark-palette
+  button[aria-label="字体色 #e98286"] {
+  background: #a33f48;
+}
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  span[style*="color: rgb(230, 163, 92)"],
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  span[style*="color: #e6a35c"] {
+  color: #925317 !important;
+}
+.platform-web[data-web-background="paper"]
+  .mark-palette
+  button[aria-label="字体色 #e6a35c"] {
+  background: #925317;
+}
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  span[style*="color: rgb(215, 189, 104)"],
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  span[style*="color: #d7bd68"] {
+  color: #786017 !important;
+}
+.platform-web[data-web-background="paper"]
+  .mark-palette
+  button[aria-label="字体色 #d7bd68"] {
+  background: #786017;
+}
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  span[style*="color: rgb(117, 185, 154)"],
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  span[style*="color: #75b99a"] {
+  color: #336c51 !important;
+}
+.platform-web[data-web-background="paper"]
+  .mark-palette
+  button[aria-label="字体色 #75b99a"] {
+  background: #336c51;
+}
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  span[style*="color: rgb(120, 174, 205)"],
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  span[style*="color: #78aecd"] {
+  color: #346580 !important;
+}
+.platform-web[data-web-background="paper"]
+  .mark-palette
+  button[aria-label="字体色 #78aecd"] {
+  background: #346580;
+}
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  span[style*="color: rgb(181, 154, 214)"],
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  span[style*="color: #b59ad6"] {
+  color: #70518f !important;
+}
+.platform-web[data-web-background="paper"]
+  .mark-palette
+  button[aria-label="字体色 #b59ad6"] {
+  background: #70518f;
+}
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  mark[style*="background-color: rgb(111, 61, 64)"],
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  mark[style*="background-color: #6f3d40"] {
+  background-color: #f0c5c2 !important;
+}
+.platform-web[data-web-background="paper"]
+  .mark-palette
+  button[aria-label="荧光色 #6f3d40"] {
+  background: #f0c5c2;
+}
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  mark[style*="background-color: rgb(115, 81, 45)"],
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  mark[style*="background-color: #73512d"] {
+  background-color: #f0d1a7 !important;
+}
+.platform-web[data-web-background="paper"]
+  .mark-palette
+  button[aria-label="荧光色 #73512d"] {
+  background: #f0d1a7;
+}
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  mark[style*="background-color: rgb(127, 106, 47)"],
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  mark[style*="background-color: #7f6a2f"] {
+  background-color: #eadb9e !important;
+}
+.platform-web[data-web-background="paper"]
+  .mark-palette
+  button[aria-label="荧光色 #7f6a2f"] {
+  background: #eadb9e;
+}
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  mark[style*="background-color: rgb(54, 95, 80)"],
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  mark[style*="background-color: #365f50"] {
+  background-color: #c4dec7 !important;
+}
+.platform-web[data-web-background="paper"]
+  .mark-palette
+  button[aria-label="荧光色 #365f50"] {
+  background: #c4dec7;
+}
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  mark[style*="background-color: rgb(54, 88, 109)"],
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  mark[style*="background-color: #36586d"] {
+  background-color: #c6dce7 !important;
+}
+.platform-web[data-web-background="paper"]
+  .mark-palette
+  button[aria-label="荧光色 #36586d"] {
+  background: #c6dce7;
+}
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  mark[style*="background-color: rgb(86, 68, 109)"],
+.platform-web[data-web-background="paper"]
+  .rich-note-content
+  mark[style*="background-color: #56446d"] {
+  background-color: #dbcee8 !important;
+}
+.platform-web[data-web-background="paper"]
+  .mark-palette
+  button[aria-label="荧光色 #56446d"] {
+  background: #dbcee8;
+}
+
+/* Landscape keyboard editing: keep one header and scroll the entire page of text. */
+.platform-web .compact-editing .mobile-note-header {
+  min-height: 48px;
+  padding-block: 2px;
+}
+.platform-web .compact-editing .mobile-save-status {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.platform-web .compact-editor .rich-note-scroll {
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scroll-padding-block: 16px;
+}
+.platform-web .compact-editor .rich-note-body {
+  flex: none;
+  overflow: visible;
+}
+.platform-web .compact-editor .note-color-strip,
+.platform-web .compact-editor .rich-note-title {
+  flex-shrink: 0;
+}
+.platform-web .floating-format-toolbar {
+  position: absolute;
+  z-index: 15;
+  top: 4px;
+  right: 8px;
+  left: auto;
+  max-width: calc(100% - 16px);
+  min-height: 48px;
+  padding: 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: #151a1f;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+.platform-web .floating-format-toolbar > button,
+.platform-web .floating-format-toolbar .mark-control > button {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+.platform-web .floating-format-toolbar .mark-palette {
+  top: calc(100% + 8px);
+  bottom: auto;
+  max-height: calc(
+    var(--web-viewport-height, 100dvh) - 124px - env(safe-area-inset-top, 0px)
+  );
+  overflow-y: auto;
+}
+.platform-web .editor-more-control {
+  position: relative;
+}
+.platform-web .editor-more-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  padding: 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #151a1f;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+}
+.platform-web .editor-more-menu button {
+  color: var(--danger);
+}
+.platform-web[data-web-background="paper"] .floating-format-toolbar,
+.platform-web[data-web-background="paper"] .editor-more-menu {
+  background: #fbf5e7;
+}
+@media (max-width: 430px) {
+  .platform-web .floating-format-toolbar {
+    flex-wrap: wrap;
+    width: min(240px, calc(100% - 16px));
+  }
+  .platform-web .floating-format-toolbar .format-divider {
+    display: none;
+  }
+}

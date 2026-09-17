@@ -17,6 +17,7 @@ describe("NoteWindowApp", () => {
   let bridge: DesktopBridge;
 
   beforeEach(async () => {
+    sessionStorage.clear();
     vi.stubGlobal(
       "ResizeObserver",
       class {
@@ -76,6 +77,152 @@ describe("NoteWindowApp", () => {
     vi.unstubAllGlobals();
     await database.delete();
   });
+
+  it("keeps tab positions across switches and document remounts despite recent-order changes", async () => {
+    const notebook = (await repository.listNotebooks())[0]!;
+    const second = await repository.createNote(notebook.id, {
+      title: "第二张",
+      body: "",
+    });
+    const third = await repository.createNote(notebook.id, {
+      title: "第三张",
+      body: "",
+    });
+    vi.mocked(bridge.getRecentNoteIds).mockResolvedValue([
+      noteId,
+      second.id,
+      third.id,
+    ]);
+    const firstWindow = render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    const labels = () =>
+      screen
+        .getAllByRole("button", { name: /切换便签：/ })
+        .map((tab) => tab.getAttribute("aria-label"));
+    await screen.findByRole("button", { name: "切换便签：第三张" });
+    const original = labels();
+    fireEvent.click(screen.getByRole("button", { name: "切换便签：第二张" }));
+    await waitFor(() =>
+      expect(bridge.switchNote).toHaveBeenCalledWith(second.id),
+    );
+    firstWindow.unmount();
+    vi.mocked(bridge.getRecentNoteIds).mockResolvedValue([
+      second.id,
+      noteId,
+      third.id,
+    ]);
+    const secondWindow = render(
+      <NoteWindowApp
+        repository={repository}
+        noteId={second.id}
+        bridge={bridge}
+      />,
+    );
+    await screen.findByRole("button", { name: "切换便签：第三张" });
+    expect(labels()).toEqual(original);
+    expect(
+      screen.getByRole("button", { name: "切换便签：第二张" }),
+    ).toHaveAttribute("aria-current", "page");
+    secondWindow.unmount();
+    vi.mocked(bridge.getRecentNoteIds).mockResolvedValue([
+      third.id,
+      second.id,
+      noteId,
+    ]);
+    render(
+      <NoteWindowApp
+        repository={repository}
+        noteId={third.id}
+        bridge={bridge}
+      />,
+    );
+    await screen.findByRole("button", { name: "切换便签：第三张" });
+    expect(labels()).toEqual(original);
+    expect(
+      screen.getByRole("button", { name: "切换便签：第三张" }),
+    ).toHaveClass("active");
+  });
+
+  it("removes deleted tabs and appends a replacement without reordering surviving tabs", async () => {
+    const notebook = (await repository.listNotebooks())[0]!;
+    const others = await Promise.all(
+      ["第二张", "第三张", "第四张", "补位便签"].map((title) =>
+        repository.createNote(notebook.id, { title, body: "" }),
+      ),
+    );
+    vi.mocked(bridge.getRecentNoteIds).mockResolvedValue([
+      noteId,
+      ...others.map((note) => note.id),
+    ]);
+    render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    await screen.findByRole("button", { name: "切换便签：第四张" });
+    await repository.trashNote(others[0]!.id);
+    vi.mocked(bridge.getRecentNoteIds).mockResolvedValue([
+      others[3]!.id,
+      others[2]!.id,
+      others[1]!.id,
+      noteId,
+    ]);
+    window.dispatchEvent(new CustomEvent("smoke-notes:data-changed"));
+    await screen.findByRole("button", { name: "切换便签：补位便签" });
+    expect(
+      screen
+        .getAllByRole("button", { name: /切换便签：/ })
+        .map((tab) => tab.textContent),
+    ).toEqual(["桌面便签", "第三张", "第四张", "补位便签"]);
+  });
+
+  it("keeps an externally opened note visible when the stored row already has four tabs", async () => {
+    const notebook = (await repository.listNotebooks())[0]!;
+    const others = await Promise.all(
+      ["第二张", "第三张", "第四张", "新打开的便签"].map((title) =>
+        repository.createNote(notebook.id, { title, body: "" }),
+      ),
+    );
+    sessionStorage.setItem(
+      "smoke-notes:note-tabs",
+      JSON.stringify([noteId, ...others.slice(0, 3).map((note) => note.id)]),
+    );
+    vi.mocked(bridge.getRecentNoteIds).mockResolvedValue(
+      others.map((note) => note.id).reverse(),
+    );
+    render(
+      <NoteWindowApp
+        repository={repository}
+        noteId={others[3]!.id}
+        bridge={bridge}
+      />,
+    );
+    await screen.findByRole("button", { name: "切换便签：新打开的便签" });
+    expect(
+      screen
+        .getAllByRole("button", { name: /切换便签：/ })
+        .map((tab) => tab.textContent),
+    ).toEqual(["桌面便签", "第二张", "第三张", "新打开的便签"]);
+    expect(
+      screen.getByRole("button", { name: "切换便签：新打开的便签" }),
+    ).toHaveAttribute("aria-current", "page");
+  });
+
+  it.each(["{broken", '{"unexpected":true}', '[null, 123, "", "missing"]'])(
+    "recovers a usable tab list from invalid stored order %s",
+    async (stored) => {
+      sessionStorage.setItem("smoke-notes:note-tabs", stored);
+      render(
+        <NoteWindowApp
+          repository={repository}
+          noteId={noteId}
+          bridge={bridge}
+        />,
+      );
+      expect(
+        await screen.findByRole("button", { name: "切换便签：桌面便签" }),
+      ).toHaveAttribute("aria-current", "page");
+    },
+  );
 
   it("closes the window without deleting the note", async () => {
     const user = userEvent.setup();

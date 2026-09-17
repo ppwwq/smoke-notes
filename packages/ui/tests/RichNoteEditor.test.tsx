@@ -393,3 +393,70 @@ describe("RichNoteEditor", () => {
     expect(screen.getByText("已自动保存")).toBeInTheDocument();
   });
 });
+
+describe("compact formatting", () => {
+  it("keeps the focused title visible when entering compact mode after scrolling the body", () => {
+    const onSave = vi.fn();
+    const { rerender } = render(<RichNoteEditor note={note} onSave={onSave} />);
+    const body = screen
+      .getByRole("textbox", { name: "便签正文" })
+      .closest(".rich-note-body")!;
+    body.scrollTop = 480;
+    fireEvent.scroll(body);
+    act(() => screen.getByRole("textbox", { name: "便签标题" }).focus());
+    rerender(<RichNoteEditor note={note} onSave={onSave} compact />);
+    expect(body.closest(".rich-note-scroll")!.scrollTop).toBe(0);
+  });
+  it("keeps the editor and draft mounted across layout changes, with tools hidden by default", () => {
+    const onSave = vi.fn();
+    const { rerender } = render(<RichNoteEditor note={note} onSave={onSave} />);
+    const body = screen.getByRole("textbox", { name: "便签正文" });
+    const title = screen.getByRole("textbox", { name: "便签标题" });
+    fireEvent.change(title, { target: { value: "未保存的标题" } });
+    fireEvent.compositionStart(body);
+    rerender(<RichNoteEditor note={note} onSave={onSave} compact />);
+    expect(
+      screen.queryByRole("button", { name: "粗体" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "便签正文" })).toBe(body);
+    expect(title).toHaveValue("未保存的标题");
+    fireEvent.compositionEnd(body);
+    rerender(<RichNoteEditor note={note} onSave={onSave} />);
+    expect(screen.getByRole("button", { name: "粗体" })).toBeVisible();
+    expect(screen.getByRole("textbox", { name: "便签正文" })).toBe(body);
+  });
+  it("keeps palettes open until applying a mark, then requests dismissal", () => {
+    const close = vi.fn();
+    render(
+      <RichNoteEditor
+        note={note}
+        onSave={vi.fn()}
+        compact
+        formatOpen
+        onFormatClose={close}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "字体颜色" }));
+    expect(close).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "清除字体颜色" }));
+    expect(close).toHaveBeenCalledOnce();
+  });
+  it("dismisses formatting after a command, outside pointer or Escape", () => {
+    const close = vi.fn();
+    render(
+      <RichNoteEditor
+        note={note}
+        onSave={vi.fn()}
+        compact
+        formatOpen
+        onFormatClose={close}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "粗体" }));
+    expect(close).toHaveBeenCalledTimes(1);
+    fireEvent.pointerDown(document.body);
+    expect(close).toHaveBeenCalledTimes(2);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(close).toHaveBeenCalledTimes(3);
+  });
+});

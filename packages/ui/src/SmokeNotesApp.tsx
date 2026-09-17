@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   Menu,
   Minus,
+  MoreHorizontal,
   NotebookPen,
   Trash2,
   Wifi,
@@ -33,6 +34,8 @@ import {
   type RichNoteEditorHandle,
 } from "./components/RichNoteEditor";
 import type { AppPlatform, DesktopBridge, PairingController } from "./types";
+import { useWebViewport } from "./useWebViewport";
+import { useWebBackground } from "./useWebBackground";
 import "./styles.css";
 
 interface SmokeNotesAppProps {
@@ -54,6 +57,11 @@ export function SmokeNotesApp({
   desktopBridge,
   pairingController,
 }: SmokeNotesAppProps) {
+  const {
+    background,
+    changeBackground,
+    notice: backgroundNotice,
+  } = useWebBackground(platform === "web");
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
@@ -72,7 +80,13 @@ export function SmokeNotesApp({
     () => typeof navigator === "undefined" || navigator.onLine,
   );
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.82);
+  const [saveStatus, setSaveStatus] = useState("已自动保存");
+  const [manualSaving, setManualSaving] = useState(false);
+  const manualSavePending = useRef(false);
   const editorRef = useRef<RichNoteEditorHandle>(null);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const [editorMenu, setEditorMenu] = useState<"format" | "more" | null>(null);
+  const closeEditorMenu = useCallback(() => setEditorMenu(null), []);
 
   const refresh = useCallback(
     async (preferredNotebookId?: string | null) => {
@@ -178,10 +192,59 @@ export function SmokeNotesApp({
     ? (notes.find((item) => item.id === selectedNoteId) ?? null)
     : null;
 
+  const webEditing = platform === "web" && view === "notes" && !!selectedNote;
+  const { style: viewportStyle, compactEditing } = useWebViewport(webEditing);
+  useEffect(() => {
+    setEditorMenu(null);
+  }, [compactEditing, selectedNoteId]);
+  useEffect(() => {
+    if (editorMenu !== "more") return;
+    const outside = (event: PointerEvent) => {
+      if (
+        event.target instanceof Element &&
+        !event.target.closest(".editor-more-control")
+      )
+        closeEditorMenu();
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeEditorMenu();
+        moreButtonRef.current?.focus({ preventScroll: true });
+      }
+    };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [editorMenu, closeEditorMenu]);
+
+  async function saveManually() {
+    if (manualSavePending.current) return;
+    manualSavePending.current = true;
+    setManualSaving(true);
+    try {
+      await editorRef.current?.flushSave();
+      setSaveStatus("已保存");
+    } catch {
+      setSaveStatus("保存失败，请重试");
+    } finally {
+      manualSavePending.current = false;
+      setManualSaving(false);
+    }
+  }
+
   return (
     <div
-      className={`smoke-app platform-${platform}`}
-      style={{ "--background-opacity": backgroundOpacity } as CSSProperties}
+      className={`smoke-app platform-${platform}${webEditing ? " web-editing" : ""}`}
+      data-web-background={platform === "web" ? background : undefined}
+      style={
+        {
+          "--background-opacity": backgroundOpacity,
+          ...viewportStyle,
+        } as CSSProperties
+      }
     >
       <div className="noise-layer" />
       {platform === "desktop" && desktopBridge && (
@@ -203,14 +266,16 @@ export function SmokeNotesApp({
           </button>
         </header>
       )}
-      <button
-        type="button"
-        className="mobile-menu"
-        aria-label="打开便签本"
-        onClick={() => setMobileNavOpen(true)}
-      >
-        <Menu size={19} />
-      </button>
+      {!webEditing && (
+        <button
+          type="button"
+          className="mobile-menu"
+          aria-label="打开便签本"
+          onClick={() => setMobileNavOpen(true)}
+        >
+          <Menu size={19} />
+        </button>
+      )}
       <div className={`sidebar-shell${mobileNavOpen ? " mobile-open" : ""}`}>
         <button
           type="button"
@@ -292,7 +357,9 @@ export function SmokeNotesApp({
             }}
           />
         ) : platform === "web" && selectedNote ? (
-          <main className="mobile-note-screen">
+          <main
+            className={`mobile-note-screen${compactEditing ? " compact-editing" : ""}`}
+          >
             <header className="mobile-note-header">
               <button
                 type="button"
@@ -302,29 +369,91 @@ export function SmokeNotesApp({
                 }}
               >
                 <ArrowLeft size={18} />
+                返回
               </button>
-              <span>手机便签</span>
+              <span
+                className="mobile-save-status"
+                role="status"
+                aria-label="保存状态"
+                aria-live="polite"
+              >
+                {saveStatus}
+              </span>
+              {compactEditing && (
+                <button
+                  type="button"
+                  data-format-toggle
+                  aria-label="格式"
+                  aria-expanded={editorMenu === "format"}
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={() =>
+                    setEditorMenu(editorMenu === "format" ? null : "format")
+                  }
+                >
+                  格式
+                </button>
+              )}
               <button
                 type="button"
-                aria-label="删除便签"
-                onClick={async () => {
-                  if (!(await saveBeforeLeaving())) return;
-                  await repository.trashNote(selectedNote.id);
-                  setLastTrashed({
-                    entity: "note",
-                    id: selectedNote.id,
-                    label: selectedNote.title,
-                  });
-                  setSelectedNoteId(null);
-                  await refreshAfterMutation(selectedNotebookId);
-                }}
+                className="mobile-save-button"
+                aria-label="保存"
+                disabled={manualSaving || saveStatus === "保存中…"}
+                onClick={() => void saveManually()}
               >
-                <Trash2 size={17} />
+                {manualSaving ? "保存中…" : "保存"}
               </button>
+              <div className="editor-more-control">
+                {compactEditing && (
+                  <button
+                    type="button"
+                    ref={moreButtonRef}
+                    aria-label="更多操作"
+                    aria-haspopup="menu"
+                    aria-expanded={editorMenu === "more"}
+                    onPointerDown={(event) => event.preventDefault()}
+                    onClick={() =>
+                      setEditorMenu(editorMenu === "more" ? null : "more")
+                    }
+                  >
+                    <MoreHorizontal size={18} />
+                  </button>
+                )}
+                {(!compactEditing || editorMenu === "more") && (
+                  <div
+                    role={compactEditing ? "menu" : undefined}
+                    className={compactEditing ? "editor-more-menu" : undefined}
+                  >
+                    <button
+                      type="button"
+                      aria-label="删除便签"
+                      role={compactEditing ? "menuitem" : undefined}
+                      onClick={async () => {
+                        closeEditorMenu();
+                        if (!(await saveBeforeLeaving())) return;
+                        await repository.trashNote(selectedNote.id);
+                        setLastTrashed({
+                          entity: "note",
+                          id: selectedNote.id,
+                          label: selectedNote.title,
+                        });
+                        setSelectedNoteId(null);
+                        await refreshAfterMutation(selectedNotebookId);
+                      }}
+                    >
+                      <Trash2 size={17} />
+                      {compactEditing && "删除便签"}
+                    </button>
+                  </div>
+                )}
+              </div>
             </header>
             <RichNoteEditor
               ref={editorRef}
+              compact={compactEditing}
+              formatOpen={editorMenu === "format"}
+              onFormatClose={closeEditorMenu}
               note={selectedNote}
+              onSaveStatusChange={setSaveStatus}
               onSave={async (changes) => {
                 const updated = await repository.updateNote(
                   selectedNote.id,
@@ -381,28 +510,33 @@ export function SmokeNotesApp({
         )}
       </div>
 
-      <nav className="mobile-bottom-nav" aria-label="手机主导航">
-        <button
-          type="button"
-          className={view === "notes" ? "active" : ""}
-          onClick={() => setView("notes")}
-        >
-          <NotebookPen size={19} />
-          <span>便签</span>
-        </button>
-        <button
-          type="button"
-          className={view === "todos" ? "active" : ""}
-          onClick={() => void showTodos()}
-        >
-          <CheckCircle2 size={19} />
-          <span>待办</span>
-        </button>
-      </nav>
+      {!webEditing && (
+        <nav className="mobile-bottom-nav" aria-label="手机主导航">
+          <button
+            type="button"
+            className={view === "notes" ? "active" : ""}
+            onClick={() => setView("notes")}
+          >
+            <NotebookPen size={19} />
+            <span>便签</span>
+          </button>
+          <button
+            type="button"
+            className={view === "todos" ? "active" : ""}
+            onClick={() => void showTodos()}
+          >
+            <CheckCircle2 size={19} />
+            <span>待办</span>
+          </button>
+        </nav>
+      )}
 
       {settingsOpen && (
         <SettingsPanel
           bridge={desktopBridge}
+          webBackground={platform === "web" ? background : undefined}
+          onWebBackgroundChange={changeBackground}
+          backgroundNotice={backgroundNotice}
           trash={trash}
           onClose={() => setSettingsOpen(false)}
           onOpenPairing={() => {

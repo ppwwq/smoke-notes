@@ -28,6 +28,14 @@ Download the **0.1.5 installer for Windows x64**. Create a notebook, add a note 
 
 The installer is currently unsigned, so Windows may show a publisher or reputation warning. Review the download source and [SHA-256 verification record](docs/verification-2026-09-05.md) before deciding whether to install.
 
+## 最近更新 · Recent updates
+
+当前源码版本为 **0.1.7**：新增网页全局纸面模式、横屏键盘下的精简编辑与手动保存，稳定桌面侧签顺序，并统一网页和桌面应用图标。完整说明及验证范围见 [更新记录](CHANGELOG.md)。
+
+Source version **0.1.7** adds a web paper theme, compact landscape editing, manual save, stable desktop note tabs, and matching app icons. See the [changelog](CHANGELOG.md) for validation and delivery details.
+
+源码版本与上方安装包下载版本分开记录；本次源码推送未发布新的安装包。
+
 ## 看看界面 · Preview
 
 ![烟笺便签本与便签界面 / Smoke Notes notebook and notes](docs/media/overview.png)

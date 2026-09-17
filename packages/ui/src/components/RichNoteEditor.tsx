@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -39,6 +40,10 @@ interface RichNoteEditorProps {
   note: Note;
   onSave(changes: NoteEdit): Promise<void> | void;
   className?: string;
+  onSaveStatusChange?(status: string): void;
+  compact?: boolean;
+  formatOpen?: boolean;
+  onFormatClose?(): void;
 }
 
 export interface RichNoteEditorHandle {
@@ -83,10 +88,24 @@ interface EditingSession {
 export const RichNoteEditor = forwardRef<
   RichNoteEditorHandle,
   RichNoteEditorProps
->(function RichNoteEditor({ note, onSave, className = "" }, ref) {
+>(function RichNoteEditor(
+  {
+    note,
+    onSave,
+    onSaveStatusChange,
+    className = "",
+    compact = false,
+    formatOpen = false,
+    onFormatClose,
+  },
+  ref,
+) {
   const [draft, setDraft] = useState(() => noteEdit(note));
   const { title, color } = draft;
   const [saveStatus, setSaveStatus] = useState("已自动保存");
+  useEffect(() => {
+    onSaveStatusChange?.(saveStatus);
+  }, [saveStatus, onSaveStatusChange]);
   const sessionRef = useRef<EditingSession>({
     noteId: note.id,
     incoming: draft,
@@ -129,6 +148,57 @@ export const RichNoteEditor = forwardRef<
       updateDraft({ contentJson, body: richTextToPlainText(contentJson) });
     },
   });
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const toolbarRef = useRef<HTMLElement>(null);
+  const scrollPosition = useRef({ body: 0, combined: 0 });
+  const previousCompact = useRef(compact);
+  useLayoutEffect(() => {
+    const scroll = scrollRef.current;
+    const body = scroll?.querySelector<HTMLElement>(".rich-note-body");
+    if (!scroll || !body || previousCompact.current === compact) return;
+    const position = scrollPosition.current;
+    if (compact) {
+      // Keep the active paragraph in place; the title remains reachable by scrolling up.
+      scroll.scrollTop = document.activeElement?.closest(".rich-note-body")
+        ? position.body
+        : 0;
+      position.combined = scroll.scrollTop;
+    } else {
+      body.scrollTop = position.combined;
+      position.body = body.scrollTop;
+      scroll.scrollTop = 0;
+    }
+    previousCompact.current = compact;
+  }, [compact]);
+
+  const closeFormat = useCallback(() => {
+    setMarkMenu(null);
+    onFormatClose?.();
+  }, [onFormatClose]);
+  useEffect(() => {
+    if (!compact || !formatOpen) return;
+    const outside = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        !toolbarRef.current?.contains(target) &&
+        !target.closest("[data-format-toggle]")
+      )
+        closeFormat();
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      closeFormat();
+      editor?.commands.focus(undefined, { scrollIntoView: !compact });
+    };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [compact, formatOpen, closeFormat, editor]);
 
   const flushSave = useCallback(async () => {
     const session = sessionRef.current;
@@ -228,35 +298,72 @@ export const RichNoteEditor = forwardRef<
 
   return (
     <section
-      className={`rich-note-editor note-color-${color} ${className}`.trim()}
+      className={`rich-note-editor note-color-${color} ${className}${compact ? " compact-editor" : ""}`.trim()}
     >
-      <div className="note-color-strip" aria-label="便签颜色">
-        {NOTE_COLORS.map((item) => (
-          <button
-            key={item}
-            type="button"
-            className={`note-color-dot note-color-dot-${item}${color === item ? " active" : ""}`}
-            aria-label={`便签颜色：${item}`}
-            onClick={() => updateDraft({ color: item })}
-          >
-            {color === item && <Check size={11} />}
-          </button>
-        ))}
+      <div
+        className="rich-note-scroll"
+        ref={scrollRef}
+        onScrollCapture={(event) => {
+          const target = event.target as HTMLElement;
+          if (target === scrollRef.current)
+            scrollPosition.current.combined = target.scrollTop;
+          else if (target.classList.contains("rich-note-body"))
+            scrollPosition.current.body = target.scrollTop;
+        }}
+      >
+        <div className="note-color-strip" aria-label="便签颜色">
+          {NOTE_COLORS.map((item) => (
+            <button
+              key={item}
+              type="button"
+              className={`note-color-dot note-color-dot-${item}${color === item ? " active" : ""}`}
+              aria-label={`便签颜色：${item}`}
+              onClick={() => updateDraft({ color: item })}
+            >
+              {color === item && <Check size={11} />}
+            </button>
+          ))}
+        </div>
+        <input
+          className="rich-note-title"
+          aria-label="便签标题"
+          value={title}
+          placeholder="输入标题"
+          onChange={(event) => updateDraft({ title: event.target.value })}
+        />
+        <EditorContent editor={editor} className="rich-note-body" />
       </div>
-      <input
-        className="rich-note-title"
-        aria-label="便签标题"
-        value={title}
-        placeholder="输入标题"
-        onChange={(event) => updateDraft({ title: event.target.value })}
-      />
-      <EditorContent editor={editor} className="rich-note-body" />
-      <footer className="format-toolbar" aria-label="文字格式">
+      <footer
+        ref={toolbarRef}
+        hidden={compact && !formatOpen}
+        role="toolbar"
+        className={`format-toolbar${compact ? " floating-format-toolbar" : ""}`}
+        aria-label="文字格式"
+        onClick={(event) => {
+          if (!compact) return;
+          const target = (event.target as Element).closest("button");
+          if (
+            target &&
+            (target.parentElement === toolbarRef.current ||
+              target.closest(".mark-palette"))
+          )
+            closeFormat();
+        }}
+        onPointerDown={(event) => {
+          if (onSaveStatusChange || compact) event.preventDefault();
+        }}
+      >
         <button
           type="button"
           aria-label="粗体"
           className={editor.isActive("bold") ? "active" : ""}
-          onClick={() => editor.chain().focus().toggleBold().run()}
+          onClick={() =>
+            editor
+              .chain()
+              .focus(undefined, { scrollIntoView: !compact })
+              .toggleBold()
+              .run()
+          }
         >
           <Bold size={17} />
         </button>
@@ -264,7 +371,13 @@ export const RichNoteEditor = forwardRef<
           type="button"
           aria-label="斜体"
           className={editor.isActive("italic") ? "active" : ""}
-          onClick={() => editor.chain().focus().toggleItalic().run()}
+          onClick={() =>
+            editor
+              .chain()
+              .focus(undefined, { scrollIntoView: !compact })
+              .toggleItalic()
+              .run()
+          }
         >
           <Italic size={17} />
         </button>
@@ -272,7 +385,13 @@ export const RichNoteEditor = forwardRef<
           type="button"
           aria-label="下划线"
           className={editor.isActive("underline") ? "active" : ""}
-          onClick={() => editor.chain().focus().toggleUnderline().run()}
+          onClick={() =>
+            editor
+              .chain()
+              .focus(undefined, { scrollIntoView: !compact })
+              .toggleUnderline()
+              .run()
+          }
         >
           <UnderlineIcon size={17} />
         </button>
@@ -280,7 +399,13 @@ export const RichNoteEditor = forwardRef<
           type="button"
           aria-label="删除线"
           className={editor.isActive("strike") ? "active" : ""}
-          onClick={() => editor.chain().focus().toggleStrike().run()}
+          onClick={() =>
+            editor
+              .chain()
+              .focus(undefined, { scrollIntoView: !compact })
+              .toggleStrike()
+              .run()
+          }
         >
           <Strikethrough size={17} />
         </button>
@@ -288,7 +413,13 @@ export const RichNoteEditor = forwardRef<
           type="button"
           aria-label="待办清单"
           className={editor.isActive("taskList") ? "active" : ""}
-          onClick={() => editor.chain().focus().toggleTaskList().run()}
+          onClick={() =>
+            editor
+              .chain()
+              .focus(undefined, { scrollIntoView: !compact })
+              .toggleTaskList()
+              .run()
+          }
         >
           <List size={17} />
         </button>
@@ -311,7 +442,11 @@ export const RichNoteEditor = forwardRef<
                   aria-label={`字体色 ${item}`}
                   style={{ "--swatch": item } as CSSProperties}
                   onClick={() => {
-                    editor.chain().focus().setColor(item).run();
+                    editor
+                      .chain()
+                      .focus(undefined, { scrollIntoView: !compact })
+                      .setColor(item)
+                      .run();
                     setMarkMenu(null);
                   }}
                 />
@@ -321,7 +456,11 @@ export const RichNoteEditor = forwardRef<
                 className="clear-mark"
                 aria-label="清除字体颜色"
                 onClick={() => {
-                  editor.chain().focus().unsetColor().run();
+                  editor
+                    .chain()
+                    .focus(undefined, { scrollIntoView: !compact })
+                    .unsetColor()
+                    .run();
                   setMarkMenu(null);
                 }}
               >
@@ -350,7 +489,11 @@ export const RichNoteEditor = forwardRef<
                   aria-label={`荧光色 ${item}`}
                   style={{ "--swatch": item } as CSSProperties}
                   onClick={() => {
-                    editor.chain().focus().setHighlight({ color: item }).run();
+                    editor
+                      .chain()
+                      .focus(undefined, { scrollIntoView: !compact })
+                      .setHighlight({ color: item })
+                      .run();
                     setMarkMenu(null);
                   }}
                 />
@@ -360,7 +503,11 @@ export const RichNoteEditor = forwardRef<
                 className="clear-mark"
                 aria-label="清除荧光标注"
                 onClick={() => {
-                  editor.chain().focus().unsetHighlight().run();
+                  editor
+                    .chain()
+                    .focus(undefined, { scrollIntoView: !compact })
+                    .unsetHighlight()
+                    .run();
                   setMarkMenu(null);
                 }}
               >

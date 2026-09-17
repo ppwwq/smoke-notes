@@ -68,6 +68,7 @@ describe("SmokeNotesApp", () => {
   let repository: LocalRepository;
 
   beforeEach(async () => {
+    localStorage.clear();
     database = new SmokeNotesDatabase(`ui-test-${crypto.randomUUID()}`);
     repository = new LocalRepository(database, {
       workspaceId: "workspace-1",
@@ -84,12 +85,133 @@ describe("SmokeNotesApp", () => {
 
   afterEach(async () => {
     cleanup();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    Reflect.deleteProperty(navigator, "maxTouchPoints");
     await database.delete();
+  });
+
+  it("remembers the web paper background across remounts and can restore the default", async () => {
+    const first = render(
+      <SmokeNotesApp repository={repository} platform="web" />,
+    );
+    await screen.findByRole("button", { name: "打开便签：周会记录" });
+    fireEvent.click(screen.getByRole("button", { name: "窗口设置" }));
+    fireEvent.click(screen.getByRole("radio", { name: /纸面模式/ }));
+    expect(screen.getByRole("radio", { name: /纸面模式/ })).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "关闭设置" }));
+    fireEvent.click(screen.getByRole("button", { name: "打开便签：周会记录" }));
+    const editor = await screen.findByRole("textbox", { name: "便签正文" });
+    expect(editor.closest(".platform-web")).toHaveAttribute(
+      "data-web-background",
+      "paper",
+    );
+    expect(editor).toHaveTextContent("确认下周计划");
+    first.unmount();
+    render(<SmokeNotesApp repository={repository} platform="web" />);
+    await screen.findByRole("button", { name: "打开便签：周会记录" });
+    fireEvent.click(screen.getByRole("button", { name: "窗口设置" }));
+    expect(screen.getByRole("radio", { name: /纸面模式/ })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: /默认模式/ }));
+    expect(document.querySelector(".platform-web")).toHaveAttribute(
+      "data-web-background",
+      "default",
+    );
+  });
+
+  it("keeps web background preferences out of the desktop settings", async () => {
+    localStorage.setItem("smoke-notes:web-background", "paper");
+    render(
+      <SmokeNotesApp
+        repository={repository}
+        platform="desktop"
+        desktopBridge={desktopBridge()}
+      />,
+    );
+    await screen.findByRole("button", { name: "打开便签：周会记录" });
+    fireEvent.click(screen.getByRole("button", { name: "窗口设置" }));
+    expect(
+      screen.queryByRole("radio", { name: /纸面模式/ }),
+    ).not.toBeInTheDocument();
+    expect(document.querySelector(".platform-desktop")).not.toHaveAttribute(
+      "data-web-background",
+    );
+  });
+
+  it("applies the background even when browser preference storage is unavailable", async () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("storage blocked");
+    });
+    render(<SmokeNotesApp repository={repository} platform="web" />);
+    await screen.findByRole("button", { name: "打开便签：周会记录" });
+    fireEvent.click(screen.getByRole("button", { name: "窗口设置" }));
+    fireEvent.click(screen.getByRole("radio", { name: /纸面模式/ }));
+    expect(document.querySelector(".platform-web")).toHaveAttribute(
+      "data-web-background",
+      "paper",
+    );
+    expect(
+      within(screen.getByRole("dialog", { name: "设置与同步" })).getByRole(
+        "status",
+      ),
+    ).toHaveTextContent("本次有效");
+  });
+
+  it("automatically uses a compact header and restores tools without replacing the editor", async () => {
+    vi.stubGlobal("innerWidth", 1194);
+    vi.stubGlobal("innerHeight", 834);
+    Object.defineProperty(navigator, "maxTouchPoints", {
+      configurable: true,
+      value: 5,
+    });
+    const viewport = Object.assign(new EventTarget(), {
+      height: 834,
+      offsetTop: 0,
+      scale: 1,
+    });
+    vi.stubGlobal("visualViewport", viewport);
+    render(<SmokeNotesApp repository={repository} platform="web" />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "打开便签：周会记录" }),
+    );
+    const body = await screen.findByRole("textbox", { name: "便签正文" });
+    act(() => body.focus());
+    act(() => {
+      viewport.height = 350;
+      viewport.dispatchEvent(new Event("resize"));
+    });
+    expect(
+      screen.queryByRole("button", { name: "粗体" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "删除便签" }),
+    ).not.toBeInTheDocument();
+    const format = screen.getByRole("button", { name: "格式" });
+    fireEvent.click(format);
+    expect(format).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(screen.getByRole("button", { name: "粗体" }));
+    expect(format).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
+    expect(screen.getByRole("menuitem", { name: "删除便签" })).toBeVisible();
+    act(() => screen.getByRole("menuitem", { name: "删除便签" }).focus());
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.getByRole("button", { name: "更多操作" })).toHaveFocus();
+    expect(
+      screen.queryByRole("menuitem", { name: "删除便签" }),
+    ).not.toBeInTheDocument();
+    act(() => {
+      viewport.height = 834;
+      viewport.dispatchEvent(new Event("resize"));
+    });
+    expect(screen.getByRole("textbox", { name: "便签正文" })).toBe(body);
+    expect(screen.getByRole("button", { name: "粗体" })).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "格式" }),
+    ).not.toBeInTheDocument();
   });
 
   const mobileNavigations = [
     "back",
-    "bottom-todos",
     "sidebar-todos",
     "notebook",
     "create-notebook",
@@ -102,12 +224,6 @@ describe("SmokeNotesApp", () => {
   ) {
     if (destination === "back") {
       fireEvent.click(screen.getByRole("button", { name: "返回便签列表" }));
-    } else if (destination === "bottom-todos") {
-      fireEvent.click(
-        within(
-          screen.getByRole("navigation", { name: "手机主导航" }),
-        ).getByRole("button", { name: "待办" }),
-      );
     } else if (destination === "sidebar-todos") {
       fireEvent.click(
         within(
@@ -203,6 +319,71 @@ describe("SmokeNotesApp", () => {
       );
     },
   );
+
+  it("manually saves once, stays in the editor, and restores navigation on return", async () => {
+    const pending = deferred<void>();
+    const update = repository.updateNote.bind(repository);
+    const save = vi
+      .spyOn(repository, "updateNote")
+      .mockImplementation(async (id, changes) => {
+        await pending.promise;
+        return update(id, changes);
+      });
+    render(<SmokeNotesApp repository={repository} platform="web" />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "打开便签：周会记录" }),
+    );
+    const title = await screen.findByRole("textbox", { name: "便签标题" });
+    expect(
+      screen.queryByRole("navigation", { name: "手机主导航" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "打开便签本" }),
+    ).not.toBeInTheDocument();
+    fireEvent.change(title, { target: { value: "手动保存的标题" } });
+    const button = screen.getByRole("button", { name: "保存" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(button).toBeDisabled();
+    expect(save).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      pending.resolve();
+      await pending.promise;
+    });
+    await waitFor(() => expect(button).not.toBeDisabled());
+    expect(title).toHaveValue("手动保存的标题");
+    fireEvent.click(screen.getByRole("button", { name: "返回便签列表" }));
+    expect(
+      await screen.findByRole("navigation", { name: "手机主导航" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "打开便签：手动保存的标题" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a manual save failure and retries without losing the draft", async () => {
+    const update = repository.updateNote.bind(repository);
+    const save = vi
+      .spyOn(repository, "updateNote")
+      .mockRejectedValueOnce(new Error("disk full"))
+      .mockImplementation(update);
+    render(<SmokeNotesApp repository={repository} platform="web" />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "打开便签：周会记录" }),
+    );
+    const title = await screen.findByRole("textbox", { name: "便签标题" });
+    fireEvent.change(title, { target: { value: "重试草稿" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(await screen.findByText("保存失败，请重试")).toBeInTheDocument();
+    expect(title).toHaveValue("重试草稿");
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("status", { name: "保存状态" }),
+      ).toHaveTextContent("已保存"),
+    );
+    expect(save).toHaveBeenCalledTimes(2);
+  });
 
   it("switches between notebooks and the fixed todo view", async () => {
     const user = userEvent.setup();
