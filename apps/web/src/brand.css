@@ -1,0 +1,14 @@
+/* Keep web branding aligned with the installed desktop application. */
+.platform-web .brand-mark {
+  position: relative;
+  overflow: hidden;
+  text-indent: -9999px;
+  border: 0;
+  box-shadow: none;
+}
+.platform-web .brand-mark::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url("/icon-192.png") center / contain no-repeat;
+}
