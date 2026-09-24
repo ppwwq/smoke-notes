@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from "react";
-import type { Notebook } from "@smoke-notes/core";
+import { TEXT_LIMITS, type Notebook } from "@smoke-notes/core";
 import {
   CheckCircle2,
   NotebookPen,
@@ -81,6 +81,7 @@ export function Sidebar(props: SidebarProps) {
           <input
             autoFocus
             aria-label="便签本名称"
+            maxLength={TEXT_LIMITS.notebookName}
             value={name}
             placeholder="新的便签本"
             onChange={(event) => setName(event.target.value)}
@@ -112,6 +113,7 @@ export function Sidebar(props: SidebarProps) {
                   <input
                     autoFocus
                     aria-label={`重命名：${notebook.name}`}
+                    maxLength={TEXT_LIMITS.notebookName}
                     value={renameValue}
                     onChange={(event) => setRenameValue(event.target.value)}
                     onKeyDown={(event) => {

@@ -1,0 +1,335 @@
+/* Liqui optics are confined to the web theme; paper keeps its existing rules. */
+[data-web-background="glass"] {
+  --lq-text: #f0f4f8;
+  --lq-text-dim: #bac8d4;
+  --lq-tint: rgba(38, 52, 64, 0.76);
+  --lq-tint-deep: rgba(17, 26, 36, 0.72);
+  --lq-rim-hi: rgba(235, 248, 255, 0.55);
+  --lq-rim-lo: rgba(235, 248, 255, 0.16);
+  --lq-highlight: rgba(218, 239, 255, 0.2);
+  --lq-accent: #addbff;
+}
+.platform-web[data-web-background="glass"] {
+  background:
+    radial-gradient(ellipse at 15% 0%, #253745, transparent 65%), #111a22;
+  --text-muted: #aabac7;
+}
+.platform-web[data-web-background="glass"]
+  :is(.mobile-note-header, .format-toolbar, .settings-panel, .pairing-dialog) {
+  position: relative;
+  isolation: isolate;
+  background: rgba(24, 35, 46, 0.88);
+  border: 1px solid rgba(211, 234, 250, 0.24);
+  border-radius: 16px;
+  box-shadow:
+    inset 0 1px 0 rgba(235, 248, 255, 0.3),
+    0 8px 28px #0003;
+  color: #f0f4f8;
+}
+.platform-web[data-web-background="glass"]
+  :is(
+    .mobile-note-header,
+    .format-toolbar,
+    .settings-panel,
+    .pairing-dialog
+  ):has(> .web-glass-optics) {
+  background: transparent;
+}
+.platform-web[data-web-background="glass"]
+  :is(.mobile-note-header, .format-toolbar, .settings-panel, .pairing-dialog)
+  > :not(.web-glass-optics) {
+  position: relative;
+  z-index: 1;
+}
+.platform-web .web-glass-optics {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.platform-web[data-web-background="glass"] .mobile-note-header {
+  margin: 8px 10px 0;
+  padding: 4px;
+  z-index: 8;
+}
+.platform-web[data-web-background="glass"] .mobile-note-screen {
+  background: #141d25;
+}
+.platform-web[data-web-background="glass"] .format-toolbar {
+  margin: 0 10px 8px;
+  z-index: 7;
+}
+.platform-web[data-web-background="glass"] .floating-format-toolbar {
+  position: absolute;
+}
+.platform-web[data-web-background="glass"] .rich-note-scroll {
+  background: linear-gradient(135deg, rgba(var(--note-tint), 0.1), #18212a);
+  color: #edf3f8;
+}
+.platform-web[data-web-background="glass"]
+  :is(.settings-backdrop, .pairing-backdrop) {
+  background: #050b1266;
+  backdrop-filter: none;
+}
+.platform-web[data-web-background="glass"] .settings-panel {
+  margin: 12px;
+  height: calc(100% - 24px);
+  max-height: calc(100dvh - 24px);
+  border-radius: 22px;
+  padding: 26px 22px;
+}
+.platform-web[data-web-background="glass"] .pairing-dialog {
+  border-radius: 22px;
+}
+.platform-web[data-web-background="glass"] .pairing-dialog > .pairing-close {
+  position: absolute;
+}
+.platform-web[data-web-background="glass"] .qr-shell {
+  background: #121b24;
+}
+.platform-web[data-web-background="glass"]
+  :is(.settings-panel, .pairing-dialog)
+  button {
+  min-height: 44px;
+  min-width: 44px;
+}
+.platform-web[data-web-background="glass"] .settings-panel :is(p, small) {
+  color: #bac8d4;
+}
+.background-preview-glass {
+  background: linear-gradient(140deg, #85a7be88, #172e41);
+  box-shadow: inset 0 1px 1px #def4ff;
+}
+.web-liqui-nav {
+  display: none;
+}
+.web-liqui-nav-row {
+  position: relative;
+  display: flex;
+  height: 46px;
+}
+.web-liqui-pill {
+  position: absolute;
+  top: 0;
+  width: 50%;
+  height: 46px;
+  border-radius: 23px;
+  background: var(--lq-highlight);
+  box-shadow:
+    inset 0 1px 0 var(--lq-rim-hi),
+    inset 0 0 0 0.5px var(--lq-rim-lo);
+  pointer-events: none;
+  transition: left 180ms ease-out;
+}
+.web-liqui-nav button {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 44px;
+  min-height: 46px;
+  border: 0;
+  border-radius: 23px;
+  background: transparent;
+  color: #c5d2dd;
+  font-size: 11px;
+  font-weight: 600;
+}
+.web-liqui-nav button[aria-current] {
+  color: #f3f9ff;
+}
+.platform-web :is(.web-liqui-nav button, .web-dialog button):focus-visible {
+  outline: 2px solid #a9daff;
+  outline-offset: -3px;
+}
+@media (max-width: 760px) {
+  .platform-web[data-web-background="glass"] .web-liqui-nav {
+    position: absolute;
+    display: block;
+    z-index: 20;
+    left: max(24px, env(safe-area-inset-left));
+    right: max(24px, env(safe-area-inset-right));
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    height: 58px;
+    padding: 6px;
+    border-radius: 29px;
+    background: #20303ddd;
+    box-shadow:
+      0 8px 28px #0006,
+      inset 0 1px 1px #e7f5ff66;
+  }
+  .platform-web[data-web-background="glass"]
+    .web-liqui-nav:has(> .web-glass-optics) {
+    background: transparent;
+  }
+  .platform-web[data-web-background="glass"] .workspace-shell {
+    padding-bottom: 0;
+  }
+  .platform-web[data-web-background="glass"]
+    :is(.notes-board-scroll, .todo-workspace) {
+    padding-bottom: calc(98px + env(safe-area-inset-bottom, 0px));
+  }
+  .platform-web[data-web-background="glass"] .settings-panel {
+    width: calc(100% - 24px);
+  }
+}
+/* Preferences have precedence over every material, including the original theme. */
+.platform-web[data-reduced-transparency="true"]:not(
+    [data-web-background="paper"]
+  )
+  :is(
+    .sidebar,
+    .notes-board,
+    .sticky-card,
+    .todo-workspace,
+    .mobile-note-screen,
+    .mobile-note-header,
+    .format-toolbar,
+    .settings-panel,
+    .pairing-dialog,
+    .mobile-bottom-nav,
+    .web-liqui-nav,
+    .mark-palette,
+    .editor-more-menu
+  ) {
+  background: #18232d;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.platform-web[data-reduced-transparency="true"]
+  :is(.web-glass-optics, .noise-layer) {
+  display: none;
+}
+.platform-web[data-reduced-transparency="true"] .web-liqui-pill {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .platform-web[data-web-background="glass"] *,
+  .platform-web[data-web-background="glass"] *::before {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+@media (forced-colors: active) {
+  .platform-web .web-glass-optics {
+    display: none;
+  }
+  .platform-web .web-liqui-nav {
+    background: Canvas;
+    border: 1px solid ButtonText;
+  }
+  .web-liqui-nav button[aria-current] {
+    outline: 2px solid Highlight;
+  }
+}
+
+.platform-web[data-web-background="glass"]::before {
+  display: none;
+}
+.platform-web[data-reduced-transparency="true"]::before {
+  opacity: 1;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.platform-web[data-web-background="glass"] .pairing-dialog {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+
+/* Keep scrollable modal content readable beyond the fixed-size optical layer. */
+.platform-web[data-web-background="glass"]
+  :is(.settings-panel, .pairing-dialog):has(> .web-glass-optics) {
+  background-color: #14202bcc;
+}
+.platform-web[data-web-background="glass"]
+  .settings-panel
+  .switch-setting
+  button {
+  width: 60px;
+  height: 44px;
+}
+.platform-web[data-web-background="glass"]
+  .settings-panel
+  .switch-setting
+  button
+  span {
+  width: 24px;
+  height: 24px;
+  top: 9px;
+  left: 5px;
+}
+.platform-web[data-web-background="glass"]
+  .settings-panel
+  .switch-setting
+  button.on
+  span {
+  left: 29px;
+}
+.platform-web[data-web-background="glass"] .format-toolbar > button,
+.platform-web[data-web-background="glass"]
+  .format-toolbar
+  .mark-control
+  > button {
+  min-width: 44px;
+  min-height: 44px;
+}
+.platform-web[data-web-background="glass"]
+  :is(.format-toolbar button, .mobile-note-header button) {
+  color: #c6d7e3;
+}
+.platform-web[data-web-background="glass"] .format-toolbar button.active {
+  color: #e7f6ff;
+  background: #375468;
+}
+@supports not (
+  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
+  .platform-web[data-web-background="glass"]
+    :is(
+      .mobile-note-header,
+      .format-toolbar,
+      .settings-panel,
+      .pairing-dialog,
+      .web-liqui-nav
+    ) {
+    background: #18232d;
+  }
+  .platform-web[data-web-background="glass"] .web-glass-optics {
+    display: none;
+  }
+}
+
+@media (max-width: 380px) {
+  .platform-web[data-web-background="glass"] .format-toolbar:not([hidden]) {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(44px, 1fr));
+    gap: 2px;
+    padding-inline: 4px;
+  }
+  .platform-web[data-web-background="glass"] .format-toolbar .format-divider {
+    display: none;
+  }
+  .platform-web[data-web-background="glass"] .format-toolbar > button,
+  .platform-web[data-web-background="glass"]
+    .format-toolbar
+    .mark-control
+    > button {
+    width: 100%;
+  }
+}
+
+.platform-web[data-web-background="glass"] .sticky-card p {
+  color: #b0bfca;
+}
+.platform-web[data-web-background="glass"] .sticky-card time {
+  color: #a0b0bd;
+}
+.platform-web[data-web-background="glass"] .mobile-save-status {
+  color: #b0bfca;
+}

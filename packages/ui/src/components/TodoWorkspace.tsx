@@ -1,5 +1,9 @@
 import { useMemo, useState } from "react";
-import type { Todo } from "@smoke-notes/core";
+import {
+  RecordValidationError,
+  TEXT_LIMITS,
+  type Todo,
+} from "@smoke-notes/core";
 import { Plus, Trash2 } from "lucide-react";
 import { SortableStack } from "./SortableStack";
 
@@ -16,6 +20,46 @@ interface TodoWorkspaceProps {
     previous: number | null,
     next: number | null,
   ) => Promise<void>;
+}
+
+function TodoTextInput({
+  todo,
+  onUpdate,
+}: Pick<TodoWorkspaceProps, "onUpdate"> & { todo: Todo }) {
+  const [edit, setEdit] = useState<{ base: string; text: string } | null>(null);
+  const [error, setError] = useState("");
+  return (
+    <>
+      <input
+        aria-label={`编辑待办：${todo.text}`}
+        maxLength={TEXT_LIMITS.todoText}
+        value={edit?.text ?? todo.text}
+        onChange={(event) => {
+          const text = event.target.value;
+          setEdit((current) => ({ base: current?.base ?? todo.text, text }));
+          setError("");
+        }}
+        onBlur={async () => {
+          if (!edit) return;
+          if (edit.text === edit.base || edit.text === todo.text) {
+            setEdit(null);
+            return;
+          }
+          try {
+            await onUpdate(todo.id, edit.text);
+            setEdit((current) => (current === edit ? null : current));
+          } catch (error) {
+            setError(
+              error instanceof RecordValidationError
+                ? error.message
+                : "保存失败，请重试",
+            );
+          }
+        }}
+      />
+      {error && <span role="alert">{error}</span>}
+    </>
+  );
 }
 
 export function TodoWorkspace(props: TodoWorkspaceProps) {
@@ -67,6 +111,7 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
         <Plus size={17} />
         <input
           aria-label="新待办内容"
+          maxLength={TEXT_LIMITS.todoText}
           placeholder="添加一件要完成的事"
           value={text}
           onChange={(event) => setText(event.target.value)}
@@ -116,14 +161,7 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
                 >
                   <span />
                 </button>
-                <input
-                  aria-label={`编辑待办：${todo.text}`}
-                  defaultValue={todo.text}
-                  onBlur={(event) => {
-                    if (event.target.value !== todo.text)
-                      void props.onUpdate(todo.id, event.target.value);
-                  }}
-                />
+                <TodoTextInput todo={todo} onUpdate={props.onUpdate} />
                 <button
                   type="button"
                   className="row-delete"

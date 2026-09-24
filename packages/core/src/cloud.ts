@@ -1,4 +1,8 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  createClient,
+  FunctionsHttpError,
+  type SupabaseClient,
+} from "@supabase/supabase-js";
 import type { Note, Notebook, SyncEntity, Todo } from "./types";
 import {
   normalizeNoteColor,
@@ -138,7 +142,28 @@ class SupabaseSyncAdapter implements RemoteSyncAdapter {
         body: { operation },
       },
     );
-    if (error) throw error;
+    if (error) {
+      // Only these validation errors occur before the server writes a row.
+      // Network errors and unknown server failures must retry the same payload.
+      if (
+        error instanceof FunctionsHttpError &&
+        error.context instanceof Response &&
+        error.context.status === 400
+      ) {
+        const response = await error.context
+          .clone()
+          .json()
+          .catch(() => null);
+        if (
+          ["text_too_long", "content_too_large", "invalid_rank"].includes(
+            response?.error,
+          )
+        ) {
+          return { status: "rejected", reason: response.error };
+        }
+      }
+      throw error;
+    }
     if (data?.status === "conflict" && data.record) {
       return {
         status: "conflict",

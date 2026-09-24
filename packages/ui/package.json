@@ -5,9 +5,11 @@
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
+    "@base-ui/react": "1.8.0",
     "@dnd-kit/core": "latest",
     "@dnd-kit/sortable": "latest",
     "@dnd-kit/utilities": "latest",
+    "@liqui-design/glass": "0.3.0",
     "@smoke-notes/core": "workspace:*",
     "@tiptap/extension-color": "^3.30.5",
     "@tiptap/extension-highlight": "^3.30.5",

@@ -1,3 +1,4 @@
+import { TEXT_LIMITS } from "./validation";
 import type { Note } from "./types";
 
 export const RANK_GAP = 1024;
@@ -54,9 +55,11 @@ export function createConflictCopy(
   const suffix = "（冲突副本）";
   return {
     ...local,
-    title: local.title.endsWith(suffix)
-      ? local.title
-      : `${local.title}${suffix}`,
+    title:
+      local.title.endsWith(suffix) ||
+      local.title.length + suffix.length > TEXT_LIMITS.noteTitle
+        ? local.title
+        : `${local.title}${suffix}`,
     version: 1,
     conflictOf: serverId,
     updatedAt: timestamp,

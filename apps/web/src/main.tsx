@@ -12,6 +12,7 @@ import {
 import { PairingGate, SmokeNotesApp } from "@smoke-notes/ui";
 import "./web.css";
 import "./brand.css";
+import "./glass.css";
 
 function persistentId(key: string): string {
   const current = localStorage.getItem(key);

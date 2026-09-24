@@ -125,7 +125,9 @@ const noteWindowManager = new NoteWindowManager(
     const window = new BrowserWindow(
       createNoteWindowOptions(join(__dirname, "preload.cjs"), state),
     );
-    noteIdByWebContents.set(window.webContents.id, state.noteId);
+    // Native window properties are unavailable by the time `closed` fires.
+    const webContentsId = window.webContents.id;
+    noteIdByWebContents.set(webContentsId, state.noteId);
     configureRenderer(window);
     // A new document must never inherit the previous document's ignored-input state.
     window.webContents.on("did-start-loading", () =>
@@ -147,9 +149,7 @@ const noteWindowManager = new NoteWindowManager(
         if (currentNoteId) noteWindowManager.hide(currentNoteId);
       }
     });
-    window.on("closed", () =>
-      noteIdByWebContents.delete(window.webContents.id),
-    );
+    window.on("closed", () => noteIdByWebContents.delete(webContentsId));
     window.once("ready-to-show", () => window.show());
     await loadRenderer(window, state.noteId);
     return {

@@ -78,6 +78,40 @@ describe("NoteWindowApp", () => {
     await database.delete();
   });
 
+  it("keeps the note and draft open when saving before deletion fails", async () => {
+    database.notes.hook("updating", (changes) => {
+      if ("title" in changes) throw new Error("storage unavailable");
+    });
+    render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    fireEvent.change(await screen.findByRole("textbox", { name: "便签标题" }), {
+      target: { value: "不能丢失的草稿" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "删除便签" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("删除失败");
+    expect(screen.getByRole("textbox", { name: "便签标题" })).toHaveValue(
+      "不能丢失的草稿",
+    );
+    expect(await repository.getNote(noteId)).not.toBeNull();
+    expect(bridge.closeNote).not.toHaveBeenCalled();
+  });
+
+  it("saves the latest desktop draft before deleting so it can be restored", async () => {
+    render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    fireEvent.change(await screen.findByRole("textbox", { name: "便签标题" }), {
+      target: { value: "删除前的最新草稿" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "删除便签" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("textbox", { name: "便签标题" })).toBeNull(),
+    );
+    await repository.restore("note", noteId);
+    expect((await repository.getNote(noteId))?.title).toBe("删除前的最新草稿");
+  });
+
   it("keeps tab positions across switches and document remounts despite recent-order changes", async () => {
     const notebook = (await repository.listNotebooks())[0]!;
     const second = await repository.createNote(notebook.id, {

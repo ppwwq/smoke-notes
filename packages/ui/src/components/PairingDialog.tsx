@@ -1,3 +1,4 @@
+import { WebDialog } from "./glass/WebDialog";
 import { useCallback, useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Link2, RefreshCw, X } from "lucide-react";
@@ -5,11 +6,16 @@ import type { PairingDetails } from "@smoke-notes/core";
 import type { PairingController } from "../types";
 
 interface PairingDialogProps {
+  web?: boolean;
   controller?: PairingController;
   onClose: () => void;
 }
 
-export function PairingDialog({ controller, onClose }: PairingDialogProps) {
+export function PairingDialog({
+  controller,
+  onClose,
+  web = false,
+}: PairingDialogProps) {
   const [details, setDetails] = useState<PairingDetails | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -35,59 +41,57 @@ export function PairingDialog({ controller, onClose }: PairingDialogProps) {
   }, [create]);
 
   return (
-    <div className="pairing-backdrop">
-      <section className="pairing-dialog" role="dialog" aria-label="连接手机">
+    <WebDialog web={web} kind="pairing" label="连接手机" onClose={onClose}>
+      <button
+        type="button"
+        className="pairing-close"
+        aria-label="关闭手机配对"
+        onClick={onClose}
+      >
+        <X size={18} />
+      </button>
+      <span className="pairing-icon">
+        <Link2 size={21} />
+      </span>
+      <p className="eyebrow">PAIR A DEVICE</p>
+      <h2>连接手机</h2>
+      <p className="pairing-copy">
+        用手机相机扫描二维码，或在手机网页输入下方 6 位码。
+      </p>
+      {loading && (
+        <div className="pairing-loading">
+          <RefreshCw size={18} />
+          正在生成安全配对码…
+        </div>
+      )}
+      {details && (
+        <>
+          <div className="qr-shell">
+            <QRCodeSVG
+              value={details.url}
+              size={164}
+              bgColor="transparent"
+              fgColor="#eaf4f8"
+              level="M"
+            />
+          </div>
+          <div className="pairing-code" aria-label={`配对码 ${details.code}`}>
+            {details.code.slice(0, 3)} <span>{details.code.slice(3)}</span>
+          </div>
+          <p className="pairing-expiry">5 分钟内有效 · 使用一次后失效</p>
+        </>
+      )}
+      {error && <div className="pairing-error">{error}</div>}
+      {!loading && !details && (
         <button
           type="button"
-          className="pairing-close"
-          aria-label="关闭手机配对"
-          onClick={onClose}
+          className="pairing-retry"
+          onClick={() => void create()}
         >
-          <X size={18} />
+          重新尝试
         </button>
-        <span className="pairing-icon">
-          <Link2 size={21} />
-        </span>
-        <p className="eyebrow">PAIR A DEVICE</p>
-        <h2>连接手机</h2>
-        <p className="pairing-copy">
-          用手机相机扫描二维码，或在手机网页输入下方 6 位码。
-        </p>
-        {loading && (
-          <div className="pairing-loading">
-            <RefreshCw size={18} />
-            正在生成安全配对码…
-          </div>
-        )}
-        {details && (
-          <>
-            <div className="qr-shell">
-              <QRCodeSVG
-                value={details.url}
-                size={164}
-                bgColor="transparent"
-                fgColor="#eaf4f8"
-                level="M"
-              />
-            </div>
-            <div className="pairing-code" aria-label={`配对码 ${details.code}`}>
-              {details.code.slice(0, 3)} <span>{details.code.slice(3)}</span>
-            </div>
-            <p className="pairing-expiry">5 分钟内有效 · 使用一次后失效</p>
-          </>
-        )}
-        {error && <div className="pairing-error">{error}</div>}
-        {!loading && !details && (
-          <button
-            type="button"
-            className="pairing-retry"
-            onClick={() => void create()}
-          >
-            重新尝试
-          </button>
-        )}
-      </section>
-    </div>
+      )}
+    </WebDialog>
   );
 }
 

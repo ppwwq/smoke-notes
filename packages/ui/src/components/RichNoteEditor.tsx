@@ -1,3 +1,4 @@
+import { GlassSurface } from "./glass/GlassSurface";
 import {
   forwardRef,
   useCallback,
@@ -17,6 +18,8 @@ import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
 import {
   HIGHLIGHT_COLORS,
+  RecordValidationError,
+  TEXT_LIMITS,
   NOTE_COLORS,
   TEXT_COLORS,
   richTextToPlainText,
@@ -34,11 +37,14 @@ import {
   Underline as UnderlineIcon,
 } from "lucide-react";
 
-export type NoteEdit = Pick<Note, "title" | "body" | "contentJson" | "color">;
+export type NoteEdit = Pick<
+  Note,
+  "title" | "body" | "contentJson" | "color"
+> & { baseSnapshot?: Note };
 
 interface RichNoteEditorProps {
   note: Note;
-  onSave(changes: NoteEdit): Promise<void> | void;
+  onSave(changes: NoteEdit): Promise<Note | void> | Note | void;
   className?: string;
   onSaveStatusChange?(status: string): void;
   compact?: boolean;
@@ -78,6 +84,7 @@ function sameEdit(left: NoteEdit, right: NoteEdit) {
 
 interface EditingSession {
   noteId: string;
+  baseSnapshot: Note;
   incoming: NoteEdit;
   persisted: NoteEdit;
   draft: NoteEdit;
@@ -108,6 +115,7 @@ export const RichNoteEditor = forwardRef<
   }, [saveStatus, onSaveStatusChange]);
   const sessionRef = useRef<EditingSession>({
     noteId: note.id,
+    baseSnapshot: note,
     incoming: draft,
     persisted: draft,
     draft,
@@ -212,8 +220,40 @@ export const RichNoteEditor = forwardRef<
         !sameEdit(session.draft, session.persisted)
       ) {
         const changes = session.draft;
-        await session.onSave(changes);
-        session.persisted = changes;
+        const saved = await session.onSave({
+          ...changes,
+          baseSnapshot: session.baseSnapshot,
+        });
+        const accepted = saved ? noteEdit(saved) : changes;
+        const latest = session.draft;
+        const contentJson = sameContent(latest.contentJson, changes.contentJson)
+          ? accepted.contentJson
+          : latest.contentJson;
+        session.draft = {
+          title: latest.title === changes.title ? accepted.title : latest.title,
+          color: latest.color === changes.color ? accepted.color : latest.color,
+          contentJson,
+          body: richTextToPlainText(contentJson),
+        };
+        session.baseSnapshot = saved ?? {
+          ...session.baseSnapshot,
+          ...accepted,
+        };
+        session.persisted = accepted;
+        if (sessionRef.current === session) {
+          setDraft(session.draft);
+          // Apply only content newly merged by storage. Reapplying each React
+          // draft during typing can overwrite a newer ProseMirror transaction.
+          if (
+            editor &&
+            sameContent(latest.contentJson, changes.contentJson) &&
+            !sameContent(accepted.contentJson, changes.contentJson)
+          ) {
+            editor.commands.setContent(accepted.contentJson, {
+              emitUpdate: false,
+            });
+          }
+        }
       }
     };
     session.saving = save();
@@ -221,12 +261,15 @@ export const RichNoteEditor = forwardRef<
       await session.saving;
       if (sessionRef.current === session) setSaveStatus("已自动保存");
     } catch (error) {
-      if (sessionRef.current === session) setSaveStatus("保存失败");
+      if (sessionRef.current === session)
+        setSaveStatus(
+          error instanceof RecordValidationError ? error.message : "保存失败",
+        );
       throw error;
     } finally {
       session.saving = undefined;
     }
-  }, []);
+  }, [editor]);
 
   useImperativeHandle(ref, () => ({ flushSave }), [flushSave]);
 
@@ -257,6 +300,25 @@ export const RichNoteEditor = forwardRef<
         contentJson,
         body: richTextToPlainText(contentJson),
       };
+      // Only advance the baseline for fields the user has not changed.
+      // Dirty fields still refer to the version actually seen before editing.
+      session.baseSnapshot = {
+        ...note,
+        title:
+          next.title === incoming.title
+            ? note.title
+            : session.baseSnapshot.title,
+        color:
+          next.color === incoming.color
+            ? note.color
+            : session.baseSnapshot.color,
+        ...(sameContent(next.contentJson, incoming.contentJson)
+          ? {}
+          : {
+              contentJson: session.baseSnapshot.contentJson,
+              body: session.baseSnapshot.body,
+            }),
+      };
       session.incoming = incoming;
       session.persisted = incoming;
       session.draft = next;
@@ -266,6 +328,7 @@ export const RichNoteEditor = forwardRef<
     } else {
       sessionRef.current = {
         noteId: note.id,
+        baseSnapshot: note,
         incoming,
         persisted: incoming,
         draft: incoming,
@@ -327,6 +390,7 @@ export const RichNoteEditor = forwardRef<
         <input
           className="rich-note-title"
           aria-label="便签标题"
+          maxLength={TEXT_LIMITS.noteTitle}
           value={title}
           placeholder="输入标题"
           onChange={(event) => updateDraft({ title: event.target.value })}
@@ -353,6 +417,7 @@ export const RichNoteEditor = forwardRef<
           if (onSaveStatusChange || compact) event.preventDefault();
         }}
       >
+        <GlassSurface />
         <button
           type="button"
           aria-label="粗体"

@@ -254,10 +254,23 @@ export function NoteWindowApp({
         <button
           type="button"
           aria-label="删除便签"
+          disabled={switching}
           onClick={async () => {
-            await repository.trashNote(noteId);
-            await bridge.closeNote(noteId);
-            window.dispatchEvent(new CustomEvent("smoke-notes:data-changed"));
+            if (switchingRef.current) return;
+            switchingRef.current = true;
+            setSwitching(true);
+            setSwitchError(null);
+            try {
+              await editorRef.current?.flushSave();
+              await repository.trashNote(noteId);
+              window.dispatchEvent(new CustomEvent("smoke-notes:data-changed"));
+              await bridge.closeNote(noteId);
+            } catch {
+              setSwitchError("删除失败，请重试。");
+            } finally {
+              switchingRef.current = false;
+              setSwitching(false);
+            }
           }}
         >
           <Trash2 size={15} />
@@ -278,6 +291,7 @@ export function NoteWindowApp({
           const updated = await repository.updateNote(noteId, changes);
           setNote(updated);
           window.dispatchEvent(new CustomEvent("smoke-notes:data-changed"));
+          return updated;
         }}
         className="standalone-note-editor"
       />

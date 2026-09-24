@@ -1,8 +1,14 @@
 import type { Table } from "dexie";
-import { isTrashExpired, rankBetween, RANK_GAP } from "./domain";
+import {
+  createConflictCopy,
+  isTrashExpired,
+  rankBetween,
+  RANK_GAP,
+} from "./domain";
 import type { Note, Notebook, SyncEntity, SyncOperation, Todo } from "./types";
 import { SmokeNotesDatabase } from "./database";
-import { sameNoteContent } from "./note-merge";
+import { mergeNoteChanges, sameNoteContent } from "./note-merge";
+import { validateSyncRecord } from "./validation";
 import {
   createTaskListContent,
   migrateLegacyNoteContent,
@@ -178,27 +184,36 @@ export class LocalRepository {
   async updateNote(
     id: string,
     changes: Pick<Note, "title"> &
-      Partial<Pick<Note, "body" | "contentJson" | "color">>,
+      Partial<Pick<Note, "body" | "contentJson" | "color">> & {
+        baseSnapshot?: Note;
+      },
   ): Promise<Note> {
-    return this.persistMutation(this.database.notes, "note", id, (current) => {
-      const contentJson = changes.contentJson
-        ? normalizeRichTextDocument(
-            changes.contentJson,
-            changes.body ?? current.body,
-          )
-        : changes.body === undefined
-          ? current.contentJson
-          : migrateLegacyNoteContent(changes.body);
-      return {
-        title: changes.title.trim(),
-        contentJson,
-        body: richTextToPlainText(contentJson),
-        color:
-          changes.color === undefined
-            ? current.color
-            : normalizeNoteColor(changes.color),
-      };
-    });
+    return this.persistMutation(
+      this.database.notes,
+      "note",
+      id,
+      (current) => {
+        const contentJson = changes.contentJson
+          ? normalizeRichTextDocument(
+              changes.contentJson,
+              changes.body ?? current.body,
+            )
+          : changes.body === undefined
+            ? current.contentJson
+            : migrateLegacyNoteContent(changes.body);
+        return {
+          title: changes.title.trim(),
+          contentJson,
+          body: richTextToPlainText(contentJson),
+          color:
+            changes.color === undefined
+              ? current.color
+              : normalizeNoteColor(changes.color),
+        };
+      },
+      "upsert",
+      changes.baseSnapshot,
+    );
   }
 
   async updateTodo(id: string, changes: Pick<Todo, "text">): Promise<Todo> {
@@ -389,6 +404,7 @@ export class LocalRepository {
     id: string,
     changes: (current: T) => Partial<T>,
     action: SyncOperation["action"] = "upsert",
+    baseSnapshot?: Note,
   ): Promise<T> {
     // Read and enqueue in the same transaction so compaction cannot rebase between them.
     return this.database.transaction(
@@ -397,7 +413,37 @@ export class LocalRepository {
       this.database.operations,
       async () => {
         const current = await this.requireRecord(table, id);
-        const updated = this.updatedRecord(current, changes(current));
+        let updated = this.updatedRecord(current, changes(current));
+        if (entity === "note" && baseSnapshot) {
+          if (baseSnapshot.id !== id)
+            throw new Error("Draft belongs to a different note");
+          const merged = mergeNoteChanges(
+            updated as Note,
+            current as Note,
+            baseSnapshot,
+          );
+          if (merged) {
+            updated = {
+              ...merged,
+              version: updated.version,
+              updatedAt: updated.updatedAt,
+            } as T;
+          } else {
+            // Keep the editor on its existing note ID and preserve the other
+            // version atomically, including its upload, before replacing it.
+            const copy = createConflictCopy(
+              {
+                ...(current as Note),
+                id: this.createId(),
+                rank: (current as Note).rank + 0.5,
+              },
+              id,
+              this.now().toISOString(),
+            );
+            await this.database.notes.add(copy);
+            await this.enqueue("note", copy, 0);
+          }
+        }
         if (
           entity === "note" &&
           sameNoteContent(current as Note, updated as Note)
@@ -437,6 +483,7 @@ export class LocalRepository {
     action: SyncOperation["action"] = "upsert",
     baseSnapshot?: Note,
   ): Promise<void> {
+    validateSyncRecord(entity, record);
     const timestamp = this.now().toISOString();
     await this.database.operations.add({
       id: this.createId(),

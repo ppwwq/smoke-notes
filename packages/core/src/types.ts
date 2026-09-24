@@ -61,6 +61,8 @@ export interface SyncOperation {
   // Optional for operations queued before field-aware conflict resolution.
   baseSnapshot?: Note;
   payload: Record<string, unknown>;
+  // Set only when the server confirms this payload was not applied.
+  rejected?: string;
   attempts: number;
   nextAttemptAt: string;
   createdAt: string;

@@ -1,3 +1,4 @@
+import { WebDialog } from "./glass/WebDialog";
 import { useEffect, useRef, useState } from "react";
 import type { TrashRecord } from "@smoke-notes/core";
 import {
@@ -16,6 +17,9 @@ interface SettingsPanelProps {
   webBackground?: WebBackground;
   onWebBackgroundChange?: (value: WebBackground) => void;
   backgroundNotice?: string;
+  reduceTransparency?: boolean;
+  systemReduced?: boolean;
+  onReduceTransparencyChange?: (value: boolean) => void;
   trash: TrashRecord[];
   onClose: () => void;
   onRestore: (item: TrashRecord) => Promise<void>;
@@ -28,6 +32,9 @@ export function SettingsPanel({
   webBackground,
   onWebBackgroundChange,
   backgroundNotice,
+  reduceTransparency,
+  systemReduced,
+  onReduceTransparencyChange,
   trash,
   onClose,
   onRestore,
@@ -73,179 +80,201 @@ export function SettingsPanel({
   }, [bridge]);
 
   return (
-    <div className="settings-backdrop" role="presentation">
-      <section className="settings-panel" role="dialog" aria-label="设置与同步">
-        <header>
-          <div>
-            <p className="eyebrow">PREFERENCES</p>
-            <h2>设置与同步</h2>
-          </div>
-          <button type="button" aria-label="关闭设置" onClick={onClose}>
-            <X size={18} />
-          </button>
-        </header>
+    <WebDialog
+      web={webBackground !== undefined}
+      kind="settings"
+      label="设置与同步"
+      onClose={onClose}
+    >
+      <header>
+        <div>
+          <p className="eyebrow">PREFERENCES</p>
+          <h2>设置与同步</h2>
+        </div>
+        <button type="button" aria-label="关闭设置" onClick={onClose}>
+          <X size={18} />
+        </button>
+      </header>
 
-        {webBackground !== undefined && (
-          <div className="settings-group">
-            <h3>外观</h3>
-            <fieldset className="web-background-options">
-              <legend>背景</legend>
-              {(["default", "paper"] as const).map((value) => (
-                <label className="web-background-option" key={value}>
-                  <input
-                    type="radio"
-                    name="web-background"
-                    value={value}
-                    checked={webBackground === value}
-                    onChange={() => onWebBackgroundChange?.(value)}
-                  />
-                  <span
-                    className={`background-preview background-preview-${value}`}
-                    aria-hidden="true"
-                  />
-                  <span>
-                    {value === "paper" ? "纸面模式" : "默认模式"}
-                    <small>
-                      {value === "paper" ? "米黄色横线纸" : "深色烟雾背景"}
-                    </small>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-            <p>应用于整个网页界面，记住此浏览器的选择。</p>
-            {backgroundNotice && <p role="status">{backgroundNotice}</p>}
-          </div>
-        )}
-
-        {bridge && (
-          <div className="settings-group">
-            <h3>
-              <SlidersHorizontal size={16} />
-              窗口
-            </h3>
-            <label className="slider-setting">
-              <span>
-                透明度 <b>{Math.round(opacity * 100)}%</b>
-              </span>
-              <input
-                type="range"
-                min="45"
-                max="100"
-                value={Math.round(opacity * 100)}
-                aria-label="窗口透明度"
-                onChange={(event) => {
-                  const value = Number(event.target.value) / 100;
-                  setOpacity(value);
-                  onBackgroundOpacityChange?.(value);
-                  void bridge.setBackgroundOpacity(value);
-                }}
-              />
-            </label>
-            <label className="switch-setting">
-              <span>
-                <Pin size={15} />
-                窗口置顶
-              </span>
-              <button
-                type="button"
-                role="switch"
-                aria-label="窗口置顶"
-                aria-checked={alwaysOnTop}
-                className={alwaysOnTop ? "on" : ""}
-                onClick={() => {
-                  const value = !alwaysOnTop;
-                  setAlwaysOnTop(value);
-                  void bridge.setAlwaysOnTop(value);
-                }}
-              >
-                <span />
-              </button>
-            </label>
-            <label className="switch-setting launch-setting">
-              <span>
-                <Power size={15} />
-                <span className="setting-copy">
-                  开机时启动
-                  <small>登录 Windows 后只恢复已打开便签，主页面保持隐藏</small>
+      {webBackground !== undefined && (
+        <div className="settings-group">
+          <h3>外观</h3>
+          <fieldset className="web-background-options">
+            <legend>背景</legend>
+            {(["default", "paper", "glass"] as const).map((value) => (
+              <label className="web-background-option" key={value}>
+                <input
+                  type="radio"
+                  name="web-background"
+                  value={value}
+                  checked={webBackground === value}
+                  onChange={() => onWebBackgroundChange?.(value)}
+                />
+                <span
+                  className={`background-preview background-preview-${value}`}
+                  aria-hidden="true"
+                />
+                <span>
+                  {value === "paper"
+                    ? "纸面模式"
+                    : value === "glass"
+                      ? "玻璃模式"
+                      : "默认模式"}
+                  <small>
+                    {value === "paper"
+                      ? "米黄色横线纸"
+                      : value === "glass"
+                        ? "通透边缘与柔和高光"
+                        : "深色烟雾背景"}
+                  </small>
                 </span>
-              </span>
-              <button
-                type="button"
-                role="switch"
-                aria-label="开机时启动"
-                aria-checked={launchAtLogin}
-                className={launchAtLogin ? "on" : ""}
-                disabled={launchAtLoginBusy}
-                onClick={() => {
-                  if (launchAtLoginBusy) return;
-                  const previous = launchAtLogin;
-                  const requested = !previous;
-                  const requestId = ++launchAtLoginRequest.current;
-                  setLaunchAtLogin(requested);
-                  setLaunchAtLoginBusy(true);
-                  void bridge
-                    .setLaunchAtLogin(requested)
-                    .then((value) => {
-                      if (launchAtLoginRequest.current !== requestId) return;
-                      setLaunchAtLogin(value);
-                      setLaunchAtLoginBusy(false);
-                    })
-                    .catch(() => {
-                      if (launchAtLoginRequest.current !== requestId) return;
-                      setLaunchAtLogin(previous);
-                      setLaunchAtLoginBusy(false);
-                    });
-                }}
-              >
-                <span />
-              </button>
-            </label>
-          </div>
-        )}
+              </label>
+            ))}
+          </fieldset>
+          <label className="switch-setting">
+            <span>减少透明效果</span>
+            <button
+              type="button"
+              role="switch"
+              aria-label="减少透明效果"
+              aria-checked={!!reduceTransparency}
+              className={reduceTransparency ? "on" : ""}
+              onClick={() => onReduceTransparencyChange?.(!reduceTransparency)}
+            >
+              <span />
+            </button>
+          </label>
+          {systemReduced && <p>已跟随系统使用清晰实底。</p>}
+          <p>应用于整个网页界面，记住此浏览器的选择。</p>
+          {backgroundNotice && <p role="status">{backgroundNotice}</p>}
+        </div>
+      )}
 
+      {bridge && (
         <div className="settings-group">
           <h3>
-            <Link2 size={16} />
-            手机同步
+            <SlidersHorizontal size={16} />
+            窗口
           </h3>
-          <p>生成一次性二维码和 6 位码，将手机加入你的私人空间。</p>
-          <button
-            type="button"
-            className="pairing-action"
-            onClick={onOpenPairing}
-          >
-            连接手机
-          </button>
+          <label className="slider-setting">
+            <span>
+              透明度 <b>{Math.round(opacity * 100)}%</b>
+            </span>
+            <input
+              type="range"
+              min="45"
+              max="100"
+              value={Math.round(opacity * 100)}
+              aria-label="窗口透明度"
+              onChange={(event) => {
+                const value = Number(event.target.value) / 100;
+                setOpacity(value);
+                onBackgroundOpacityChange?.(value);
+                void bridge.setBackgroundOpacity(value);
+              }}
+            />
+          </label>
+          <label className="switch-setting">
+            <span>
+              <Pin size={15} />
+              窗口置顶
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-label="窗口置顶"
+              aria-checked={alwaysOnTop}
+              className={alwaysOnTop ? "on" : ""}
+              onClick={() => {
+                const value = !alwaysOnTop;
+                setAlwaysOnTop(value);
+                void bridge.setAlwaysOnTop(value);
+              }}
+            >
+              <span />
+            </button>
+          </label>
+          <label className="switch-setting launch-setting">
+            <span>
+              <Power size={15} />
+              <span className="setting-copy">
+                开机时启动
+                <small>登录 Windows 后只恢复已打开便签，主页面保持隐藏</small>
+              </span>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-label="开机时启动"
+              aria-checked={launchAtLogin}
+              className={launchAtLogin ? "on" : ""}
+              disabled={launchAtLoginBusy}
+              onClick={() => {
+                if (launchAtLoginBusy) return;
+                const previous = launchAtLogin;
+                const requested = !previous;
+                const requestId = ++launchAtLoginRequest.current;
+                setLaunchAtLogin(requested);
+                setLaunchAtLoginBusy(true);
+                void bridge
+                  .setLaunchAtLogin(requested)
+                  .then((value) => {
+                    if (launchAtLoginRequest.current !== requestId) return;
+                    setLaunchAtLogin(value);
+                    setLaunchAtLoginBusy(false);
+                  })
+                  .catch(() => {
+                    if (launchAtLoginRequest.current !== requestId) return;
+                    setLaunchAtLogin(previous);
+                    setLaunchAtLoginBusy(false);
+                  });
+              }}
+            >
+              <span />
+            </button>
+          </label>
         </div>
+      )}
 
-        <div className="settings-group trash-group">
-          <h3>
-            <ArchiveRestore size={16} />
-            最近删除
-          </h3>
-          {trash.length === 0 ? (
-            <p>最近删除中没有内容。</p>
-          ) : (
-            trash.map((item) => (
-              <div
-                className="trash-row"
-                key={`${item.entity}-${item.record.id}`}
-              >
-                <span>
-                  {"name" in item.record
-                    ? item.record.name
-                    : "title" in item.record
-                      ? item.record.title
-                      : item.record.text}
-                </span>
-                <button type="button" onClick={() => void onRestore(item)}>
-                  恢复
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
-    </div>
+      <div className="settings-group">
+        <h3>
+          <Link2 size={16} />
+          手机同步
+        </h3>
+        <p>生成一次性二维码和 6 位码，将手机加入你的私人空间。</p>
+        <button
+          type="button"
+          className="pairing-action"
+          onClick={onOpenPairing}
+        >
+          连接手机
+        </button>
+      </div>
+
+      <div className="settings-group trash-group">
+        <h3>
+          <ArchiveRestore size={16} />
+          最近删除
+        </h3>
+        {trash.length === 0 ? (
+          <p>最近删除中没有内容。</p>
+        ) : (
+          trash.map((item) => (
+            <div className="trash-row" key={`${item.entity}-${item.record.id}`}>
+              <span>
+                {"name" in item.record
+                  ? item.record.name
+                  : "title" in item.record
+                    ? item.record.title
+                    : item.record.text}
+              </span>
+              <button type="button" onClick={() => void onRestore(item)}>
+                恢复
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </WebDialog>
   );
 }

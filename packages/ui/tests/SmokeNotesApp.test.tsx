@@ -66,6 +66,17 @@ function desktopBridge(): DesktopBridge {
 describe("SmokeNotesApp", () => {
   let database: SmokeNotesDatabase;
   let repository: LocalRepository;
+  const pendingReads = new Set<Promise<unknown>>();
+
+  function trackRead<Args extends unknown[], Result>(
+    read: (...args: Args) => Promise<Result>,
+  ) {
+    return (...args: Args) => {
+      const pending = read(...args).finally(() => pendingReads.delete(pending));
+      pendingReads.add(pending);
+      return pending;
+    };
+  }
 
   beforeEach(async () => {
     localStorage.clear();
@@ -81,10 +92,27 @@ describe("SmokeNotesApp", () => {
       body: "确认下周计划",
     });
     await repository.createTodo("交水费");
+    vi.spyOn(repository, "listNotebooks").mockImplementation(
+      trackRead(LocalRepository.prototype.listNotebooks.bind(repository)),
+    );
+    vi.spyOn(repository, "listNotes").mockImplementation(
+      trackRead(LocalRepository.prototype.listNotes.bind(repository)),
+    );
+    vi.spyOn(repository, "listTodos").mockImplementation(
+      trackRead(LocalRepository.prototype.listTodos.bind(repository)),
+    );
+    vi.spyOn(repository, "listTrash").mockImplementation(
+      trackRead(LocalRepository.prototype.listTrash.bind(repository)),
+    );
   });
 
   afterEach(async () => {
     cleanup();
+    // Navigation can render before its data-changed refresh finishes.
+    // Finish the observed reads before closing the test database.
+    await act(async () => {
+      while (pendingReads.size) await Promise.all([...pendingReads]);
+    });
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     Reflect.deleteProperty(navigator, "maxTouchPoints");
@@ -119,8 +147,36 @@ describe("SmokeNotesApp", () => {
     );
   });
 
+  it("switches glass and paper without replacing the editor or losing a draft", async () => {
+    localStorage.setItem("smoke-notes:web-reduced-transparency", "true");
+    render(<SmokeNotesApp repository={repository} platform="web" />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "打开便签：周会记录" }),
+    );
+    const editor = await screen.findByRole("textbox", { name: "便签正文" });
+    const title = screen.getByPlaceholderText("输入标题");
+    fireEvent.change(title, { target: { value: "仍在编辑的标题" } });
+    fireEvent.click(screen.getByRole("button", { name: "窗口设置" }));
+    for (const theme of ["玻璃模式", "纸面模式", "默认模式", "玻璃模式"]) {
+      fireEvent.click(screen.getByRole("radio", { name: new RegExp(theme) }));
+      expect(document.querySelector(".rich-note-content")).toBe(editor);
+      expect(title).toHaveValue("仍在编辑的标题");
+    }
+    expect(screen.getByRole("switch", { name: "减少透明效果" })).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "关闭设置" }));
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(async () =>
+      expect(
+        (
+          await repository.listNotes((await repository.listNotebooks())[0].id)
+        )[0].title,
+      ).toBe("仍在编辑的标题"),
+    );
+  });
+
   it("keeps web background preferences out of the desktop settings", async () => {
-    localStorage.setItem("smoke-notes:web-background", "paper");
+    localStorage.setItem("smoke-notes:web-background", "glass");
+    localStorage.setItem("smoke-notes:web-reduced-transparency", "true");
     render(
       <SmokeNotesApp
         repository={repository}

@@ -125,6 +125,56 @@ beforeEach(() => {
   vi.setSystemTime(new Date("2026-09-05T10:03:00.000Z"));
 });
 
+describe("mutation validation responses", () => {
+  const operation = {
+    id: "operation",
+    deviceId: "desktop",
+    entity: "note" as const,
+    entityId: "note",
+    action: "upsert" as const,
+    baseVersion: 1,
+    payload: { id: "note", title: "x".repeat(201) },
+    attempts: 0,
+    createdAt: "2026-09-05T10:00:00Z",
+    nextAttemptAt: "2026-09-05T10:00:00Z",
+  };
+  it.each(["text_too_long", "content_too_large", "invalid_rank"])(
+    "recognizes %s as a definite rejection without losing the operation",
+    async (reason) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          async () =>
+            new Response(JSON.stringify({ error: reason }), {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            }),
+        ),
+      );
+      await expect(cloud.syncAdapter.push(operation)).resolves.toEqual({
+        status: "rejected",
+        reason,
+      });
+    },
+  );
+  it.each(["mutation_failed", "concurrent_change_retry"])(
+    "keeps %s retryable rather than replacing an uncertain operation",
+    async (reason) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          async () =>
+            new Response(JSON.stringify({ error: reason }), {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            }),
+        ),
+      );
+      await expect(cloud.syncAdapter.push(operation)).rejects.toThrow();
+    },
+  );
+});
+
 describe("cloud pull", () => {
   it("still downloads later server changes when the device clock is years ahead", async () => {
     const server = mockServer();

@@ -55,6 +55,35 @@ function createHandle(): NoteWindowHandle & {
 }
 
 describe("NoteWindowManager", () => {
+  it("shares a window when the same note is opened concurrently", async () => {
+    const manager = new NoteWindowManager(createStore(), async () =>
+      createHandle(),
+    );
+    const [first, second] = await Promise.all([
+      manager.open("same"),
+      manager.open("same"),
+    ]);
+    expect(second).toBe(first);
+    manager.hide("same");
+    expect((first as ReturnType<typeof createHandle>).hidden).toBe(1);
+  });
+
+  it("allows another open after an in-flight window creation fails", async () => {
+    let fail = true;
+    const handle = createHandle();
+    const manager = new NoteWindowManager(createStore(), async () => {
+      if (fail) throw new Error("load failed");
+      return handle;
+    });
+    const results = await Promise.allSettled([
+      manager.open("retry"),
+      manager.open("retry"),
+    ]);
+    expect(results.every((result) => result.status === "rejected")).toBe(true);
+    fail = false;
+    expect(await manager.open("retry")).toBe(handle);
+  });
+
   it("focuses an existing note window instead of opening a duplicate", async () => {
     const store = createStore();
     const handle = createHandle();

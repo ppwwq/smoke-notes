@@ -23,6 +23,7 @@ export type NoteWindowFactory = (
 
 export class NoteWindowManager {
   private readonly windows = new Map<string, NoteWindowHandle>();
+  private readonly opening = new Map<string, Promise<NoteWindowHandle>>();
   private readonly pendingStates = new Map<string, NoteWindowState>();
   private readonly switchingNoteIds = new Set<string>();
 
@@ -33,6 +34,8 @@ export class NoteWindowManager {
   ) {}
 
   async open(noteId: string): Promise<NoteWindowHandle> {
+    const pending = this.opening.get(noteId);
+    if (pending) return pending;
     const existing = this.windows.get(noteId);
     if (existing && !existing.isDestroyed()) {
       existing.show();
@@ -48,9 +51,15 @@ export class NoteWindowManager {
       isOpen: true,
       lastOpenedAt: this.now().toISOString(),
     });
-    const created = await this.factory(state);
-    this.windows.set(noteId, created);
-    return created;
+    const pendingOpen = Promise.resolve()
+      .then(() => this.factory(state))
+      .then((created) => {
+        this.windows.set(noteId, created);
+        return created;
+      })
+      .finally(() => this.opening.delete(noteId));
+    this.opening.set(noteId, pendingOpen);
+    return pendingOpen;
   }
 
   hide(noteId: string): void {

@@ -7,7 +7,9 @@ import type { Note, Notebook, SyncEntity, SyncOperation, Todo } from "./types";
 export type RemoteRecord = Notebook | Note | Todo;
 
 export type PushResult =
-  { status: "applied" } | { status: "conflict"; record: RemoteRecord };
+  | { status: "applied" }
+  | { status: "conflict"; record: RemoteRecord }
+  | { status: "rejected"; reason: string };
 
 export interface RemoteChange {
   entity: SyncEntity;
@@ -47,11 +49,14 @@ export class SyncEngine {
   }
 
   async flush(): Promise<FlushResult> {
-    const now = this.now();
     await this.compactUnsentChanges();
+    const now = this.now();
     const pending = (
       await this.database.operations.orderBy("createdAt").toArray()
-    ).filter((operation) => new Date(operation.nextAttemptAt) <= now);
+    ).filter(
+      (operation) =>
+        !operation.rejected && new Date(operation.nextAttemptAt) <= now,
+    );
     const result: FlushResult = { applied: 0, conflicts: 0, failed: 0 };
     const visited = new Set<string>();
 
@@ -74,6 +79,11 @@ export class SyncEngine {
         if (pushed.status === "applied") {
           await this.database.operations.delete(operation.id);
           result.applied += 1;
+        } else if (pushed.status === "rejected") {
+          await this.database.operations.update(operation.id, {
+            rejected: pushed.reason,
+          });
+          result.failed += 1;
         } else {
           if (await this.preserveConflict(operation, pushed.record))
             result.conflicts += 1;
@@ -109,7 +119,10 @@ export class SyncEngine {
         }
         for (const group of groups.values()) {
           // An uncertain upload is retried unchanged before compacting its successors.
-          if (group.length < 2 || group.some((item) => item.attempts > 0))
+          if (
+            group.length < 2 ||
+            group.some((item) => item.attempts > 0 && !item.rejected)
+          )
             continue;
           group.sort((a, b) => a.baseVersion - b.baseVersion);
           if (
@@ -128,13 +141,22 @@ export class SyncEngine {
             continue;
           const version = first.baseVersion + 1;
           await table.put({ ...local, version });
+          const rejected = group.some((item) => item.rejected);
           await this.database.operations.put({
             ...first,
+            ...(rejected
+              ? {
+                  id: this.createId(),
+                  rejected: undefined,
+                  attempts: 0,
+                  nextAttemptAt: this.now().toISOString(),
+                }
+              : {}),
             action: last.action,
             payload: { ...last.payload, version },
           });
           await this.database.operations.bulkDelete(
-            group.slice(1).map((item) => item.id),
+            (rejected ? group : group.slice(1)).map((item) => item.id),
           );
         }
       },
