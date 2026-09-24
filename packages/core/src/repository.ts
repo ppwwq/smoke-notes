@@ -2,6 +2,7 @@ import type { Table } from "dexie";
 import { isTrashExpired, rankBetween, RANK_GAP } from "./domain";
 import type { Note, Notebook, SyncEntity, SyncOperation, Todo } from "./types";
 import { SmokeNotesDatabase } from "./database";
+import { sameNoteContent } from "./note-merge";
 import {
   createTaskListContent,
   migrateLegacyNoteContent,
@@ -261,7 +262,7 @@ export class LocalRepository {
         for (const note of childNotes) {
           const deletedNote = this.updatedRecord(note, { deletedAt });
           await this.database.notes.put(deletedNote);
-          await this.enqueue("note", deletedNote, note.version, "delete");
+          await this.enqueue("note", deletedNote, note.version, "delete", note);
         }
         return updated;
       },
@@ -296,7 +297,13 @@ export class LocalRepository {
           for (const note of childNotes) {
             const restoredNote = this.updatedRecord(note, { deletedAt: null });
             await this.database.notes.put(restoredNote);
-            await this.enqueue("note", restoredNote, note.version);
+            await this.enqueue(
+              "note",
+              restoredNote,
+              note.version,
+              "upsert",
+              note,
+            );
           }
           return updated;
         },
@@ -391,8 +398,19 @@ export class LocalRepository {
       async () => {
         const current = await this.requireRecord(table, id);
         const updated = this.updatedRecord(current, changes(current));
+        if (
+          entity === "note" &&
+          sameNoteContent(current as Note, updated as Note)
+        )
+          return current;
         await table.put(updated);
-        await this.enqueue(entity, updated, current.version, action);
+        await this.enqueue(
+          entity,
+          updated,
+          current.version,
+          action,
+          entity === "note" ? (current as Note) : undefined,
+        );
         return updated;
       },
     );
@@ -417,6 +435,7 @@ export class LocalRepository {
     record: Notebook | Note | Todo,
     baseVersion: number,
     action: SyncOperation["action"] = "upsert",
+    baseSnapshot?: Note,
   ): Promise<void> {
     const timestamp = this.now().toISOString();
     await this.database.operations.add({
@@ -426,6 +445,7 @@ export class LocalRepository {
       entityId: record.id,
       action,
       baseVersion,
+      ...(baseSnapshot ? { baseSnapshot } : {}),
       payload: { ...record },
       attempts: 0,
       nextAttemptAt: timestamp,

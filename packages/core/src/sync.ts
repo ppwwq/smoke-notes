@@ -1,5 +1,6 @@
 import type { Table } from "dexie";
 import { createConflictCopy } from "./domain";
+import { mergeNoteChanges, sameNoteContent } from "./note-merge";
 import { SmokeNotesDatabase } from "./database";
 import type { Note, Notebook, SyncEntity, SyncOperation, Todo } from "./types";
 
@@ -74,8 +75,8 @@ export class SyncEngine {
           await this.database.operations.delete(operation.id);
           result.applied += 1;
         } else {
-          await this.preserveConflict(operation, pushed.record);
-          result.conflicts += 1;
+          if (await this.preserveConflict(operation, pushed.record))
+            result.conflicts += 1;
         }
       } catch {
         const attempts = operation.attempts + 1;
@@ -167,7 +168,7 @@ export class SyncEngine {
   private async preserveConflict(
     operation: SyncOperation,
     serverRecord: RemoteRecord,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const table = this.tableFor(operation.entity);
     if (operation.entity !== "note") {
       await this.database.transaction(
@@ -182,10 +183,10 @@ export class SyncEngine {
             .delete();
         },
       );
-      return;
+      return true;
     }
 
-    await this.database.transaction(
+    return this.database.transaction(
       "rw",
       this.database.notes,
       this.database.operations,
@@ -196,9 +197,41 @@ export class SyncEngine {
           .where("entityId")
           .equals(operation.entityId)
           .delete();
-        if (!local) return;
+        if (!local) return false;
 
         const timestamp = this.now().toISOString();
+        const remote = serverRecord as Note;
+        const base =
+          operation.baseSnapshot?.version === operation.baseVersion
+            ? operation.baseSnapshot
+            : undefined;
+        const merged = mergeNoteChanges(local, remote, base);
+        if (merged) {
+          if (!sameNoteContent(merged, remote)) {
+            const updated = {
+              ...merged,
+              version: remote.version + 1,
+              updatedAt: timestamp,
+            };
+            await this.database.notes.put(updated);
+            // The server has cached the old operation's conflict response.
+            // Reconciliation is a new operation, never a changed retry.
+            await this.database.operations.add({
+              id: this.createId(),
+              deviceId: this.context.deviceId,
+              entity: "note",
+              entityId: local.id,
+              action: updated.deletedAt ? "delete" : "upsert",
+              baseVersion: remote.version,
+              baseSnapshot: remote,
+              payload: { ...updated },
+              attempts: 0,
+              nextAttemptAt: timestamp,
+              createdAt: timestamp,
+            });
+          }
+          return false;
+        }
         const copy = createConflictCopy(
           { ...local, id: this.createId(), rank: local.rank + 0.5 },
           serverRecord.id,
@@ -217,6 +250,7 @@ export class SyncEngine {
           nextAttemptAt: timestamp,
           createdAt: timestamp,
         });
+        return true;
       },
     );
   }

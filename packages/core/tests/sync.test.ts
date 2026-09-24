@@ -411,4 +411,27 @@ describe("SyncEngine", () => {
       },
     ]);
   });
+
+  it("accepts identical note content at a newer server version without a copy", async () => {
+    const notebook = await repository.createNotebook("工作");
+    const note = await repository.createNote(notebook.id, {
+      title: "同一内容",
+      body: "正文",
+    });
+    await database.operations.clear();
+    await repository.updateNote(note.id, { title: "更新标题" });
+    const server = { ...(await repository.getNote(note.id))!, version: 9 };
+    const engine = new SyncEngine(
+      database,
+      {
+        push: async () => ({ status: "conflict", record: server }),
+        pull: async () => ({ changes: [], cursor: "next" }),
+      },
+      { deviceId: "desktop-1" },
+    );
+
+    expect(await engine.flush()).toMatchObject({ conflicts: 0, failed: 0 });
+    expect(await repository.listNotes(notebook.id)).toEqual([server]);
+    expect(await repository.listPendingOperations()).toEqual([]);
+  });
 });

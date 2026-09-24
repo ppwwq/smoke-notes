@@ -58,6 +58,8 @@ export interface SyncOperation {
   entityId: EntityId;
   action: SyncAction;
   baseVersion: number;
+  // Optional for operations queued before field-aware conflict resolution.
+  baseSnapshot?: Note;
   payload: Record<string, unknown>;
   attempts: number;
   nextAttemptAt: string;

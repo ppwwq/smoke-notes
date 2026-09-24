@@ -32,4 +32,30 @@ describe("createSyncRuntime", () => {
     runtime.stop();
     expect(stopRealtime).toHaveBeenCalled();
   });
+  it("syncs immediately on focus and reconnection and removes wake listeners on stop", async () => {
+    const engine = {
+      flush: vi.fn(async () => ({ applied: 0, conflicts: 0, failed: 0 })),
+      pull: vi.fn(async () => "next"),
+    };
+    const runtime = createSyncRuntime({
+      engine,
+      cloud: { subscribe: () => () => {} },
+      storage: { getItem: () => null, setItem: () => {} },
+      notify: () => {},
+      intervalMs: 60_000,
+    });
+    try {
+      await runtime.start();
+      window.dispatchEvent(new Event("focus"));
+      await vi.waitFor(() => expect(engine.pull).toHaveBeenCalledTimes(2));
+      window.dispatchEvent(new Event("online"));
+      await vi.waitFor(() => expect(engine.pull).toHaveBeenCalledTimes(3));
+      runtime.stop();
+      window.dispatchEvent(new Event("focus"));
+      await Promise.resolve();
+      expect(engine.pull).toHaveBeenCalledTimes(3);
+    } finally {
+      runtime.stop();
+    }
+  });
 });
