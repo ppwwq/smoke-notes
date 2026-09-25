@@ -146,7 +146,7 @@ export function NoteWindowApp({
               key={item.id}
               type="button"
               aria-label={`切换便签：${displayTitle}`}
-              className={`recent-note-tab note-color-${item.color}${item.id === noteId ? " active" : ""}`}
+              className={`recent-note-tab${item.id === noteId ? " active" : ""}`}
               title={displayTitle}
               aria-current={item.id === noteId ? "page" : undefined}
               disabled={switching}
