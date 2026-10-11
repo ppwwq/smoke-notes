@@ -145,13 +145,21 @@ const noteWindowManager = new NoteWindowManager(
     window.on("close", (event) => {
       if (!quitting) {
         event.preventDefault();
-        const currentNoteId = noteIdByWebContents.get(window.webContents.id);
-        if (currentNoteId) noteWindowManager.hide(currentNoteId);
+        window.webContents.send("note-window:request-close");
       }
     });
-    window.on("closed", () => noteIdByWebContents.delete(webContentsId));
+    window.on("closed", () => {
+      const currentNoteId = noteIdByWebContents.get(webContentsId);
+      if (currentNoteId) clearNoteStateSave(currentNoteId);
+      noteIdByWebContents.delete(webContentsId);
+    });
     window.once("ready-to-show", () => window.show());
-    await loadRenderer(window, state.noteId);
+    try {
+      await loadRenderer(window, state.noteId);
+    } catch (error) {
+      window.destroy();
+      throw error;
+    }
     return {
       show: () => window.show(),
       focus: () => window.focus(),
@@ -160,6 +168,7 @@ const noteWindowManager = new NoteWindowManager(
       isDestroyed: () => window.isDestroyed(),
       async navigate(targetNoteId: string) {
         const previousNoteId = noteIdByWebContents.get(window.webContents.id);
+        if (previousNoteId) clearNoteStateSave(previousNoteId);
         noteIdByWebContents.set(window.webContents.id, targetNoteId);
         try {
           await loadRenderer(window, targetNoteId);
@@ -179,11 +188,11 @@ function scheduleMainStateSave() {
 }
 
 function scheduleNoteStateSave(noteId: string, window: BrowserWindow) {
-  const current = notePersistTimers.get(noteId);
-  if (current) clearTimeout(current);
+  clearNoteStateSave(noteId);
   notePersistTimers.set(
     noteId,
     setTimeout(() => {
+      notePersistTimers.delete(noteId);
       if (window.isDestroyed()) return;
       const bounds = toPersistedNoteWindowBounds(window.getBounds());
       noteWindowManager.update(noteId, {
@@ -195,6 +204,26 @@ function scheduleNoteStateSave(noteId: string, window: BrowserWindow) {
       });
     }, 250),
   );
+}
+
+function clearNoteStateSave(noteId: string) {
+  const timer = notePersistTimers.get(noteId);
+  if (timer) clearTimeout(timer);
+  notePersistTimers.delete(noteId);
+}
+
+function closeSavedNote(noteId: string) {
+  const window = BrowserWindow.getAllWindows().find(
+    (candidate) => noteIdByWebContents.get(candidate.webContents.id) === noteId,
+  );
+  if (window) {
+    noteWindowManager.update(noteId, {
+      ...toPersistedNoteWindowBounds(window.getBounds()),
+      alwaysOnTop: window.isAlwaysOnTop(),
+    });
+  }
+  clearNoteStateSave(noteId);
+  noteWindowManager.close(noteId);
 }
 
 function trustedWindow(event: Electron.IpcMainInvokeEvent): BrowserWindow {
@@ -272,7 +301,7 @@ function registerIpc() {
     }
     const noteId = noteIdByWebContents.get(event.sender.id);
     if (!noteId) throw new Error("Note window identity is missing");
-    noteWindowManager.hide(noteId);
+    window.webContents.send("note-window:request-close");
   });
   ipcMain.handle("app:get-launch-at-login", (event) => {
     if (trustedWindow(event) !== mainWindow)
@@ -295,7 +324,7 @@ function registerIpc() {
     const senderNoteId = noteIdByWebContents.get(event.sender.id);
     if (senderNoteId && senderNoteId !== rawNoteId)
       throw new Error("A note window may only close itself");
-    noteWindowManager.hide(rawNoteId);
+    closeSavedNote(rawNoteId);
   });
   ipcMain.handle(
     "note-window:get-recent",

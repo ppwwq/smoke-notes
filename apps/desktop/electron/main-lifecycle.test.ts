@@ -20,6 +20,7 @@ async function startMain() {
     private readonly contents = Object.assign(new EventEmitter(), {
       id: windows.length + 1,
       setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
     });
     constructor() {
       super();
@@ -142,18 +143,43 @@ describe("main-process note window lifecycle", () => {
     expect(() =>
       invoke("note-window:mouse-passthrough", sourceId, false),
     ).not.toThrow();
-    // Closing the reused window must now hide the target, preserving both states.
+    // Native close waits for the renderer to save before releasing the process.
     const preventDefault = vi.fn();
     source.emit("close", { preventDefault });
     expect(preventDefault).toHaveBeenCalledOnce();
-    expect(source.hide).toHaveBeenCalledOnce();
-    expect(invoke("note-window:get-state", sourceId, "target")).toMatchObject({
+    expect(source.webContents.send).toHaveBeenCalledWith(
+      "note-window:request-close",
+    );
+    expect(source.isDestroyed()).toBe(false);
+    await invoke("note-window:close", sourceId, "target");
+    expect(source.isDestroyed()).toBe(true);
+    expect(invoke("note-window:get-state", 1, "target")).toMatchObject({
       noteId: "target",
       isOpen: false,
     });
-    expect(() => source.destroy()).not.toThrow();
     expect(() =>
       invoke("note-window:mouse-passthrough", sourceId, false),
     ).toThrow("Not a note window");
+  });
+
+  it("releases closed renderers while retaining the main window and reopen state", async () => {
+    const { open, invoke, windows } = await startMain();
+    const note = await open("note-1");
+    const senderId = note.webContents.id;
+    note.emit("move");
+    await invoke("note-window:close", senderId, "note-1");
+    expect(note.isDestroyed()).toBe(true);
+    expect(windows[0].isDestroyed()).toBe(false);
+    expect(invoke("note-window:get-state", 1, "note-1")).toMatchObject({
+      noteId: "note-1",
+      x: 70,
+      y: 0,
+      width: 420,
+      height: 500,
+      isOpen: false,
+    });
+    const reopened = await open("note-1");
+    expect(reopened).not.toBe(note);
+    expect(reopened.isDestroyed()).toBe(false);
   });
 });

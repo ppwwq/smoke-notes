@@ -13,6 +13,7 @@ import type {
   Notebook,
   Todo,
   TrashRecord,
+  SyncStatus,
 } from "@smoke-notes/core";
 import {
   ArrowLeft,
@@ -31,10 +32,14 @@ import { NotesWorkspace } from "./components/NotesWorkspace";
 import { TodoWorkspace } from "./components/TodoWorkspace";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { PairingDialog } from "./components/PairingDialog";
-import {
-  RichNoteEditor,
-  type RichNoteEditorHandle,
-} from "./components/RichNoteEditor";
+import type { RichNoteEditorHandle } from "./components/RichNoteEditor";
+import { SyncIndicator } from "./components/SyncIndicator";
+import { useMobileSidebar } from "./useMobileSidebar";
+const RichNoteEditor = lazy(() =>
+  import("./components/RichNoteEditor").then((module) => ({
+    default: module.RichNoteEditor,
+  })),
+);
 import type { AppPlatform, DesktopBridge, PairingController } from "./types";
 import { useWebViewport } from "./useWebViewport";
 import { useWebBackground } from "./useWebBackground";
@@ -72,6 +77,7 @@ interface SmokeNotesAppProps {
   platform: AppPlatform;
   desktopBridge?: DesktopBridge;
   pairingController?: PairingController;
+  syncStatus?: SyncStatus;
 }
 
 interface LastTrashed {
@@ -85,6 +91,7 @@ export function SmokeNotesApp({
   platform,
   desktopBridge,
   pairingController,
+  syncStatus,
 }: SmokeNotesAppProps) {
   const {
     background,
@@ -107,6 +114,11 @@ export function SmokeNotesApp({
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
+  const { mobile, panelRef, triggerRef } = useMobileSidebar(
+    mobileNavOpen,
+    closeMobileNav,
+  );
   const [pairingOpen, setPairingOpen] = useState(false);
   const [lastTrashed, setLastTrashed] = useState<LastTrashed | null>(null);
   const [online, setOnline] = useState(
@@ -116,6 +128,7 @@ export function SmokeNotesApp({
   const [saveStatus, setSaveStatus] = useState("已自动保存");
   const [manualSaving, setManualSaving] = useState(false);
   const manualSavePending = useRef(false);
+  const creatingRef = useRef(false);
   const editorRef = useRef<RichNoteEditorHandle>(null);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const [editorMenu, setEditorMenu] = useState<"format" | "more" | null>(null);
@@ -312,13 +325,26 @@ export function SmokeNotesApp({
           <button
             type="button"
             className="mobile-menu"
+            ref={triggerRef}
             aria-label="打开便签本"
+            aria-expanded={mobileNavOpen}
+            aria-controls="notebook-sidebar"
+            inert={mobile && mobileNavOpen}
             onClick={() => setMobileNavOpen(true)}
           >
             <Menu size={19} />
           </button>
         )}
-        <div className={`sidebar-shell${mobileNavOpen ? " mobile-open" : ""}`}>
+        <div
+          id="notebook-sidebar"
+          ref={panelRef}
+          className={`sidebar-shell${mobileNavOpen ? " mobile-open" : ""}`}
+          inert={mobile && !mobileNavOpen}
+          aria-hidden={mobile && !mobileNavOpen ? true : undefined}
+          role={mobile && mobileNavOpen ? "dialog" : undefined}
+          aria-modal={mobile && mobileNavOpen ? true : undefined}
+          aria-label={mobile && mobileNavOpen ? "便签本导航" : undefined}
+        >
           <button
             type="button"
             className="mobile-scrim"
@@ -356,18 +382,28 @@ export function SmokeNotesApp({
               });
               await refreshAfterMutation(null);
             }}
-            onOpenSettings={() => setSettingsOpen(true)}
+            onOpenSettings={() => {
+              setMobileNavOpen(false);
+              setSettingsOpen(true);
+            }}
           />
         </div>
 
-        <div className="workspace-shell">
-          <div
-            className="connection-chip"
-            title={online ? "设备在线" : "离线记录中"}
-          >
-            {online ? <Wifi size={13} /> : <WifiOff size={13} />}
-            <span>{online ? "已连接" : "离线中"}</span>
-          </div>
+        <div
+          className={`workspace-shell${platform === "web" && syncStatus ? " has-sync-status" : ""}`}
+          inert={mobile && mobileNavOpen}
+        >
+          {platform === "web" ? (
+            <SyncIndicator status={syncStatus} />
+          ) : (
+            <div
+              className="connection-chip"
+              title={online ? "设备在线" : "离线记录中"}
+            >
+              {online ? <Wifi size={13} /> : <WifiOff size={13} />}
+              <span>{online ? "已连接" : "离线中"}</span>
+            </div>
+          )}
           {view === "todos" ? (
             <TodoWorkspace
               todos={todos}
@@ -398,9 +434,9 @@ export function SmokeNotesApp({
                 await refreshAfterMutation(selectedNotebookId);
               }}
             />
-          ) : platform === "web" && selectedNote ? (
+          ) : selectedNote ? (
             <main
-              className={`mobile-note-screen${compactEditing ? " compact-editing" : ""}`}
+              className={`mobile-note-screen${platform === "desktop" ? " desktop-inline-note" : ""}${compactEditing ? " compact-editing" : ""}`}
             >
               <header className="mobile-note-header">
                 <GlassSurface />
@@ -492,30 +528,38 @@ export function SmokeNotesApp({
                   )}
                 </div>
               </header>
-              <RichNoteEditor
-                ref={editorRef}
-                compact={compactEditing}
-                formatOpen={editorMenu === "format"}
-                onFormatClose={closeEditorMenu}
-                note={selectedNote}
-                onSaveStatusChange={setSaveStatus}
-                onSave={async (changes) => {
-                  const updated = await repository.updateNote(
-                    selectedNote.id,
-                    changes,
-                  );
-                  setNotes((current) =>
-                    current.map((item) =>
-                      item.id === updated.id ? updated : item,
-                    ),
-                  );
-                  window.dispatchEvent(
-                    new CustomEvent("smoke-notes:data-changed"),
-                  );
-                  return updated;
-                }}
-                className="mobile-rich-editor"
-              />
+              <Suspense
+                fallback={
+                  <div role="status" className="rich-editor-loading">
+                    正在打开便签…
+                  </div>
+                }
+              >
+                <RichNoteEditor
+                  ref={editorRef}
+                  compact={compactEditing}
+                  formatOpen={editorMenu === "format"}
+                  onFormatClose={closeEditorMenu}
+                  note={selectedNote}
+                  onSaveStatusChange={setSaveStatus}
+                  onSave={async (changes) => {
+                    const updated = await repository.updateNote(
+                      selectedNote.id,
+                      changes,
+                    );
+                    setNotes((current) =>
+                      current.map((item) =>
+                        item.id === updated.id ? updated : item,
+                      ),
+                    );
+                    window.dispatchEvent(
+                      new CustomEvent("smoke-notes:data-changed"),
+                    );
+                    return updated;
+                  }}
+                  className="mobile-rich-editor"
+                />
+              </Suspense>
             </main>
           ) : (
             <NotesWorkspace
@@ -527,16 +571,20 @@ export function SmokeNotesApp({
                 else setSelectedNoteId(id);
               }}
               onCreateNote={async (kind) => {
-                if (!selectedNotebookId) return;
-                const note = await repository.createNote(selectedNotebookId, {
-                  title: "",
-                  body: "",
-                  kind,
-                });
-                await refreshAfterMutation(selectedNotebookId);
-                if (platform === "desktop")
-                  await desktopBridge?.openNote(note.id);
-                else setSelectedNoteId(note.id);
+                if (!selectedNotebookId || creatingRef.current) return;
+                creatingRef.current = true;
+                try {
+                  await editorRef.current?.flushSave();
+                  const note = await repository.createNote(selectedNotebookId, {
+                    title: "",
+                    body: "",
+                    kind,
+                  });
+                  await refreshAfterMutation(selectedNotebookId);
+                  setSelectedNoteId(note.id);
+                } finally {
+                  creatingRef.current = false;
+                }
               }}
               onTrashNote={async (id) => {
                 const note = notes.find((item) => item.id === id);
@@ -556,46 +604,51 @@ export function SmokeNotesApp({
           )}
         </div>
 
-        {!webEditing && platform === "web" && background === "glass" && (
-          <Suspense
-            fallback={
-              <PlainWebNav
+        <div style={{ display: "contents" }} inert={mobile && mobileNavOpen}>
+          {!webEditing && platform === "web" && background === "glass" && (
+            <Suspense
+              fallback={
+                <PlainWebNav
+                  view={view}
+                  onChange={(value) =>
+                    value === "todos" ? void showTodos() : setView("notes")
+                  }
+                />
+              }
+            >
+              <LiquiNav
                 view={view}
                 onChange={(value) =>
                   value === "todos" ? void showTodos() : setView("notes")
                 }
               />
-            }
-          >
-            <LiquiNav
-              view={view}
-              onChange={(value) =>
-                value === "todos" ? void showTodos() : setView("notes")
-              }
-            />
-          </Suspense>
-        )}
-        {!webEditing && !(platform === "web" && background === "glass") && (
-          <nav className="mobile-bottom-nav" aria-label="手机主导航">
-            <button
-              type="button"
-              className={view === "notes" ? "active" : ""}
-              onClick={() => setView("notes")}
+            </Suspense>
+          )}
+          {!webEditing && !(platform === "web" && background === "glass") && (
+            <nav
+              className="mobile-bottom-nav"
+              aria-label="手机主导航"
+              inert={mobile && mobileNavOpen}
             >
-              <NotebookPen size={19} />
-              <span>便签</span>
-            </button>
-            <button
-              type="button"
-              className={view === "todos" ? "active" : ""}
-              onClick={() => void showTodos()}
-            >
-              <CheckCircle2 size={19} />
-              <span>待办</span>
-            </button>
-          </nav>
-        )}
-
+              <button
+                type="button"
+                className={view === "notes" ? "active" : ""}
+                onClick={() => setView("notes")}
+              >
+                <NotebookPen size={19} />
+                <span>便签</span>
+              </button>
+              <button
+                type="button"
+                className={view === "todos" ? "active" : ""}
+                onClick={() => void showTodos()}
+              >
+                <CheckCircle2 size={19} />
+                <span>待办</span>
+              </button>
+            </nav>
+          )}
+        </div>
         {settingsOpen && (
           <SettingsPanel
             bridge={desktopBridge}

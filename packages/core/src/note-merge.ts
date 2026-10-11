@@ -1,7 +1,7 @@
 import type { Note } from "./types";
 
 // JSONB can reorder object keys. Formatting and task states still matter.
-function sameValue(left: unknown, right: unknown): boolean {
+export function sameValue(left: unknown, right: unknown): boolean {
   if (left === right) return true;
   if (!left || !right || typeof left !== "object" || typeof right !== "object")
     return false;

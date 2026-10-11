@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -95,6 +96,66 @@ describe("NoteWindowApp", () => {
     );
     expect(await repository.getNote(noteId)).not.toBeNull();
     expect(bridge.closeNote).not.toHaveBeenCalled();
+  });
+
+  it("saves the latest draft before releasing a closed window", async () => {
+    vi.mocked(bridge.closeNote).mockImplementation(async () => {
+      expect((await repository.getNote(noteId))?.title).toBe("关闭前的草稿");
+    });
+    render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    fireEvent.change(await screen.findByRole("textbox", { name: "便签标题" }), {
+      target: { value: "关闭前的草稿" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "关闭便签" }));
+    await waitFor(() => expect(bridge.closeNote).toHaveBeenCalledOnce());
+  });
+
+  it("keeps the window and draft when saving a native close request fails", async () => {
+    let requestClose = () => {};
+    const unsubscribe = vi.fn();
+    bridge.onNoteCloseRequested = (listener) => {
+      requestClose = listener;
+      return unsubscribe;
+    };
+    database.notes.hook("updating", (changes) => {
+      if ("title" in changes) throw new Error("storage unavailable");
+    });
+    const view = render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    fireEvent.change(await screen.findByRole("textbox", { name: "便签标题" }), {
+      target: { value: "不能丢失的关闭草稿" },
+    });
+    await act(async () => requestClose());
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "保存或关闭失败",
+    );
+    expect(screen.getByRole("textbox", { name: "便签标题" })).toHaveValue(
+      "不能丢失的关闭草稿",
+    );
+    expect(bridge.closeNote).not.toHaveBeenCalled();
+    view.unmount();
+    expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+
+  it("waits for composition to finish and ignores repeated close clicks", async () => {
+    render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    const body = await screen.findByRole("textbox", { name: "便签正文" });
+    fireEvent.compositionStart(body);
+    fireEvent.change(screen.getByRole("textbox", { name: "便签标题" }), {
+      target: { value: "选字中的草稿" },
+    });
+    const close = screen.getByRole("button", { name: "关闭便签" });
+    fireEvent.click(close);
+    fireEvent.click(close);
+    expect(bridge.closeNote).not.toHaveBeenCalled();
+    fireEvent.compositionEnd(body);
+    await waitFor(() => expect(bridge.closeNote).toHaveBeenCalledOnce());
+    expect((await repository.getNote(noteId))?.title).toBe("选字中的草稿");
   });
 
   it("saves the latest desktop draft before deleting so it can be restored", async () => {
@@ -301,7 +362,7 @@ describe("NoteWindowApp", () => {
     await waitFor(() => expect(setPassthrough).toHaveBeenLastCalledWith(false));
   });
 
-  it("opens a newly created note and broadcasts it to the main list", async () => {
+  it("reuses the window for a newly created note and broadcasts it to the main list", async () => {
     const user = userEvent.setup();
     const changed = vi.fn();
     window.addEventListener("smoke-notes:data-changed", changed, {
@@ -315,7 +376,8 @@ describe("NoteWindowApp", () => {
     await user.click(screen.getByRole("button", { name: "新建便签" }));
     await user.click(screen.getByRole("menuitem", { name: "普通便签" }));
 
-    await waitFor(() => expect(bridge.openNote).toHaveBeenCalledOnce());
+    await waitFor(() => expect(bridge.switchNote).toHaveBeenCalledOnce());
+    expect(bridge.openNote).not.toHaveBeenCalled();
     expect(changed).toHaveBeenCalledOnce();
   });
 
@@ -329,8 +391,9 @@ describe("NoteWindowApp", () => {
     await user.click(screen.getByRole("button", { name: "新建便签" }));
     await user.click(screen.getByRole("menuitem", { name: "待办便签" }));
 
-    await waitFor(() => expect(bridge.openNote).toHaveBeenCalledOnce());
-    const createdId = vi.mocked(bridge.openNote).mock.calls[0]![0];
+    await waitFor(() => expect(bridge.switchNote).toHaveBeenCalledOnce());
+    expect(bridge.openNote).not.toHaveBeenCalled();
+    const createdId = vi.mocked(bridge.switchNote).mock.calls[0]![0];
     expect(await repository.getNote(createdId)).toMatchObject({
       kind: "todo",
       contentJson: {
@@ -349,6 +412,53 @@ describe("NoteWindowApp", () => {
         ],
       },
     });
+  });
+
+  it("saves the old draft before creating and retries a failed switch without duplicating notes", async () => {
+    vi.mocked(bridge.switchNote).mockRejectedValueOnce(
+      new Error("navigation failed"),
+    );
+    render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    const title = await screen.findByRole("textbox", { name: "便签标题" });
+    fireEvent.change(title, { target: { value: "必须保存" } });
+    fireEvent.click(screen.getByRole("button", { name: "新建便签" }));
+    const create = screen.getByRole("menuitem", { name: "普通便签" });
+    fireEvent.click(create);
+    fireEvent.click(create);
+    expect(await screen.findByRole("alert")).toHaveTextContent("新便签已创建");
+    expect((await repository.getNote(noteId))?.title).toBe("必须保存");
+    const book = (await repository.listNotebooks())[0]!;
+    expect(await repository.listNotes(book.id)).toHaveLength(2);
+    const createdId = vi.mocked(bridge.switchNote).mock.calls[0]![0];
+    fireEvent.click(screen.getByRole("button", { name: "重试打开新便签" }));
+    await waitFor(() => expect(bridge.switchNote).toHaveBeenCalledTimes(2));
+    expect(bridge.switchNote).toHaveBeenLastCalledWith(createdId);
+    expect(await repository.listNotes(book.id)).toHaveLength(2);
+    expect(bridge.openNote).not.toHaveBeenCalled();
+  });
+
+  it("does not create or switch when saving the current draft fails", async () => {
+    database.notes.hook("updating", () => {
+      throw new Error("disk full");
+    });
+    render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    const title = await screen.findByRole("textbox", { name: "便签标题" });
+    fireEvent.change(title, { target: { value: "保留草稿" } });
+    fireEvent.click(screen.getByRole("button", { name: "新建便签" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "待办便签" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "当前草稿已保留",
+    );
+    expect(title).toHaveValue("保留草稿");
+    expect(
+      await repository.listNotes((await repository.listNotebooks())[0]!.id),
+    ).toHaveLength(1);
+    expect(bridge.switchNote).not.toHaveBeenCalled();
+    expect(bridge.openNote).not.toHaveBeenCalled();
   });
 
   it("closes the compact create menu on outside click, Escape, and editor focus", async () => {

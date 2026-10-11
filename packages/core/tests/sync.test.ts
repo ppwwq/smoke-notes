@@ -26,6 +26,27 @@ describe("SyncEngine", () => {
 
   afterEach(async () => database.delete());
 
+  it("counts backed-off uploads and separates rejected operations", async () => {
+    await repository.createTodo("等待重试");
+    await repository.createTodo("被拒绝的记录");
+    const operations = await database.operations.toArray();
+    await database.operations.update(operations[0]!.id, {
+      nextAttemptAt: "2099-01-01T00:00:00Z",
+    });
+    await database.operations.update(operations[1]!.id, {
+      rejected: "text_too_long",
+    });
+    const engine = new SyncEngine(
+      database,
+      {
+        push: async () => ({ status: "applied" }),
+        pull: async () => ({ changes: [], cursor: "next" }),
+      },
+      { deviceId: "desktop-1" },
+    );
+    expect(await engine.getQueueState()).toEqual({ pending: 1, rejected: 1 });
+  });
+
   it("removes successfully uploaded operations from the outbox", async () => {
     await repository.createTodo("同步我");
     const adapter: RemoteSyncAdapter = {

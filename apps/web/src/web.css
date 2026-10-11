@@ -67,6 +67,34 @@ body,
   flex-shrink: 0;
   padding-bottom: max(6px, env(safe-area-inset-bottom, 0px));
 }
+.platform-web .format-toolbar > button,
+.platform-web .format-toolbar .mark-control > button {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+.platform-web .note-color-strip {
+  gap: 2px;
+  padding-inline: 12px;
+}
+.platform-web .note-color-dot {
+  width: 44px;
+  height: 44px;
+}
+@media (max-width: 380px) {
+  .platform-web .format-toolbar:not([hidden]) {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(44px, 1fr));
+    gap: 2px;
+  }
+  .platform-web .format-toolbar .format-divider {
+    display: none;
+  }
+  .platform-web .format-toolbar > button,
+  .platform-web .format-toolbar .mark-control > button {
+    width: 100%;
+  }
+}
 .platform-web .format-status {
   display: none;
 }
@@ -442,7 +470,7 @@ body[data-web-background="paper"] #root {
   border-color: #c7b99e;
   box-shadow: 0 8px 24px rgba(69, 50, 20, 0.16);
 }
-.platform-web[data-web-background="paper"] .note-color-dot.active {
+.platform-web[data-web-background="paper"] .note-color-dot.active::before {
   box-shadow: 0 0 0 2px #5f513f;
 }
 

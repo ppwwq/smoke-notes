@@ -1918,25 +1918,42 @@ button {
 }
 .note-color-strip {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 10px 16px 4px;
 }
 .note-color-dot {
   display: grid;
   place-items: center;
-  width: 17px;
-  height: 17px;
+  width: 28px;
+  height: 28px;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 0;
   border-radius: 50%;
   color: #eff2f4;
-  background: rgb(var(--dot));
+  background: transparent;
   cursor: pointer;
   opacity: 0.55;
 }
 .note-color-dot.active,
 .note-color-dot:hover {
   opacity: 1;
+}
+.note-color-dot::before {
+  content: "";
+  grid-area: 1 / 1;
+  width: 17px;
+  height: 17px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 50%;
+  background: rgb(var(--dot));
+}
+.note-color-dot svg {
+  grid-area: 1 / 1;
+  z-index: 1;
+}
+.note-color-dot.active::before,
+.note-color-dot:hover::before {
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
 }
 .note-color-dot-amber {
@@ -2193,4 +2210,88 @@ button {
 }
 .format-toolbar[hidden] {
   display: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.sync-indicator {
+  position: absolute;
+  z-index: 22;
+  top: calc(18px + env(safe-area-inset-top, 0px));
+  right: max(14px, env(safe-area-inset-right, 0px));
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  color: var(--accent-bright);
+}
+.sync-ring {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+.sync-ring.spinning {
+  border-top-color: transparent;
+  animation: sync-spin 0.8s linear infinite;
+}
+.sync-indicator[data-phase="error"] {
+  color: var(--danger);
+}
+.sync-indicator[data-phase="offline"] {
+  color: var(--muted);
+}
+@keyframes sync-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sync-ring.spinning {
+    animation: none;
+    border-style: dashed;
+  }
+}
+.platform-web[data-web-background] .has-sync-status .mobile-note-header {
+  padding-right: calc(42px + env(safe-area-inset-right, 0px));
+}
+.platform-web[data-web-background="glass"] .sync-indicator {
+  top: calc(26px + env(safe-area-inset-top, 0px));
+  right: max(20px, env(safe-area-inset-right, 0px));
+}
+.platform-web .has-sync-status .notes-board-header,
+.platform-web .has-sync-status .todo-workspace > header {
+  padding-right: 32px;
+}
+.desktop-inline-note {
+  inset: 0;
+  position: relative;
+  height: 100%;
+  padding-top: 30px;
+}
+.desktop-inline-note .mobile-note-header {
+  flex-shrink: 0;
+}
+.desktop-inline-note .mobile-note-header button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: auto;
+  min-width: 44px;
+  min-height: 44px;
+  padding-inline: 8px;
+}
+.platform-desktop .workspace-shell:has(.desktop-inline-note) > .connection-chip,
+.desktop-inline-note .format-status {
+  display: none;
+}
+.create-note-error {
+  color: var(--danger);
 }

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useActionMenu } from "../useActionMenu";
 import type { Note, NoteKind, Notebook } from "@smoke-notes/core";
 import {
   CheckSquare2,
@@ -24,7 +25,31 @@ interface NotesWorkspaceProps {
 }
 
 export function NotesWorkspace(props: NotesWorkspaceProps) {
-  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const {
+    open: createMenuOpen,
+    setOpen: setCreateMenuOpen,
+    controlRef,
+    triggerRef,
+    onKeyDown,
+  } = useActionMenu();
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const pending = useRef(false);
+  async function create(kind: NoteKind) {
+    if (pending.current) return;
+    pending.current = true;
+    setCreating(true);
+    setCreateError(null);
+    setCreateMenuOpen(false);
+    try {
+      await props.onCreateNote(kind);
+    } catch {
+      setCreateError("新建失败，已有内容已保留，请重试。");
+    } finally {
+      pending.current = false;
+      setCreating(false);
+    }
+  }
   if (!props.notebook)
     return (
       <main className="empty-workspace">
@@ -45,11 +70,17 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
           <h1>{props.notebook.name}</h1>
           <span>{props.notes.length} 张桌面便签</span>
         </div>
-        <div className="create-note-control">
+        <div
+          className="create-note-control"
+          ref={controlRef}
+          onKeyDown={onKeyDown}
+        >
           <button
             type="button"
             className="create-note-button"
             aria-label="新建便签"
+            ref={triggerRef}
+            disabled={creating}
             aria-haspopup="menu"
             aria-expanded={createMenuOpen}
             onClick={() => setCreateMenuOpen((open) => !open)}
@@ -64,7 +95,7 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
                 role="menuitem"
                 onClick={() => {
                   setCreateMenuOpen(false);
-                  void props.onCreateNote("note");
+                  void create("note");
                 }}
               >
                 <StickyNote size={15} />
@@ -75,7 +106,7 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
                 role="menuitem"
                 onClick={() => {
                   setCreateMenuOpen(false);
-                  void props.onCreateNote("todo");
+                  void create("todo");
                 }}
               >
                 <CheckSquare2 size={15} />
@@ -85,6 +116,11 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
           )}
         </div>
       </header>
+      {createError && (
+        <p role="alert" className="create-note-error">
+          {createError}
+        </p>
+      )}
       <section
         className="notes-board-scroll"
         aria-label={`${props.notebook.name}便签列表`}
@@ -93,7 +129,8 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
           <button
             type="button"
             className="blank-note-card"
-            onClick={() => void props.onCreateNote("note")}
+            disabled={creating}
+            onClick={() => void create("note")}
           >
             <FilePlus2 size={25} />
             <strong>写下第一张便签</strong>

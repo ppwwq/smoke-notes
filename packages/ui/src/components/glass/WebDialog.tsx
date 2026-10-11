@@ -2,7 +2,7 @@ import { useRef, useState, type ReactNode } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { GlassSurface } from "./GlassSurface";
 
-// Base UI owns web focus trapping, Escape and focus restoration. Theme changes
+// Base UI owns focus trapping, Escape and focus restoration on both platforms. Theme changes
 // leave the same modal and children mounted inside the existing app overlay.
 export function WebDialog({
   web,
@@ -24,14 +24,6 @@ export function WebDialog({
       : null,
   );
   const panel = kind === "settings" ? "settings-panel" : "pairing-dialog";
-  if (!web)
-    return (
-      <div className={`${kind}-backdrop`}>
-        <section className={panel} role="dialog" aria-label={label}>
-          {children}
-        </section>
-      </div>
-    );
   return (
     <Dialog.Root
       open
@@ -43,11 +35,17 @@ export function WebDialog({
       <Dialog.Portal container={portalHost}>
         <div className={`${kind}-backdrop`}>
           <Dialog.Popup
-            className={`${panel} web-dialog`}
+            className={`${panel}${web ? " web-dialog" : ""}`}
             aria-label={label}
-            finalFocus={() => returnTarget}
+            finalFocus={() =>
+              returnTarget?.closest("[inert]")
+                ? document.querySelector<HTMLElement>(
+                    '[aria-label="打开便签本"]',
+                  )
+                : returnTarget
+            }
           >
-            <GlassSurface kind="dialog" />
+            {web && <GlassSurface kind="dialog" />}
             {children}
           </Dialog.Popup>
         </div>

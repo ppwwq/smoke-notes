@@ -7,10 +7,12 @@ import {
   screen,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
+import type { Editor } from "@tiptap/react";
 import {
   LocalRepository,
   SmokeNotesDatabase,
   SyncEngine,
+  migrateLegacyNoteContent,
   type Note,
 } from "@smoke-notes/core";
 import {
@@ -82,6 +84,45 @@ it("preserves both edits when a remote title arrives while a local draft is dirt
     await ref.current!.flushSave();
   });
   expect(await repository.listNotes(note.notebookId)).toHaveLength(2);
+});
+
+it("keeps a conflict copy for a remote body arriving during Chinese composition", async () => {
+  const ref = createRef<RichNoteEditorHandle>();
+  const onSave = (changes: NoteEdit) => repository.updateNote(note.id, changes);
+  const view = render(<RichNoteEditor ref={ref} note={note} onSave={onSave} />);
+  const body = screen.getByRole("textbox", {
+    name: "便签正文",
+  }) as HTMLElement & { editor: Editor };
+  fireEvent.compositionStart(body);
+  act(() => {
+    body.editor.commands.insertContent("中文草稿");
+  });
+  const localBody = body.editor.getText();
+  await remoteEngine({
+    ...note,
+    version: 2,
+    body: "手机正文",
+    contentJson: migrateLegacyNoteContent("手机正文"),
+  }).pull(null);
+  view.rerender(
+    <RichNoteEditor
+      ref={ref}
+      note={(await repository.getNote(note.id))!}
+      onSave={onSave}
+    />,
+  );
+  expect(body.editor.getText()).toBe(localBody);
+  fireEvent.compositionEnd(body);
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  await act(async () => {
+    await ref.current!.flushSave();
+  });
+  const notes = await repository.listNotes(note.notebookId);
+  expect(notes).toHaveLength(2);
+  expect(notes.some((item) => item.body === localBody)).toBe(true);
+  expect(notes.some((item) => item.body === "手机正文")).toBe(true);
 });
 it("advances the edit baseline when a remote update already matches the draft", async () => {
   const ref = createRef<RichNoteEditorHandle>();

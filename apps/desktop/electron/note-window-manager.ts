@@ -62,10 +62,13 @@ export class NoteWindowManager {
     return pendingOpen;
   }
 
-  hide(noteId: string): void {
-    const window = this.windows.get(noteId);
-    if (window && !window.isDestroyed()) window.hide();
+  close(noteId: string): void {
+    // The caller has saved its draft. Keep reopen metadata, but release the
+    // Chromium renderer instead of retaining every previously opened editor.
     this.persist(noteId, { isOpen: false });
+    const window = this.windows.get(noteId);
+    if (window && !window.isDestroyed()) window.destroy();
+    this.windows.delete(noteId);
   }
 
   update(noteId: string, changes: Partial<NoteWindowState>): NoteWindowState {

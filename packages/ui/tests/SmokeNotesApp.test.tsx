@@ -470,6 +470,36 @@ describe("SmokeNotesApp", () => {
     expect(notebookTint("book-a")).toBe(notebookTint("book-a"));
   });
 
+  it("does not submit a notebook name while confirming an IME candidate", async () => {
+    render(<SmokeNotesApp repository={repository} platform="desktop" />);
+    await screen.findByRole("button", { name: "工作" });
+    fireEvent.click(screen.getByRole("button", { name: "新建便签本" }));
+    const input = screen.getByRole("textbox", { name: "便签本名称" });
+    fireEvent.change(input, { target: { value: "选字中" } });
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+    expect(input).toBeInTheDocument();
+    expect(await repository.listNotebooks()).toHaveLength(2);
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(
+      await screen.findByRole("button", { name: "选字中" }),
+    ).toBeInTheDocument();
+  });
+
+  it("supports menu arrows and Escape with focus restored to the trigger", async () => {
+    const user = userEvent.setup();
+    render(<SmokeNotesApp repository={repository} platform="desktop" />);
+    await screen.findByText("周会记录");
+    const trigger = screen.getByRole("button", { name: "新建便签" });
+    trigger.focus();
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menuitem", { name: "普通便签" })).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menuitem", { name: "待办便签" })).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(trigger).toHaveFocus();
+  });
+
   it("creates a notebook and a note from the interface", async () => {
     const user = userEvent.setup();
     const bridge = desktopBridge();
@@ -494,7 +524,19 @@ describe("SmokeNotesApp", () => {
     ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "新建便签" }));
     await user.click(screen.getByRole("menuitem", { name: "普通便签" }));
-    await waitFor(() => expect(bridge.openNote).toHaveBeenCalledOnce());
+    expect(
+      await screen.findByRole("textbox", { name: "便签正文" }),
+    ).toBeInTheDocument();
+    expect(bridge.openNote).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("complementary", { name: "便签导航" }),
+    ).toBeInTheDocument();
+    await user.type(
+      screen.getByRole("textbox", { name: "便签标题" }),
+      "主窗口编辑",
+    );
+    await user.click(screen.getByRole("button", { name: "返回便签列表" }));
+    expect(await screen.findByText("主窗口编辑")).toBeInTheDocument();
   });
 
   it("creates a todo note from the new-note menu and marks its card", async () => {
@@ -512,12 +554,16 @@ describe("SmokeNotesApp", () => {
     await user.click(screen.getByRole("button", { name: "新建便签" }));
     await user.click(screen.getByRole("menuitem", { name: "待办便签" }));
 
-    await waitFor(() => expect(bridge.openNote).toHaveBeenCalledOnce());
+    expect(
+      await screen.findByRole("textbox", { name: "便签正文" }),
+    ).toBeInTheDocument();
+    expect(bridge.openNote).not.toHaveBeenCalled();
     const notes = await repository.listNotes(
       (await repository.listNotebooks()).find((book) => book.name === "工作")!
         .id,
     );
     expect(notes.at(-1)?.kind).toBe("todo");
+    await user.click(screen.getByRole("button", { name: "返回便签列表" }));
     expect(
       await screen.findByLabelText("待办便签：无标题便签"),
     ).toBeInTheDocument();

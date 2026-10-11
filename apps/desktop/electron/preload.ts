@@ -27,6 +27,12 @@ contextBridge.exposeInMainWorld("smokeDesktop", {
   closeNote: async (noteId: string): Promise<void> => {
     await ipcRenderer.invoke("note-window:close", noteId);
   },
+  onNoteCloseRequested: (listener: () => void): (() => void) => {
+    const handler = () => listener();
+    ipcRenderer.on("note-window:request-close", handler);
+    return () =>
+      ipcRenderer.removeListener("note-window:request-close", handler);
+  },
   getRecentNoteIds: (currentNoteId: string, limit: number): Promise<string[]> =>
     ipcRenderer.invoke("note-window:get-recent", currentNoteId, limit),
   switchNote: (targetNoteId: string): Promise<void> =>

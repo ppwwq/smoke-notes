@@ -8,8 +8,10 @@ import {
   createSyncRuntime,
   pairingCodeFromUrl,
   type CloudConfig,
+  type SyncStatus,
 } from "@smoke-notes/core";
-import { PairingGate, SmokeNotesApp } from "@smoke-notes/ui";
+import { SmokeNotesApp } from "@smoke-notes/ui/app";
+import { PairingGate } from "@smoke-notes/ui/pairing";
 import "./web.css";
 import "./brand.css";
 import "./glass.css";
@@ -57,11 +59,24 @@ async function bootstrap() {
   const deviceId = persistentId("smoke-notes:device-id");
   const database = new SmokeNotesDatabase("smoke-notes-web");
   const repository = new LocalRepository(database, { workspaceId, deviceId });
-  root.render(
-    <StrictMode>
-      <SmokeNotesApp repository={repository} platform="web" />
-    </StrictMode>,
-  );
+  let syncStatus: SyncStatus | undefined = cloud
+    ? {
+        phase: navigator.onLine ? "syncing" : "offline",
+        pending: 0,
+        initial: true,
+      }
+    : undefined;
+  const renderApp = () =>
+    root.render(
+      <StrictMode>
+        <SmokeNotesApp
+          repository={repository}
+          platform="web"
+          syncStatus={syncStatus}
+        />
+      </StrictMode>,
+    );
+  renderApp();
 
   if (cloud) {
     const engine = new SyncEngine(database, cloud.syncAdapter, { deviceId });
@@ -72,12 +87,17 @@ async function bootstrap() {
           return engine.flush();
         },
         pull: (cursor) => engine.pull(cursor),
+        getQueueState: () => engine.getQueueState(),
       },
       cloud,
       storage: localStorage,
       notify: () =>
         window.dispatchEvent(new CustomEvent("smoke-notes:data-changed")),
       onError: (error) => console.warn("Background sync paused", error),
+      onStatusChange: (status) => {
+        syncStatus = status;
+        renderApp();
+      },
     });
     await runtime.start();
     window.addEventListener("beforeunload", () => runtime.stop(), {

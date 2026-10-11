@@ -12,6 +12,7 @@ export interface DesktopBridge {
   closeCurrentWindow(): Promise<void>;
   openNote(noteId: string): Promise<void>;
   closeNote(noteId: string): Promise<void>;
+  onNoteCloseRequested?(listener: () => void): () => void;
   getRecentNoteIds(currentNoteId: string, limit: number): Promise<string[]>;
   switchNote(targetNoteId: string): Promise<void>;
   setNoteWindowMousePassthrough(ignore: boolean): Promise<void>;

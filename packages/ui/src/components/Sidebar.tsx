@@ -86,6 +86,8 @@ export function Sidebar(props: SidebarProps) {
             placeholder="新的便签本"
             onChange={(event) => setName(event.target.value)}
             onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing || event.keyCode === 229)
+                return;
               if (event.key === "Enter") void submit();
               if (event.key === "Escape") setAdding(false);
             }}
@@ -117,6 +119,11 @@ export function Sidebar(props: SidebarProps) {
                     value={renameValue}
                     onChange={(event) => setRenameValue(event.target.value)}
                     onKeyDown={(event) => {
+                      if (
+                        event.nativeEvent.isComposing ||
+                        event.keyCode === 229
+                      )
+                        return;
                       if (event.key === "Enter" && renameValue.trim()) {
                         void props
                           .onRenameNotebook(notebook.id, renameValue)

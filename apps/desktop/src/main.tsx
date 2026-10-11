@@ -8,11 +8,8 @@ import {
   createSyncRuntime,
   type CloudConfig,
 } from "@smoke-notes/core";
-import {
-  NoteWindowApp,
-  SmokeNotesApp,
-  type PairingController,
-} from "@smoke-notes/ui";
+import type { PairingController } from "@smoke-notes/ui";
+import "@smoke-notes/ui/styles.css";
 import "./shell.css";
 
 function persistentId(key: string): string {
@@ -33,13 +30,14 @@ function cloudConfig(): CloudConfig | null {
 }
 
 async function bootstrap() {
+  const noteId = new URLSearchParams(window.location.search).get("noteId");
   const config = cloudConfig();
-  const cloud = config ? new SupabaseCloud(config) : null;
+  // Only the main renderer owns cloud authentication and background sync.
+  const cloud = config && !noteId ? new SupabaseCloud(config) : null;
   const workspaceId = persistentId("smoke-notes:workspace-id");
   const deviceId = persistentId("smoke-notes:device-id");
   const database = new SmokeNotesDatabase("smoke-notes-desktop");
   const repository = new LocalRepository(database, { workspaceId, deviceId });
-  const noteId = new URLSearchParams(window.location.search).get("noteId");
   const dataChannel = new BroadcastChannel("smoke-notes:data");
   dataChannel.onmessage = () =>
     window.dispatchEvent(
@@ -58,24 +56,31 @@ async function bootstrap() {
       }
     : undefined;
 
-  createRoot(document.getElementById("root")!).render(
-    <StrictMode>
-      {noteId ? (
+  const root = createRoot(document.getElementById("root")!);
+  if (noteId) {
+    const { NoteWindowApp } = await import("@smoke-notes/ui/note-window");
+    root.render(
+      <StrictMode>
         <NoteWindowApp
           repository={repository}
           noteId={noteId}
           bridge={window.smokeDesktop}
         />
-      ) : (
+      </StrictMode>,
+    );
+  } else {
+    const { SmokeNotesApp } = await import("@smoke-notes/ui/app");
+    root.render(
+      <StrictMode>
         <SmokeNotesApp
           repository={repository}
           platform="desktop"
           desktopBridge={window.smokeDesktop}
           pairingController={pairingController}
         />
-      )}
-    </StrictMode>,
-  );
+      </StrictMode>,
+    );
+  }
 
   if (cloud && !noteId) {
     const engine = new SyncEngine(database, cloud.syncAdapter, { deviceId });

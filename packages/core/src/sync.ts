@@ -35,6 +35,11 @@ export interface FlushResult {
   failed: number;
 }
 
+export interface SyncQueueState {
+  pending: number;
+  rejected: number;
+}
+
 export class SyncEngine {
   private readonly now: () => Date;
   private readonly createId: () => string;
@@ -46,6 +51,14 @@ export class SyncEngine {
   ) {
     this.now = context.now ?? (() => new Date());
     this.createId = context.createId ?? (() => crypto.randomUUID());
+  }
+
+  async getQueueState(): Promise<SyncQueueState> {
+    const operations = await this.database.operations.toArray();
+    return {
+      pending: operations.filter((operation) => !operation.rejected).length,
+      rejected: operations.filter((operation) => !!operation.rejected).length,
+    };
   }
 
   async flush(): Promise<FlushResult> {

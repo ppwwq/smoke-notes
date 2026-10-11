@@ -9,7 +9,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { EditorContent, useEditor } from "@tiptap/react";
+import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { TextStyle } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
@@ -23,6 +23,7 @@ import {
   NOTE_COLORS,
   TEXT_COLORS,
   richTextToPlainText,
+  sameValue as sameContent,
   type Note,
   type RichTextDocument,
 } from "@smoke-notes/core";
@@ -69,8 +70,35 @@ function noteEdit(note: Note): NoteEdit {
   };
 }
 
-function sameContent(left: RichTextDocument, right: RichTextDocument) {
-  return JSON.stringify(left) === JSON.stringify(right);
+// Replace only the changed range. ProseMirror maps the current selection through
+// this transaction; unchanged paragraphs and their DOM stay in place.
+function applyRemoteContent(editor: Editor, content: RichTextDocument) {
+  const next = editor.schema.nodeFromJSON(content);
+  const previous = editor.state.doc;
+  const start = previous.content.findDiffStart(next.content);
+  if (start === null) return;
+  const end = previous.content.findDiffEnd(next.content)!;
+  const overlap = start - Math.min(end.a, end.b);
+  const endA = end.a + Math.max(0, overlap);
+  const endB = end.b + Math.max(0, overlap);
+  const scroll: { element: HTMLElement; top: number; left: number }[] = [];
+  for (
+    let element: HTMLElement | null = editor.view.dom;
+    element;
+    element = element.parentElement
+  ) {
+    scroll.push({ element, top: element.scrollTop, left: element.scrollLeft });
+  }
+  editor.view.dispatch(
+    editor.state.tr
+      .replace(start, endA, next.slice(start, endB))
+      .setMeta("preventUpdate", true)
+      .setMeta("addToHistory", false),
+  );
+  for (const { element, top, left } of scroll) {
+    element.scrollTop = top;
+    element.scrollLeft = left;
+  }
 }
 
 function sameEdit(left: NoteEdit, right: NoteEdit) {
@@ -110,6 +138,19 @@ export const RichNoteEditor = forwardRef<
   const [draft, setDraft] = useState(() => noteEdit(note));
   const { title, color } = draft;
   const [saveStatus, setSaveStatus] = useState("已自动保存");
+  const [composing, setComposing] = useState(false);
+  const composition = useRef<{ done: Promise<void>; finish(): void } | null>(
+    null,
+  );
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      composition.current?.finish();
+      composition.current = null;
+    };
+  }, []);
   useEffect(() => {
     onSaveStatusChange?.(saveStatus);
   }, [saveStatus, onSaveStatusChange]);
@@ -131,6 +172,7 @@ export const RichNoteEditor = forwardRef<
     );
   }, []);
   const editor = useEditor({
+    shouldRerenderOnTransaction: true,
     extensions: [
       StarterKit,
       TextStyle,
@@ -210,20 +252,27 @@ export const RichNoteEditor = forwardRef<
 
   const flushSave = useCallback(async () => {
     const session = sessionRef.current;
+    if (composition.current) await composition.current.done;
+    if (!mounted.current || sessionRef.current !== session) return;
     if (session.saving) return session.saving;
     if (sameEdit(session.draft, session.persisted)) return;
     setSaveStatus("保存中…");
     // Serialize writes and include any edits made while a save was pending.
     const save = async () => {
       while (
+        mounted.current &&
         sessionRef.current === session &&
         !sameEdit(session.draft, session.persisted)
       ) {
+        if (composition.current) await composition.current.done;
+        if (!mounted.current || sessionRef.current !== session) return;
         const changes = session.draft;
         const saved = await session.onSave({
           ...changes,
           baseSnapshot: session.baseSnapshot,
         });
+        if (composition.current) await composition.current.done;
+        if (!mounted.current || sessionRef.current !== session) return;
         const accepted = saved ? noteEdit(saved) : changes;
         const latest = session.draft;
         const contentJson = sameContent(latest.contentJson, changes.contentJson)
@@ -249,9 +298,7 @@ export const RichNoteEditor = forwardRef<
             sameContent(latest.contentJson, changes.contentJson) &&
             !sameContent(accepted.contentJson, changes.contentJson)
           ) {
-            editor.commands.setContent(accepted.contentJson, {
-              emitUpdate: false,
-            });
+            applyRemoteContent(editor, accepted.contentJson);
           }
         }
       }
@@ -274,13 +321,23 @@ export const RichNoteEditor = forwardRef<
   useImperativeHandle(ref, () => ({ flushSave }), [flushSave]);
 
   useEffect(() => {
+    if (composition.current) return;
     const incoming = noteEdit(note);
     const session = sessionRef.current;
     session.onSave = onSave;
     let next = incoming;
     if (session.noteId === note.id) {
       // Database refreshes produce fresh objects even when nothing changed.
-      if (sameEdit(session.incoming, incoming)) return;
+      if (sameEdit(session.incoming, incoming)) {
+        if (note.version >= session.baseSnapshot.version) {
+          session.baseSnapshot = {
+            ...session.baseSnapshot,
+            version: note.version,
+            updatedAt: note.updatedAt,
+          };
+        }
+        return;
+      }
       // Merge remote changes only into fields the user has not edited locally.
       const contentJson = sameContent(
         session.draft.contentJson,
@@ -342,12 +399,12 @@ export const RichNoteEditor = forwardRef<
       editor &&
       !sameContent(editor.getJSON() as RichTextDocument, next.contentJson)
     ) {
-      editor.commands.setContent(next.contentJson, { emitUpdate: false });
+      applyRemoteContent(editor, next.contentJson);
     }
-  }, [editor, note, onSave]);
+  }, [editor, note, onSave, composing]);
 
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || composing) return;
     const session = sessionRef.current;
     if (sameEdit(session.draft, session.persisted)) return;
     const timer = window.setTimeout(() => {
@@ -355,13 +412,40 @@ export const RichNoteEditor = forwardRef<
       void flushSave().catch(() => {});
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [draft, editor, flushSave, note.id]);
+  }, [draft, editor, flushSave, note.id, composing]);
 
   if (!editor) return <div className="rich-editor-loading">正在打开便签…</div>;
 
   return (
     <section
       className={`rich-note-editor note-color-${color} ${className}${compact ? " compact-editor" : ""}`.trim()}
+      onCompositionStartCapture={() => {
+        if (composition.current) return;
+        let finish!: () => void;
+        const done = new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+        composition.current = { done, finish };
+        setComposing(true);
+      }}
+      onCompositionEndCapture={() => {
+        const current = composition.current;
+        const session = sessionRef.current;
+        // The final input/ProseMirror transaction can follow compositionend.
+        window.setTimeout(() => {
+          if (composition.current !== current || !mounted.current) return;
+          if (sessionRef.current === session && !editor.isDestroyed) {
+            const contentJson = editor.getJSON() as RichTextDocument;
+            updateDraft({
+              contentJson,
+              body: richTextToPlainText(contentJson),
+            });
+          }
+          composition.current = null;
+          setComposing(false);
+          current?.finish();
+        }, 0);
+      }}
     >
       <div
         className="rich-note-scroll"
@@ -381,6 +465,7 @@ export const RichNoteEditor = forwardRef<
               type="button"
               className={`note-color-dot note-color-dot-${item}${color === item ? " active" : ""}`}
               aria-label={`便签颜色：${item}`}
+              aria-pressed={color === item}
               onClick={() => updateDraft({ color: item })}
             >
               {color === item && <Check size={11} />}
@@ -421,6 +506,7 @@ export const RichNoteEditor = forwardRef<
         <button
           type="button"
           aria-label="粗体"
+          aria-pressed={editor.isActive("bold")}
           className={editor.isActive("bold") ? "active" : ""}
           onClick={() =>
             editor
@@ -435,6 +521,7 @@ export const RichNoteEditor = forwardRef<
         <button
           type="button"
           aria-label="斜体"
+          aria-pressed={editor.isActive("italic")}
           className={editor.isActive("italic") ? "active" : ""}
           onClick={() =>
             editor
@@ -449,6 +536,7 @@ export const RichNoteEditor = forwardRef<
         <button
           type="button"
           aria-label="下划线"
+          aria-pressed={editor.isActive("underline")}
           className={editor.isActive("underline") ? "active" : ""}
           onClick={() =>
             editor
@@ -463,6 +551,7 @@ export const RichNoteEditor = forwardRef<
         <button
           type="button"
           aria-label="删除线"
+          aria-pressed={editor.isActive("strike")}
           className={editor.isActive("strike") ? "active" : ""}
           onClick={() =>
             editor
@@ -477,6 +566,7 @@ export const RichNoteEditor = forwardRef<
         <button
           type="button"
           aria-label="待办清单"
+          aria-pressed={editor.isActive("taskList")}
           className={editor.isActive("taskList") ? "active" : ""}
           onClick={() =>
             editor
@@ -493,6 +583,7 @@ export const RichNoteEditor = forwardRef<
           <button
             type="button"
             aria-label="字体颜色"
+            aria-expanded={markMenu === "text"}
             className={markMenu === "text" ? "active" : ""}
             onClick={() => setMarkMenu(markMenu === "text" ? null : "text")}
           >
@@ -538,6 +629,7 @@ export const RichNoteEditor = forwardRef<
           <button
             type="button"
             aria-label="荧光标注"
+            aria-expanded={markMenu === "highlight"}
             className={markMenu === "highlight" ? "active" : ""}
             onClick={() =>
               setMarkMenu(markMenu === "highlight" ? null : "highlight")

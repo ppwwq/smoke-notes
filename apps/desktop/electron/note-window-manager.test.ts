@@ -64,8 +64,8 @@ describe("NoteWindowManager", () => {
       manager.open("same"),
     ]);
     expect(second).toBe(first);
-    manager.hide("same");
-    expect((first as ReturnType<typeof createHandle>).hidden).toBe(1);
+    manager.close("same");
+    expect((first as ReturnType<typeof createHandle>).destroyed).toBe(true);
   });
 
   it("allows another open after an in-flight window creation fails", async () => {
@@ -98,16 +98,50 @@ describe("NoteWindowManager", () => {
     expect(store.states[0]).toMatchObject({ noteId: "note-1", isOpen: true });
   });
 
-  it("hides a note without deleting its saved state", async () => {
+  it("releases a closed note and restores its saved window state on reopen", async () => {
+    const store = createStore();
+    const handle = createHandle();
+    const factory = vi.fn(async () => createHandle());
+    factory.mockResolvedValueOnce(handle);
+    const manager = new NoteWindowManager(store, factory);
+
+    await manager.open("note-2");
+    manager.update("note-2", {
+      x: 42,
+      y: 68,
+      width: 520,
+      backgroundOpacity: 0.73,
+      alwaysOnTop: true,
+    });
+    manager.close("note-2");
+
+    expect(handle.destroyed).toBe(true);
+    expect(store.states[0]).toMatchObject({ noteId: "note-2", isOpen: false });
+    const reopened = await manager.open("note-2");
+    expect(reopened).not.toBe(handle);
+    expect(factory).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        noteId: "note-2",
+        isOpen: true,
+        x: 42,
+        y: 68,
+        width: 520,
+        backgroundOpacity: 0.73,
+        alwaysOnTop: true,
+      }),
+    );
+  });
+
+  it("keeps the window alive if persisting the close fails", async () => {
     const store = createStore();
     const handle = createHandle();
     const manager = new NoteWindowManager(store, async () => handle);
-
-    await manager.open("note-2");
-    manager.hide("note-2");
-
-    expect(handle.hidden).toBe(1);
-    expect(store.states[0]).toMatchObject({ noteId: "note-2", isOpen: false });
+    await manager.open("note-1");
+    store.writeAll = () => {
+      throw new Error("disk full");
+    };
+    expect(() => manager.close("note-1")).toThrow("disk full");
+    expect(handle.destroyed).toBe(false);
   });
 
   it("restores only windows that were open at shutdown", async () => {

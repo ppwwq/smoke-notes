@@ -2,6 +2,7 @@ export * from "./database";
 export * from "./cloud";
 export * from "./domain";
 export * from "./note-content";
+export * from "./note-merge";
 export * from "./note-window-state";
 export * from "./repository";
 export * from "./runtime";

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import type { DesktopBridge } from "./types";
 import { useNoteTabs } from "./useNoteTabs";
+import { useActionMenu } from "./useActionMenu";
 import { attachNoteMousePassthrough } from "./note-mouse-passthrough";
 import {
   RichNoteEditor,
@@ -49,13 +50,41 @@ export function NoteWindowApp({
     noteId,
     bridge,
   );
-  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const {
+    open: createMenuOpen,
+    setOpen: setCreateMenuOpen,
+    controlRef: createControlRef,
+    triggerRef: createTriggerRef,
+    onKeyDown: onCreateKeyDown,
+  } = useActionMenu();
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const switchingRef = useRef(false);
-  const createControlRef = useRef<HTMLDivElement>(null);
+  const [pendingCreated, setPendingCreated] = useState<{
+    id: string;
+    kind: NoteKind;
+  } | null>(null);
   const editorRef = useRef<RichNoteEditorHandle>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const closeNote = useCallback(async () => {
+    if (switchingRef.current) return;
+    switchingRef.current = true;
+    setSwitching(true);
+    setSwitchError(null);
+    try {
+      await editorRef.current?.flushSave();
+      await bridge.closeNote(noteId);
+    } catch {
+      setSwitchError("保存或关闭失败，当前草稿已保留，请重试。");
+    } finally {
+      switchingRef.current = false;
+      setSwitching(false);
+    }
+  }, [bridge, noteId]);
+  useEffect(
+    () => bridge.onNoteCloseRequested?.(() => void closeNote()),
+    [bridge, closeNote],
+  );
   useEffect(() => {
     if (rootRef.current)
       return attachNoteMousePassthrough(rootRef.current, bridge);
@@ -94,13 +123,17 @@ export function NoteWindowApp({
       document.removeEventListener("pointerdown", closeOnOutsidePointer);
       document.removeEventListener("keydown", closeOnEscape);
     };
-  }, [createMenuOpen]);
+  }, [createMenuOpen, createControlRef, setCreateMenuOpen]);
 
   if (!note)
     return (
       <div ref={rootRef} className="note-window missing-note">
         <p>这张便签已被删除或无法读取。</p>
-        <button type="button" onClick={() => void bridge.closeNote(noteId)}>
+        <button
+          type="button"
+          disabled={switching}
+          onClick={() => void closeNote()}
+        >
           关闭
         </button>
       </div>
@@ -108,15 +141,37 @@ export function NoteWindowApp({
   const currentNote = note;
 
   async function createNote(kind: NoteKind) {
-    const created = await repository.createNote(currentNote.notebookId, {
-      title: "",
-      body: "",
-      color: currentNote.color,
-      kind,
-    });
+    if (switchingRef.current) return;
+    switchingRef.current = true;
+    setSwitching(true);
+    setSwitchError(null);
     setCreateMenuOpen(false);
-    window.dispatchEvent(new CustomEvent("smoke-notes:data-changed"));
-    await bridge.openNote(created.id);
+    let target = pendingCreated;
+    try {
+      await editorRef.current?.flushSave();
+      if (!target) {
+        const created = await repository.createNote(currentNote.notebookId, {
+          title: "",
+          body: "",
+          color: currentNote.color,
+          kind,
+        });
+        target = { id: created.id, kind };
+        setPendingCreated(target);
+        window.dispatchEvent(new CustomEvent("smoke-notes:data-changed"));
+      }
+      await bridge.switchNote(target.id);
+      setPendingCreated(null);
+    } catch {
+      setSwitchError(
+        target
+          ? "新便签已创建，但切换失败。请重试打开，不会重复创建。"
+          : "保存或新建失败，当前草稿已保留，请重试。",
+      );
+    } finally {
+      switchingRef.current = false;
+      setSwitching(false);
+    }
   }
 
   return (
@@ -180,10 +235,16 @@ export function NoteWindowApp({
         })}
       </nav>
       <header className="note-window-bar">
-        <div className="note-window-create-control" ref={createControlRef}>
+        <div
+          className="note-window-create-control"
+          ref={createControlRef}
+          onKeyDown={onCreateKeyDown}
+        >
           <button
             type="button"
             aria-label="新建便签"
+            ref={createTriggerRef}
+            disabled={switching || !!pendingCreated}
             aria-haspopup="menu"
             aria-expanded={createMenuOpen}
             onClick={() => setCreateMenuOpen((open) => !open)}
@@ -278,12 +339,26 @@ export function NoteWindowApp({
         <button
           type="button"
           aria-label="关闭便签"
-          onClick={() => void bridge.closeNote(noteId)}
+          disabled={switching}
+          onClick={() => void closeNote()}
         >
           <X size={17} />
         </button>
       </header>
-      {switchError && <p role="alert">{switchError}</p>}
+      {switchError && (
+        <div role="alert">
+          <p>{switchError}</p>
+          {pendingCreated && (
+            <button
+              type="button"
+              disabled={switching}
+              onClick={() => void createNote(pendingCreated.kind)}
+            >
+              重试打开新便签
+            </button>
+          )}
+        </div>
+      )}
       <RichNoteEditor
         ref={editorRef}
         note={note}
