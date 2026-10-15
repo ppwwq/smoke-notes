@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, json, sha256Hex } from "../_shared/http.ts";
+import { rotatePairingCode } from "./rotate.ts";
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS")
@@ -29,24 +30,19 @@ Deno.serve(async (request) => {
     const webUrl = Deno.env.get("WEB_APP_URL");
     if (!webUrl) throw new Error("WEB_APP_URL is not configured");
     const pairingUrl = new URL(webUrl);
-    const random = new Uint32Array(1);
-    crypto.getRandomValues(random);
-    const code = String(random[0] % 1_000_000).padStart(6, "0");
-    const codeHash = await sha256Hex(code);
-    const expiresAt = new Date(Date.now() + 5 * 60_000).toISOString();
-    const retired = await client
-      .from("pairing_codes")
-      .update({ redeemed_at: new Date().toISOString() })
-      .eq("workspace_id", workspaceId)
-      .is("redeemed_at", null);
-    if (retired.error) throw retired.error;
-    const inserted = await client.from("pairing_codes").insert({
-      workspace_id: workspaceId,
-      code_hash: codeHash,
-      created_by: authData.user.id,
-      expires_at: expiresAt,
-    });
-    if (inserted.error) throw inserted.error;
+    const { code, expiresAt } = await rotatePairingCode(
+      async () => {
+        const random = new Uint32Array(1);
+        crypto.getRandomValues(random);
+        const code = String(random[0] % 1_000_000).padStart(6, "0");
+        return { code, codeHash: await sha256Hex(code) };
+      },
+      (codeHash) =>
+        client.rpc("rotate_pairing_code", {
+          p_workspace_id: workspaceId,
+          p_code_hash: codeHash,
+        }),
+    );
 
     pairingUrl.searchParams.set("pair", code);
     return json({ code, expiresAt, url: pairingUrl.toString() });

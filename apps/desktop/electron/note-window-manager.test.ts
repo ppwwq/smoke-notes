@@ -195,7 +195,7 @@ describe("NoteWindowManager", () => {
     ]);
   });
 
-  it("reuses the source window and destroys an already open target after navigation", async () => {
+  it("focuses an already open target without unloading either draft", async () => {
     const store = createStore();
     const handles = new Map<string, ReturnType<typeof createHandle>>();
     const manager = new NoteWindowManager(store, async (state) => {
@@ -216,20 +216,21 @@ describe("NoteWindowManager", () => {
 
     await expect(manager.switch("source", "target")).resolves.toBeUndefined();
 
-    expect(handles.get("source")?.navigated).toEqual(["target"]);
-    expect(handles.get("target")?.destroyed).toBe(true);
+    expect(handles.get("source")?.navigated).toEqual([]);
+    expect(handles.get("source")?.destroyed).toBe(false);
+    expect(handles.get("target")?.destroyed).toBe(false);
+    expect(handles.get("target")?.focused).toBe(1);
     expect(store.states).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ noteId: "source", isOpen: false }),
+        expect.objectContaining({
+          noteId: "source",
+          isOpen: true,
+          x: 42,
+          width: 520,
+        }),
         expect.objectContaining({
           noteId: "target",
           isOpen: true,
-          x: 42,
-          y: 68,
-          width: 520,
-          height: 430,
-          backgroundOpacity: 0.77,
-          alwaysOnTop: true,
         }),
       ]),
     );
@@ -326,7 +327,7 @@ describe("NoteWindowManager", () => {
     ]);
   });
 
-  it("keeps both windows active when replacing an open target fails", async () => {
+  it("keeps both windows active when recording target activation fails", async () => {
     const store = createStore();
     const handles = new Map<string, ReturnType<typeof createHandle>>();
     const manager = new NoteWindowManager(store, async (state) => {
@@ -336,7 +337,7 @@ describe("NoteWindowManager", () => {
     });
     await manager.open("source");
     await manager.open("target");
-    handles.get("source")!.navigate = vi.fn(async () => {
+    store.writeAll = vi.fn(() => {
       throw new Error("load failed");
     });
 
@@ -370,7 +371,6 @@ describe("NoteWindowManager", () => {
       backgroundOpacity: 0.77,
       alwaysOnTop: true,
     });
-    await manager.open("target");
     const snapshot = structuredClone(store.states);
     store.writeAll = vi.fn(() => {
       throw new Error("write failed");
@@ -381,12 +381,9 @@ describe("NoteWindowManager", () => {
     );
 
     expect(handles.get("source")?.navigated).toEqual(["target", "source"]);
-    expect(handles.get("target")?.destroyed).toBe(false);
     expect(store.writeAll).toHaveBeenCalledOnce();
     expect(store.states).toEqual(snapshot);
-    expect(manager.getState("target")).toEqual(
-      snapshot.find((state) => state.noteId === "target"),
-    );
+    expect(manager.getState("target").width).not.toBe(520);
   });
 
   it("preserves unrelated state changes made while the source is navigating", async () => {
@@ -453,7 +450,6 @@ describe("NoteWindowManager", () => {
       return handle;
     });
     await manager.open("source");
-    await manager.open("target");
     const source = handles.get("source")!;
     source.navigate = vi.fn(async (noteId) => {
       source.navigated.push(noteId);
@@ -479,10 +475,9 @@ describe("NoteWindowManager", () => {
       expect.objectContaining({ message: "rollback failed" }),
     );
     expect(source.destroyed).toBe(true);
-    expect(handles.get("target")?.destroyed).toBe(false);
   });
 
-  it("keeps a committed switch successful when old-target destruction fails", async () => {
+  it("never destroys an existing target even when its destroy method would fail", async () => {
     const store = createStore();
     const handles = new Map<string, ReturnType<typeof createHandle>>();
     const manager = new NoteWindowManager(store, async (state) => {
@@ -500,9 +495,11 @@ describe("NoteWindowManager", () => {
 
     await expect(manager.switch("source", "target")).resolves.toBeUndefined();
 
-    expect(oldTarget.hidden).toBe(1);
+    expect(oldTarget.destroy).not.toHaveBeenCalled();
+    expect(source.navigated).toEqual([]);
+    expect(oldTarget.hidden).toBe(0);
     await manager.open("target");
-    expect(source.focused).toBe(1);
-    expect(oldTarget.focused).toBe(0);
+    expect(source.focused).toBe(0);
+    expect(oldTarget.focused).toBe(2);
   });
 });

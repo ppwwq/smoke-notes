@@ -36,6 +36,8 @@ export function createSyncRuntime(options: SyncRuntimeOptions) {
   let unsubscribe: (() => void) | null = null;
   let running = false;
   let stopped = false;
+  let started = false;
+  let generation = 0;
   let wakePending = false;
   let notifying = false;
   let initial = true;
@@ -67,14 +69,19 @@ export function createSyncRuntime(options: SyncRuntimeOptions) {
       return;
     }
     running = true;
+    const currentGeneration = generation;
+    const active = () => !stopped && generation === currentGeneration;
     publish("syncing");
     try {
       const result = await options.engine.flush();
+      if (!active()) return;
       const cursor = await options.engine.pull(
         options.storage.getItem("smoke-notes:sync-cursor"),
       );
+      if (!active()) return;
       options.storage.setItem("smoke-notes:sync-cursor", cursor);
       const queue = await options.engine.getQueueState?.();
+      if (!active()) return;
       pending = queue?.pending ?? 0;
       if (!online()) publish("offline");
       else if (queue?.rejected) publish("error");
@@ -92,8 +99,10 @@ export function createSyncRuntime(options: SyncRuntimeOptions) {
         }
       }
     } catch (error) {
-      publish(online() ? "error" : "offline");
-      options.onError?.(error);
+      if (active()) {
+        publish(online() ? "error" : "offline");
+        options.onError?.(error);
+      }
     } finally {
       running = false;
       if (wakePending && !stopped) {
@@ -105,7 +114,10 @@ export function createSyncRuntime(options: SyncRuntimeOptions) {
 
   return {
     async start() {
+      if (started) return;
+      started = true;
       stopped = false;
+      const currentGeneration = generation;
       if (typeof window !== "undefined") {
         window.addEventListener("focus", wake);
         window.addEventListener("online", wake);
@@ -114,7 +126,7 @@ export function createSyncRuntime(options: SyncRuntimeOptions) {
         document.addEventListener("visibilitychange", visible);
       }
       await synchronize();
-      if (stopped) return;
+      if (stopped || generation !== currentGeneration) return;
       unsubscribe = options.cloud.subscribe(() => {
         void synchronize();
       });
@@ -123,7 +135,9 @@ export function createSyncRuntime(options: SyncRuntimeOptions) {
       }, options.intervalMs ?? 5000);
     },
     stop() {
+      started = false;
       stopped = true;
+      generation += 1;
       wakePending = false;
       if (typeof window !== "undefined") {
         window.removeEventListener("focus", wake);

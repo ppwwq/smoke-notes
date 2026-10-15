@@ -1,5 +1,9 @@
-import { useState, type CSSProperties } from "react";
-import { TEXT_LIMITS, type Notebook } from "@smoke-notes/core";
+import { useRef, useState, type CSSProperties } from "react";
+import {
+  RecordValidationError,
+  TEXT_LIMITS,
+  type Notebook,
+} from "@smoke-notes/core";
 import {
   CheckCircle2,
   NotebookPen,
@@ -37,12 +41,51 @@ export function Sidebar(props: SidebarProps) {
   const [name, setName] = useState("");
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [error, setError] = useState("");
+  const createPending = useRef(false);
+  const renamePending = useRef(false);
+  const nameRevision = useRef(0);
+  const renameRevision = useRef(0);
 
   async function submit() {
-    if (!name.trim()) return;
-    await props.onCreateNotebook(name);
-    setName("");
-    setAdding(false);
+    if (!name.trim() || createPending.current) return;
+    createPending.current = true;
+    const revision = nameRevision.current;
+    setError("");
+    try {
+      await props.onCreateNotebook(name);
+      if (revision === nameRevision.current) {
+        setName("");
+        setAdding(false);
+      }
+    } catch (reason) {
+      setError(
+        reason instanceof RecordValidationError
+          ? reason.message
+          : "新建失败，请重试",
+      );
+    } finally {
+      createPending.current = false;
+    }
+  }
+
+  async function rename(id: string) {
+    if (!renameValue.trim() || renamePending.current) return;
+    renamePending.current = true;
+    const revision = renameRevision.current;
+    setError("");
+    try {
+      await props.onRenameNotebook(id, renameValue);
+      if (revision === renameRevision.current) setRenamingId(null);
+    } catch (reason) {
+      setError(
+        reason instanceof RecordValidationError
+          ? reason.message
+          : "重命名失败，请重试",
+      );
+    } finally {
+      renamePending.current = false;
+    }
   }
 
   return (
@@ -84,7 +127,10 @@ export function Sidebar(props: SidebarProps) {
             maxLength={TEXT_LIMITS.notebookName}
             value={name}
             placeholder="新的便签本"
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => {
+              nameRevision.current += 1;
+              setName(event.target.value);
+            }}
             onKeyDown={(event) => {
               if (event.nativeEvent.isComposing || event.keyCode === 229)
                 return;
@@ -97,6 +143,7 @@ export function Sidebar(props: SidebarProps) {
           />
         </div>
       )}
+      {error && <p role="alert">{error}</p>}
 
       <div className="notebook-scroll">
         {props.notebooks.length === 0 ? (
@@ -117,18 +164,17 @@ export function Sidebar(props: SidebarProps) {
                     aria-label={`重命名：${notebook.name}`}
                     maxLength={TEXT_LIMITS.notebookName}
                     value={renameValue}
-                    onChange={(event) => setRenameValue(event.target.value)}
+                    onChange={(event) => {
+                      renameRevision.current += 1;
+                      setRenameValue(event.target.value);
+                    }}
                     onKeyDown={(event) => {
                       if (
                         event.nativeEvent.isComposing ||
                         event.keyCode === 229
                       )
                         return;
-                      if (event.key === "Enter" && renameValue.trim()) {
-                        void props
-                          .onRenameNotebook(notebook.id, renameValue)
-                          .then(() => setRenamingId(null));
-                      }
+                      if (event.key === "Enter") void rename(notebook.id);
                       if (event.key === "Escape") setRenamingId(null);
                     }}
                   />
@@ -154,6 +200,7 @@ export function Sidebar(props: SidebarProps) {
                   className="notebook-action"
                   aria-label={`重命名便签本：${notebook.name}`}
                   onClick={() => {
+                    renameRevision.current += 1;
                     setRenamingId(notebook.id);
                     setRenameValue(notebook.name);
                   }}

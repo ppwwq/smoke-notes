@@ -33,6 +33,40 @@ describe("rich note content", () => {
     expect(richTextToPlainText(content)).toBe("第一行\n第二行");
   });
 
+  it("preserves soft line breaks and separate heading and code blocks", () => {
+    expect(
+      richTextToPlainText({
+        type: "doc",
+        content: [
+          {
+            type: "heading",
+            attrs: { level: 1 },
+            content: [{ type: "text", text: "标题" }],
+          },
+          {
+            type: "paragraph",
+            content: [
+              { type: "text", text: "第一行" },
+              { type: "hardBreak" },
+              { type: "text", text: "第二行" },
+            ],
+          },
+          {
+            type: "codeBlock",
+            content: [{ type: "text", text: "代码一\n代码二" }],
+          },
+          { type: "paragraph", content: [{ type: "text", text: "结尾" }] },
+        ],
+      }),
+    ).toBe("标题\n第一行\n第二行\n代码一\n代码二\n结尾");
+  });
+
+  it("preserves intentional trailing blank lines in the plain text projection", () => {
+    expect(richTextToPlainText(migrateLegacyNoteContent("第一行\n\n"))).toBe(
+      "第一行\n\n",
+    );
+  });
+
   it("keeps only the supported note, text, and highlight colors", () => {
     expect(normalizeNoteColor("rose")).toBe("rose");
     expect(normalizeNoteColor("neon")).toBe(DEFAULT_NOTE_COLOR);

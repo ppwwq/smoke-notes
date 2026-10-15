@@ -40,6 +40,10 @@ export interface SyncQueueState {
   rejected: number;
 }
 
+// Share the fallback across instances, including separate Dexie connections.
+// Browsers use Web Locks so the same protection also spans tabs/windows.
+const activeFlushes = new Map<string, Promise<FlushResult>>();
+
 export class SyncEngine {
   private readonly now: () => Date;
   private readonly createId: () => string;
@@ -62,32 +66,93 @@ export class SyncEngine {
   }
 
   async flush(): Promise<FlushResult> {
+    const key = `smoke-notes:flush:${this.database.name}`;
+    if (typeof navigator !== "undefined" && navigator.locks)
+      return navigator.locks.request(key, () => this.flushPending());
+
+    const previous = activeFlushes.get(key);
+    const flushing = (previous ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => this.flushPending());
+    activeFlushes.set(key, flushing);
+    try {
+      return await flushing;
+    } finally {
+      if (activeFlushes.get(key) === flushing) activeFlushes.delete(key);
+    }
+  }
+
+  private async flushPending(): Promise<FlushResult> {
     await this.compactUnsentChanges();
     const now = this.now();
     const pending = (
       await this.database.operations.orderBy("createdAt").toArray()
-    ).filter(
-      (operation) =>
-        !operation.rejected && new Date(operation.nextAttemptAt) <= now,
-    );
+    )
+      .filter(
+        (operation) =>
+          !operation.rejected && new Date(operation.nextAttemptAt) <= now,
+      )
+      // IDs do not preserve insertion order when records share a timestamp.
+      // Upload parent notebooks before notes that reference them.
+      .sort(
+        (a, b) =>
+          Number(b.entity === "notebook") - Number(a.entity === "notebook"),
+      );
     const result: FlushResult = { applied: 0, conflicts: 0, failed: 0 };
     const visited = new Set<string>();
 
-    for (const operation of pending) {
-      const key = `${operation.entity}:${operation.entityId}`;
+    for (const candidate of pending) {
+      const key = `${candidate.entity}:${candidate.entityId}`;
       if (visited.has(key)) continue;
-      const earlier = await this.database.operations
-        .where("entityId")
-        .equals(operation.entityId)
-        .toArray();
-      if (earlier.some((item) => item.baseVersion < operation.baseVersion))
-        continue;
+      // Read the payload and mark it immutable atomically. Even without Web
+      // Locks, another tab cannot compact it between this read and the send.
+      const operation = await this.database.transaction(
+        "rw",
+        this.database.operations,
+        async () => {
+          const current = await this.database.operations.get(candidate.id);
+          if (
+            !current ||
+            current.rejected ||
+            new Date(current.nextAttemptAt) > now
+          )
+            return null;
+          const earlier = await this.database.operations
+            .where("entityId")
+            .equals(current.entityId)
+            .toArray();
+          if (
+            earlier.some(
+              (item) =>
+                item.entity === current.entity &&
+                item.baseVersion < current.baseVersion,
+            )
+          )
+            return null;
+          if (
+            current.entity === "note" &&
+            typeof current.payload.notebookId === "string"
+          ) {
+            const parentOperations = await this.database.operations
+              .where("entityId")
+              .equals(current.payload.notebookId)
+              .toArray();
+            if (
+              parentOperations.some(
+                (item) => item.entity === "notebook" && item.baseVersion === 0,
+              )
+            )
+              return null;
+          }
+          await this.database.operations.update(current.id, {
+            attempts: current.attempts + 1,
+          });
+          return current;
+        },
+      );
+      if (!operation) continue;
       visited.add(key);
       try {
-        // Once sent, this operation must retain its identity and payload for retries.
-        await this.database.operations.update(operation.id, {
-          attempts: operation.attempts + 1,
-        });
         const pushed = await this.adapter.push(operation);
         if (pushed.status === "applied") {
           await this.database.operations.delete(operation.id);
@@ -206,19 +271,20 @@ export class SyncEngine {
   ): Promise<boolean> {
     const table = this.tableFor(operation.entity);
     if (operation.entity !== "note") {
-      await this.database.transaction(
+      return this.database.transaction(
         "rw",
         table,
         this.database.operations,
         async () => {
+          if (!(await this.database.operations.get(operation.id))) return false;
           await table.put(serverRecord);
           await this.database.operations
             .where("entityId")
             .equals(operation.entityId)
             .delete();
+          return true;
         },
       );
-      return true;
     }
 
     return this.database.transaction(
@@ -226,6 +292,9 @@ export class SyncEngine {
       this.database.notes,
       this.database.operations,
       async () => {
+        // An older tab may still return a cached conflict after another tab
+        // reconciled this upload. It must not overwrite later local edits.
+        if (!(await this.database.operations.get(operation.id))) return false;
         const local = await this.database.notes.get(operation.entityId);
         await this.database.notes.put(serverRecord as Note);
         await this.database.operations

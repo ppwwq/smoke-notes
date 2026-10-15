@@ -37,6 +37,44 @@ describe("LocalRepository", () => {
     ]);
   });
 
+  it("serializes rank allocation for concurrently created records", async () => {
+    const notebooks = await Promise.all([
+      repository.createNotebook("一"),
+      repository.createNotebook("二"),
+      repository.createNotebook("三"),
+    ]);
+    const notes = await Promise.all([
+      repository.createNote(notebooks[0].id, { title: "一" }),
+      repository.createNote(notebooks[0].id, { title: "二" }),
+      repository.createNote(notebooks[0].id, { title: "三" }),
+    ]);
+    const todos = await Promise.all([
+      repository.createTodo("一"),
+      repository.createTodo("二"),
+      repository.createTodo("三"),
+    ]);
+
+    for (const records of [notebooks, notes, todos]) {
+      expect(new Set(records.map((record) => record.rank)).size).toBe(3);
+    }
+  });
+
+  it("rejects creating a note in a deleted or missing notebook", async () => {
+    const notebook = await repository.createNotebook("即将删除");
+    await repository.trashNotebook(notebook.id);
+    await database.operations.clear();
+
+    await expect(
+      repository.createNote(notebook.id, { title: "不可见的便签" }),
+    ).rejects.toThrow();
+    await expect(
+      repository.createNote("missing", { title: "孤立的便签" }),
+    ).rejects.toThrow();
+
+    expect(await database.notes.count()).toBe(0);
+    expect(await repository.listPendingOperations()).toEqual([]);
+  });
+
   it("updates a todo and keeps the change in the outbox", async () => {
     const todo = await repository.createTodo("交水费");
     const completed = await repository.toggleTodo(todo.id);
@@ -352,5 +390,223 @@ describe("LocalRepository", () => {
     expect(
       (await repository.listNotes(notebook.id)).map((note) => note.title),
     ).toEqual(["子便签"]);
+  });
+
+  it("restores only notes deleted with their notebook", async () => {
+    const notebook = await repository.createNotebook("部分已删除");
+    const oldTrash = await repository.createNote(notebook.id, {
+      title: "早先单独删除",
+    });
+    const active = await repository.createNote(notebook.id, { title: "保留" });
+    const deleted = await repository.trashNote(oldTrash.id);
+    await database.notes.put({
+      ...deleted,
+      deletedAt: "2026-08-27T12:00:00.000Z",
+    });
+
+    await repository.trashNotebook(notebook.id);
+    await repository.restore("notebook", notebook.id);
+
+    expect(await repository.listNotes(notebook.id)).toMatchObject([
+      { id: active.id },
+    ]);
+    expect((await database.notes.get(oldTrash.id))?.deletedAt).toBe(
+      "2026-08-27T12:00:00.000Z",
+    );
+  });
+
+  it("does not revive deleted children when restoring an active notebook", async () => {
+    const notebook = await repository.createNotebook("现有便签本");
+    const note = await repository.createNote(notebook.id, { title: "已删除" });
+    await repository.trashNote(note.id);
+    await database.operations.clear();
+
+    expect(await repository.restore("notebook", notebook.id)).toEqual(notebook);
+    expect(await repository.listNotes(notebook.id)).toEqual([]);
+    expect(await repository.listPendingOperations()).toEqual([]);
+  });
+
+  it("restores the parent when recovering a single note from a deleted notebook", async () => {
+    const notebook = await repository.createNotebook("已删除便签本");
+    const note = await repository.createNote(notebook.id, {
+      title: "恢复这张",
+    });
+    const sibling = await repository.createNote(notebook.id, {
+      title: "继续保留删除",
+    });
+    await repository.trashNotebook(notebook.id);
+    await database.operations.clear();
+
+    await repository.restore("note", note.id);
+
+    expect(await repository.listNotebooks()).toMatchObject([
+      { id: notebook.id },
+    ]);
+    expect(await repository.listNotes(notebook.id)).toMatchObject([
+      { id: note.id },
+    ]);
+    expect((await database.notes.get(sibling.id))?.deletedAt).not.toBeNull();
+    expect(
+      (await repository.listPendingOperations()).map(
+        (operation) => operation.entity,
+      ),
+    ).toEqual(["notebook", "note"]);
+  });
+
+  it("preserves the actual stale editor draft when the original was deleted", async () => {
+    const notebook = await repository.createNotebook("笔记");
+    const original = await repository.createNote(notebook.id, {
+      title: "原题",
+      body: "旧正文",
+    });
+    const deleted = await repository.trashNote(original.id);
+    await database.operations.clear();
+
+    const saved = await repository.updateNote(original.id, {
+      title: "未保存标题",
+      body: "未保存正文",
+      color: "sky",
+      baseSnapshot: original,
+    });
+
+    expect(saved.id).not.toBe(original.id);
+    expect(saved).toMatchObject({
+      title: "未保存标题（冲突副本）",
+      body: "未保存正文",
+      color: "sky",
+      conflictOf: original.id,
+      deletedAt: null,
+      version: 1,
+    });
+    expect(await database.notes.get(original.id)).toEqual(deleted);
+    expect(await repository.listNotes(notebook.id)).toEqual([saved]);
+    expect(await repository.listPendingOperations()).toMatchObject([
+      { entityId: saved.id, baseVersion: 0, action: "upsert", payload: saved },
+    ]);
+  });
+
+  it("does not preserve an unchanged stale editor as a conflict after deletion", async () => {
+    const notebook = await repository.createNotebook("笔记");
+    const original = await repository.createNote(notebook.id, {
+      title: "原题",
+      body: "原文",
+    });
+    const deleted = await repository.trashNote(original.id);
+    await database.operations.clear();
+
+    expect(
+      await repository.updateNote(original.id, {
+        title: original.title,
+        body: original.body,
+        baseSnapshot: original,
+      }),
+    ).toEqual(deleted);
+    expect(await repository.listNotes(notebook.id)).toEqual([]);
+    expect(await repository.listPendingOperations()).toEqual([]);
+  });
+
+  it("recovers editing that continues after an unchanged save returned the deleted snapshot", async () => {
+    const notebook = await repository.createNotebook("笔记");
+    const original = await repository.createNote(notebook.id, {
+      title: "A",
+      body: "原文",
+    });
+    const deleted = await repository.trashNote(original.id);
+    await database.operations.clear();
+
+    const unchanged = await repository.updateNote(original.id, {
+      title: "A ",
+      body: original.body,
+      baseSnapshot: original,
+    });
+    expect(unchanged).toEqual(deleted);
+    expect(await repository.listPendingOperations()).toEqual([]);
+
+    const saved = await repository.updateNote(original.id, {
+      title: "B",
+      body: "等待保存时继续输入的正文",
+      baseSnapshot: unchanged,
+    });
+
+    expect(saved.id).not.toBe(original.id);
+    expect(saved).toMatchObject({
+      title: "B（冲突副本）",
+      body: "等待保存时继续输入的正文",
+      deletedAt: null,
+      conflictOf: original.id,
+    });
+    expect(await database.notes.get(original.id)).toEqual(deleted);
+    expect(await repository.listNotes(notebook.id)).toEqual([saved]);
+    expect(await repository.listPendingOperations()).toMatchObject([
+      { entityId: saved.id, action: "upsert", payload: saved },
+    ]);
+  });
+
+  it("does not recover an unchanged draft based on a deleted snapshot", async () => {
+    const notebook = await repository.createNotebook("笔记");
+    const original = await repository.createNote(notebook.id, { title: "A" });
+    const deleted = await repository.trashNote(original.id);
+    await database.operations.clear();
+
+    expect(
+      await repository.updateNote(original.id, {
+        title: deleted.title,
+        body: deleted.body,
+        baseSnapshot: deleted,
+      }),
+    ).toEqual(deleted);
+    expect(await repository.listNotes(notebook.id)).toEqual([]);
+    expect(await repository.listPendingOperations()).toEqual([]);
+  });
+
+  it("keeps a late editor draft visible in a new notebook after the original notebook was deleted", async () => {
+    const notebook = await repository.createNotebook("原便签本");
+    const original = await repository.createNote(notebook.id, {
+      title: "草稿",
+      body: "旧正文",
+    });
+    const deletedNotebook = await repository.trashNotebook(notebook.id);
+    const deletedNote = await database.notes.get(original.id);
+    await database.operations.clear();
+    const enqueued: string[] = [];
+    database.operations.hook("creating", (_key, operation) => {
+      enqueued.push(operation.entity);
+    });
+
+    const saved = await repository.updateNote(original.id, {
+      title: original.title,
+      body: "真正未保存的草稿",
+      baseSnapshot: original,
+    });
+
+    expect(saved.notebookId).not.toBe(notebook.id);
+    expect(saved.body).toBe("真正未保存的草稿");
+    expect(await repository.listNotebooks()).toMatchObject([
+      { id: saved.notebookId, name: "原便签本（恢复）", version: 1 },
+    ]);
+    expect(await repository.listNotes(saved.notebookId)).toEqual([saved]);
+    expect(await database.notebooks.get(notebook.id)).toEqual(deletedNotebook);
+    expect(await database.notes.get(original.id)).toEqual(deletedNote);
+    expect(enqueued).toEqual(["notebook", "note"]);
+  });
+
+  it("rolls back the recovery notebook and copy when the draft is invalid", async () => {
+    const notebook = await repository.createNotebook("原便签本");
+    const original = await repository.createNote(notebook.id, {
+      title: "草稿",
+    });
+    await repository.trashNotebook(notebook.id);
+    await database.operations.clear();
+
+    await expect(
+      repository.updateNote(original.id, {
+        title: "x".repeat(201),
+        baseSnapshot: original,
+      }),
+    ).rejects.toThrow(/200/);
+
+    expect(await database.notebooks.count()).toBe(1);
+    expect(await database.notes.count()).toBe(1);
+    expect(await repository.listPendingOperations()).toEqual([]);
   });
 });

@@ -73,3 +73,69 @@ it("keeps an actual user draft through a remote refresh and saves it on blur", a
     expect(callbacks.onUpdate).toHaveBeenCalledWith(todo.id, "我的草稿"),
   );
 });
+
+it("does not create a todo when Enter confirms an IME composition", () => {
+  const callbacks = handlers();
+  render(<TodoWorkspace todos={[]} {...callbacks} />);
+  const input = screen.getByRole("textbox", { name: "新待办内容" });
+  fireEvent.change(input, { target: { value: "中文" } });
+  fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+  fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+  expect(callbacks.onCreate).not.toHaveBeenCalled();
+});
+
+it("submits once and preserves text typed while the new todo is saving", async () => {
+  const callbacks = handlers();
+  let finish!: () => void;
+  callbacks.onCreate.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  render(<TodoWorkspace todos={[]} {...callbacks} />);
+  const input = screen.getByRole("textbox", { name: "新待办内容" });
+  fireEvent.change(input, { target: { value: "第一件事" } });
+  fireEvent.keyDown(input, { key: "Enter" });
+  fireEvent.keyDown(input, { key: "Enter" });
+  expect(callbacks.onCreate).toHaveBeenCalledTimes(1);
+  fireEvent.change(input, { target: { value: "第二件事" } });
+  finish();
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "添加" })).toBeEnabled(),
+  );
+  expect(input).toHaveValue("第二件事");
+});
+
+it("keeps the new todo draft and reports create failures", async () => {
+  const callbacks = handlers();
+  callbacks.onCreate.mockRejectedValueOnce(new Error("storage unavailable"));
+  render(<TodoWorkspace todos={[]} {...callbacks} />);
+  const input = screen.getByRole("textbox", { name: "新待办内容" });
+  fireEvent.change(input, { target: { value: "尚未保存" } });
+  fireEvent.keyDown(input, { key: "Enter" });
+  expect(await screen.findByRole("alert")).toHaveTextContent("添加失败");
+  expect(input).toHaveValue("尚未保存");
+});
+
+it("saves a return to the original text after an earlier edit is still pending", async () => {
+  const callbacks = handlers();
+  let finish!: () => void;
+  callbacks.onUpdate.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  render(<TodoWorkspace todos={[todo]} {...callbacks} />);
+  const input = screen.getByRole("textbox", { name: "编辑待办：旧文字" });
+  fireEvent.change(input, { target: { value: "中间文字" } });
+  fireEvent.blur(input);
+  await waitFor(() => expect(callbacks.onUpdate).toHaveBeenCalledTimes(1));
+  fireEvent.change(input, { target: { value: "旧文字" } });
+  fireEvent.blur(input);
+  finish();
+  await waitFor(() =>
+    expect(callbacks.onUpdate).toHaveBeenLastCalledWith(todo.id, "旧文字"),
+  );
+});

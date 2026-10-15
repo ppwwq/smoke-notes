@@ -34,6 +34,8 @@ export class NoteWindowManager {
   ) {}
 
   async open(noteId: string): Promise<NoteWindowHandle> {
+    if (this.switchingNoteIds.has(noteId))
+      throw new Error("A note window switch is already in progress");
     const pending = this.opening.get(noteId);
     if (pending) return pending;
     const existing = this.windows.get(noteId);
@@ -126,7 +128,25 @@ export class NoteWindowManager {
     if (!source || source.isDestroyed() || !source.navigate) {
       throw new Error("Source note window cannot be reused");
     }
+    // Preserve an already open editor (including its IME/draft/history).
+    // Navigating the source then destroying this target would discard its draft.
+    const pendingTarget = this.opening.get(targetNoteId);
+    if (pendingTarget) await pendingTarget;
+    if (
+      this.switchingNoteIds.has(sourceNoteId) ||
+      this.switchingNoteIds.has(targetNoteId)
+    )
+      throw new Error("A note window switch is already in progress");
     const existingTarget = this.windows.get(targetNoteId);
+    if (existingTarget && !existingTarget.isDestroyed()) {
+      this.persist(targetNoteId, {
+        isOpen: true,
+        lastOpenedAt: this.now().toISOString(),
+      });
+      existingTarget.show();
+      existingTarget.focus();
+      return;
+    }
     const currentStates = this.store.readAll();
     const storedSourceState = currentStates.find(
       (state) => state.noteId === sourceNoteId,
@@ -188,21 +208,6 @@ export class NoteWindowManager {
 
       this.windows.delete(sourceNoteId);
       this.windows.set(targetNoteId, source);
-      if (
-        existingTarget &&
-        existingTarget !== source &&
-        !existingTarget.isDestroyed()
-      ) {
-        try {
-          existingTarget.destroy();
-        } catch {
-          try {
-            existingTarget.hide();
-          } catch {
-            // The switch is already committed; cleanup is best effort only.
-          }
-        }
-      }
     } finally {
       this.pendingStates.delete(targetNoteId);
       this.switchingNoteIds.delete(sourceNoteId);

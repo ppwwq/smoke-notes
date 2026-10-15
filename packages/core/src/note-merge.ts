@@ -1,4 +1,5 @@
 import type { Note } from "./types";
+import { normalizeRichTextDocument, richTextToPlainText } from "./note-content";
 
 // JSONB can reorder object keys. Formatting and task states still matter.
 export function sameValue(left: unknown, right: unknown): boolean {
@@ -15,20 +16,19 @@ export function sameValue(left: unknown, right: unknown): boolean {
   );
 }
 
-const fields = [
-  "notebookId",
-  "kind",
-  "title",
-  "body",
-  "contentJson",
-  "color",
-  "rank",
-] as const;
+const fields = ["notebookId", "kind", "title", "color", "rank"] as const;
+
+// The rich document is authoritative. Old clients used a different plain-text
+// projection for line breaks; comparing that cached projection creates false
+// conflicts. Unmigrated records still retain their body as the fallback.
+const content = (note: Note) =>
+  normalizeRichTextDocument(note.contentJson, note.body);
 
 export function sameNoteContent(left: Note, right: Note): boolean {
   return (
     Boolean(left.deletedAt) === Boolean(right.deletedAt) &&
-    fields.every((field) => sameValue(left[field], right[field]))
+    fields.every((field) => sameValue(left[field], right[field])) &&
+    sameValue(content(left), content(right))
   );
 }
 
@@ -45,9 +45,7 @@ export function mergeNoteChanges(
   // Never turn a delete-versus-edit conflict into a silent deletion or revival.
   if (local.deletedAt || remote.deletedAt || base.deletedAt) return null;
   const merged = { ...remote };
-  for (const field of fields.filter(
-    (field) => field !== "body" && field !== "contentJson",
-  )) {
+  for (const field of fields) {
     if (sameValue(local[field], base[field])) continue;
     if (
       !sameValue(remote[field], base[field]) &&
@@ -56,19 +54,14 @@ export function mergeNoteChanges(
       return null;
     Object.assign(merged, { [field]: local[field] });
   }
-  // Rich text and its plain-text projection form one field.
-  const content = (note: Note) => ({
-    body: note.body,
-    contentJson: note.contentJson,
-  });
   if (!sameValue(content(local), content(base))) {
     if (
       !sameValue(content(remote), content(base)) &&
       !sameValue(content(local), content(remote))
     )
       return null;
-    merged.body = local.body;
-    merged.contentJson = local.contentJson;
+    merged.contentJson = content(local);
+    merged.body = richTextToPlainText(merged.contentJson);
   }
   return merged;
 }

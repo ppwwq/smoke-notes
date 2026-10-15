@@ -3,6 +3,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -43,6 +44,7 @@ const RichNoteEditor = lazy(() =>
 import type { AppPlatform, DesktopBridge, PairingController } from "./types";
 import { useWebViewport } from "./useWebViewport";
 import { useWebBackground } from "./useWebBackground";
+import { useDesktopQuit } from "./useDesktopQuit";
 import { GlassContext } from "./components/glass/GlassContext";
 import { GlassSurface } from "./components/glass/GlassSurface";
 const LiquiNav = lazy(() =>
@@ -130,20 +132,25 @@ export function SmokeNotesApp({
   const manualSavePending = useRef(false);
   const creatingRef = useRef(false);
   const editorRef = useRef<RichNoteEditorHandle>(null);
+  const { preparingQuit, quitError } = useDesktopQuit(desktopBridge, editorRef);
+  const activeNoteRef = useRef<Note | null>(null);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const [editorMenu, setEditorMenu] = useState<"format" | "more" | null>(null);
   const closeEditorMenu = useCallback(() => setEditorMenu(null), []);
+  const refreshRevision = useRef(0);
+  const invalidateRefresh = useCallback(() => {
+    ++refreshRevision.current;
+  }, []);
 
   const refresh = useCallback(
     async (preferredNotebookId?: string | null) => {
+      const revision = ++refreshRevision.current;
       const [nextNotebooks, nextTodos, nextTrash] = await Promise.all([
         repository.listNotebooks(),
         repository.listTodos(),
         repository.listTrash(),
       ]);
-      setNotebooks(nextNotebooks);
-      setTodos(nextTodos);
-      setTrash(nextTrash);
+      if (revision !== refreshRevision.current) return;
       const requestedId =
         preferredNotebookId === undefined
           ? selectedNotebookIdRef.current
@@ -151,9 +158,26 @@ export function SmokeNotesApp({
       const targetId = nextNotebooks.some((item) => item.id === requestedId)
         ? requestedId
         : (nextNotebooks[0]?.id ?? null);
+      const nextNotes = targetId ? await repository.listNotes(targetId) : [];
+      // A save or a later refresh invalidates this snapshot, even when local
+      // queue compaction has lowered the note's version in the meantime.
+      if (revision !== refreshRevision.current) return;
+      const activeNote = activeNoteRef.current;
+      if (activeNote && !nextNotes.some((item) => item.id === activeNote.id)) {
+        // A remote deletion must not unmount an editor with an unsaved draft.
+        // Storage preserves changed drafts as a new note; onSave selects it.
+        try {
+          await editorRef.current?.flushSave();
+        } catch {
+          return;
+        }
+        if (revision !== refreshRevision.current) return;
+      }
+      setNotebooks(nextNotebooks);
+      setTodos(nextTodos);
+      setTrash(nextTrash);
       selectedNotebookIdRef.current = targetId;
       setSelectedNotebookId(targetId);
-      const nextNotes = targetId ? await repository.listNotes(targetId) : [];
       setNotes(nextNotes);
       setSelectedNoteId((current) => {
         if (nextNotes.some((note) => note.id === current)) return current;
@@ -173,7 +197,8 @@ export function SmokeNotesApp({
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+    return invalidateRefresh;
+  }, [refresh, invalidateRefresh]);
 
   useEffect(() => {
     if (!desktopBridge) return;
@@ -225,11 +250,9 @@ export function SmokeNotesApp({
     if (!(await saveBeforeLeaving())) return;
     setView("notes");
     selectedNotebookIdRef.current = id;
-    setSelectedNotebookId(id);
-    const nextNotes = await repository.listNotes(id);
-    setNotes(nextNotes);
     setSelectedNoteId(null);
     setMobileNavOpen(false);
+    await refresh(id);
   }
 
   const selectedNotebook =
@@ -237,6 +260,33 @@ export function SmokeNotesApp({
   const selectedNote = selectedNoteId
     ? (notes.find((item) => item.id === selectedNoteId) ?? null)
     : null;
+  useLayoutEffect(() => {
+    activeNoteRef.current = selectedNote;
+  }, [selectedNote]);
+
+  useEffect(() => {
+    if (platform !== "web") return;
+    const saveInBackground = () => {
+      if (document.visibilityState === "hidden")
+        void editorRef.current?.flushSave().catch(() => {});
+    };
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      if (
+        !activeNoteRef.current ||
+        saveStatus === "已自动保存" ||
+        saveStatus === "已保存"
+      )
+        return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    document.addEventListener("visibilitychange", saveInBackground);
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => {
+      document.removeEventListener("visibilitychange", saveInBackground);
+      window.removeEventListener("beforeunload", warnBeforeLeaving);
+    };
+  }, [platform, saveStatus]);
 
   const webEditing = platform === "web" && view === "notes" && !!selectedNote;
   const { style: viewportStyle, compactEditing } = useWebViewport(webEditing);
@@ -289,6 +339,7 @@ export function SmokeNotesApp({
       }}
     >
       <div
+        inert={preparingQuit}
         className={`smoke-app platform-${platform}${webEditing ? " web-editing" : ""}`}
         data-web-background={platform === "web" ? background : undefined}
         data-reduced-transparency={
@@ -302,6 +353,7 @@ export function SmokeNotesApp({
         }
       >
         <div className="noise-layer" />
+        {quitError && <p role="alert">{quitError}</p>}
         {platform === "desktop" && desktopBridge && (
           <header className="main-window-titlebar" aria-label="主窗口控制">
             <span className="main-window-drag-handle">烟笺</span>
@@ -544,14 +596,26 @@ export function SmokeNotesApp({
                   onSaveStatusChange={setSaveStatus}
                   onSave={async (changes) => {
                     const updated = await repository.updateNote(
-                      selectedNote.id,
+                      changes.baseSnapshot?.id ?? selectedNote.id,
                       changes,
                     );
-                    setNotes((current) =>
-                      current.map((item) =>
-                        item.id === updated.id ? updated : item,
-                      ),
-                    );
+                    invalidateRefresh();
+                    setNotes((current) => {
+                      const retained = current.filter(
+                        (item) =>
+                          item.id !== selectedNote.id || item.id === updated.id,
+                      );
+                      return retained.some((item) => item.id === updated.id)
+                        ? retained.map((item) =>
+                            item.id === updated.id ? updated : item,
+                          )
+                        : [...retained, updated];
+                    });
+                    if (updated.id !== selectedNote.id) {
+                      selectedNotebookIdRef.current = updated.notebookId;
+                      setSelectedNotebookId(updated.notebookId);
+                      setSelectedNoteId(updated.id);
+                    }
                     window.dispatchEvent(
                       new CustomEvent("smoke-notes:data-changed"),
                     );

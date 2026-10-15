@@ -25,7 +25,11 @@ import {
   readLaunchAtLogin,
   writeLaunchAtLogin,
 } from "./launch-at-login";
-import { registerSingleInstance, shouldShowMainWindow } from "./app-lifecycle";
+import {
+  registerSingleInstance,
+  shouldShowMainWindow,
+  SaveBeforeQuit,
+} from "./app-lifecycle";
 import { registerNoteMousePassthrough } from "./note-mouse-passthrough";
 import {
   createContentSecurityPolicy,
@@ -38,6 +42,7 @@ import {
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let quitting = false;
+let loadingRenderers = 0;
 let persistTimer: NodeJS.Timeout | null = null;
 const notePersistTimers = new Map<string, NodeJS.Timeout>();
 const noteIdByWebContents = new Map<number, string>();
@@ -102,6 +107,11 @@ const noteStateStore: NoteWindowStateStore = {
 function configureRenderer(window: BrowserWindow) {
   window.setMenuBarVisibility(false);
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  const cancelQuit = () =>
+    saveBeforeQuit.cancel("窗口正在重新载入，退出已取消，请稍后重试。");
+  window.webContents.on("did-start-loading", cancelQuit);
+  window.webContents.on("did-finish-load", cancelQuit);
+  window.webContents.on("render-process-gone", cancelQuit);
   window.webContents.on("will-navigate", (event, url) => {
     const allowedDevUrl =
       !app.isPackaged && url.startsWith("http://127.0.0.1:5173");
@@ -110,13 +120,21 @@ function configureRenderer(window: BrowserWindow) {
 }
 
 async function loadRenderer(window: BrowserWindow, noteId?: string) {
-  const query = noteId ? `?noteId=${encodeURIComponent(noteId)}` : "";
-  if (app.isPackaged)
-    await window.loadFile(
-      join(__dirname, "../dist/index.html"),
-      noteId ? { query: { noteId } } : undefined,
-    );
-  else await window.loadURL(`http://127.0.0.1:5173/${query}`);
+  ++loadingRenderers;
+  saveBeforeQuit.cancel("窗口正在打开或切换，退出已取消，请稍后重试。");
+  try {
+    const query = noteId ? `?noteId=${encodeURIComponent(noteId)}` : "";
+    if (app.isPackaged)
+      await window.loadFile(
+        join(__dirname, "../dist/index.html"),
+        noteId ? { query: { noteId } } : undefined,
+      );
+    else await window.loadURL(`http://127.0.0.1:5173/${query}`);
+  } finally {
+    --loadingRenderers;
+    // An acknowledgement from the old document cannot cover its replacement.
+    saveBeforeQuit.cancel("窗口已切换，退出已取消，请稍后重试。");
+  }
 }
 
 const noteWindowManager = new NoteWindowManager(
@@ -244,7 +262,59 @@ function validNoteId(value: unknown): value is string {
   );
 }
 
+const saveBeforeQuit = new SaveBeforeQuit(
+  () =>
+    BrowserWindow.getAllWindows()
+      .filter(
+        (window) =>
+          window === mainWindow ||
+          noteIdByWebContents.has(window.webContents.id),
+      )
+      .map((window) => ({
+        id: window.webContents.id,
+        prepare: (requestId: number) =>
+          window.webContents.send("app:prepare-quit", requestId),
+        cancel: (requestId: number, message: string) => {
+          if (!window.isDestroyed())
+            window.webContents.send("app:cancel-quit", requestId, message);
+        },
+      })),
+  () => {
+    if (loadingRenderers) throw new Error("A renderer is still loading");
+    saveMainState();
+    for (const window of BrowserWindow.getAllWindows()) {
+      const noteId = noteIdByWebContents.get(window.webContents.id);
+      if (!noteId) continue;
+      clearNoteStateSave(noteId);
+      noteWindowManager.update(noteId, {
+        ...toPersistedNoteWindowBounds(window.getBounds()),
+        alwaysOnTop: window.isAlwaysOnTop(),
+      });
+    }
+    quitting = true;
+    try {
+      app.quit();
+    } catch (error) {
+      quitting = false;
+      throw error;
+    }
+  },
+);
+
+function requireNotQuitting() {
+  if (saveBeforeQuit.preparing || quitting)
+    throw new Error("正在保存并退出，请稍候。");
+}
+
 function registerIpc() {
+  ipcMain.handle(
+    "app:quit-result",
+    (event, requestId: unknown, saved: unknown) => {
+      trustedWindow(event);
+      if (typeof requestId !== "number") return;
+      saveBeforeQuit.acknowledge(requestId, event.sender.id, saved === true);
+    },
+  );
   registerNoteMousePassthrough(
     ipcMain,
     (senderId) =>
@@ -315,11 +385,13 @@ function registerIpc() {
   });
   ipcMain.handle("note-window:open", async (event, rawNoteId: unknown) => {
     trustedWindow(event);
+    requireNotQuitting();
     if (!validNoteId(rawNoteId)) throw new Error("Invalid note id");
     await noteWindowManager.open(rawNoteId);
   });
   ipcMain.handle("note-window:close", (event, rawNoteId: unknown) => {
     trustedWindow(event);
+    requireNotQuitting();
     if (!validNoteId(rawNoteId)) throw new Error("Invalid note id");
     const senderNoteId = noteIdByWebContents.get(event.sender.id);
     if (senderNoteId && senderNoteId !== rawNoteId)
@@ -343,6 +415,7 @@ function registerIpc() {
   );
   ipcMain.handle("note-window:switch", async (event, rawTargetId: unknown) => {
     const window = trustedWindow(event);
+    requireNotQuitting();
     if (!validNoteId(rawTargetId)) throw new Error("Invalid note id");
     const sourceNoteId = noteIdByWebContents.get(event.sender.id);
     if (!sourceNoteId) throw new Error("Only a note window may switch notes");
@@ -391,7 +464,6 @@ function createTray() {
       {
         label: "退出",
         click: () => {
-          quitting = true;
           app.quit();
         },
       },
@@ -456,9 +528,10 @@ if (registerSingleInstance(app, activateMainWindow)) {
     await noteWindowManager.restoreOpen();
   });
 
-  app.on("before-quit", () => {
-    quitting = true;
-    saveMainState();
+  app.on("before-quit", (event) => {
+    if (quitting) return;
+    event.preventDefault();
+    void saveBeforeQuit.request();
   });
   app.on("activate", activateMainWindow);
   app.on("window-all-closed", () => {

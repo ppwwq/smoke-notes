@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   RecordValidationError,
   TEXT_LIMITS,
@@ -26,8 +26,15 @@ function TodoTextInput({
   todo,
   onUpdate,
 }: Pick<TodoWorkspaceProps, "onUpdate"> & { todo: Todo }) {
-  const [edit, setEdit] = useState<{ base: string; text: string } | null>(null);
+  const [edit, setEdit] = useState<{
+    base: string;
+    text: string;
+    revision: number;
+  } | null>(null);
   const [error, setError] = useState("");
+  const revision = useRef(0);
+  const pending = useRef<Promise<void> | null>(null);
+  const submitted = useRef<number | null>(null);
   return (
     <>
       <input
@@ -36,24 +43,49 @@ function TodoTextInput({
         value={edit?.text ?? todo.text}
         onChange={(event) => {
           const text = event.target.value;
-          setEdit((current) => ({ base: current?.base ?? todo.text, text }));
+          const nextRevision = ++revision.current;
+          setEdit((current) => ({
+            base: current?.base ?? todo.text,
+            text,
+            revision: nextRevision,
+          }));
           setError("");
         }}
         onBlur={async () => {
-          if (!edit) return;
-          if (edit.text === edit.base || edit.text === todo.text) {
+          if (!edit || submitted.current === edit.revision) return;
+          if (
+            !pending.current &&
+            (edit.text === edit.base || edit.text === todo.text)
+          ) {
             setEdit(null);
             return;
           }
+          submitted.current = edit.revision;
+          // Preserve edit order, including returning to the original value while
+          // an earlier write is pending. A failed write must not block a retry.
+          const save = (pending.current ?? Promise.resolve())
+            .catch(() => {})
+            .then(() => onUpdate(todo.id, edit.text));
+          pending.current = save;
           try {
-            await onUpdate(todo.id, edit.text);
-            setEdit((current) => (current === edit ? null : current));
-          } catch (error) {
-            setError(
-              error instanceof RecordValidationError
-                ? error.message
-                : "保存失败，请重试",
+            await save;
+            setEdit((current) =>
+              !current || current.revision === edit.revision
+                ? null
+                : { ...current, base: edit.text },
             );
+            if (submitted.current === edit.revision) setError("");
+          } catch (error) {
+            if (submitted.current === edit.revision) {
+              setError(
+                error instanceof RecordValidationError
+                  ? error.message
+                  : "保存失败，请重试",
+              );
+            }
+          } finally {
+            if (pending.current === save) pending.current = null;
+            if (submitted.current === edit.revision) submitted.current = null;
           }
         }}
       />
@@ -64,6 +96,10 @@ function TodoTextInput({
 
 export function TodoWorkspace(props: TodoWorkspaceProps) {
   const [text, setText] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState("");
+  const createPending = useRef(false);
+  const draftRevision = useRef(0);
   const [filter, setFilter] = useState<Filter>("all");
   const visible = useMemo(
     () =>
@@ -77,9 +113,24 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
   const completed = props.todos.filter((todo) => todo.completed).length;
 
   async function addTodo() {
-    if (!text.trim()) return;
-    await props.onCreate(text);
-    setText("");
+    if (!text.trim() || createPending.current) return;
+    createPending.current = true;
+    const revision = draftRevision.current;
+    setCreating(true);
+    setCreateError("");
+    try {
+      await props.onCreate(text);
+      if (revision === draftRevision.current) setText("");
+    } catch (error) {
+      setCreateError(
+        error instanceof RecordValidationError
+          ? error.message
+          : "添加失败，请重试",
+      );
+    } finally {
+      createPending.current = false;
+      setCreating(false);
+    }
   }
 
   return (
@@ -114,15 +165,25 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
           maxLength={TEXT_LIMITS.todoText}
           placeholder="添加一件要完成的事"
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => {
+            draftRevision.current += 1;
+            setText(event.target.value);
+            setCreateError("");
+          }}
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing || event.keyCode === 229) return;
             if (event.key === "Enter") void addTodo();
           }}
         />
-        <button type="button" onClick={() => void addTodo()}>
+        <button
+          type="button"
+          disabled={creating}
+          onClick={() => void addTodo()}
+        >
           添加
         </button>
       </div>
+      {createError && <p role="alert">{createError}</p>}
 
       <div className="filter-bar" aria-label="待办筛选">
         {(["all", "open", "done"] as const).map((value) => (

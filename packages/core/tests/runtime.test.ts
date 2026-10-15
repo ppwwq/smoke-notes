@@ -2,6 +2,94 @@ import { describe, expect, it, vi } from "vitest";
 import { createSyncRuntime, type SyncStatus } from "../src/index";
 
 describe("createSyncRuntime", () => {
+  it("starts only one timer and realtime subscription when started twice", async () => {
+    const unsubscribe = vi.fn();
+    const cloud = { subscribe: vi.fn(() => unsubscribe) };
+    const runtime = createSyncRuntime({
+      engine: {
+        flush: async () => ({ applied: 0, conflicts: 0, failed: 0 }),
+        pull: async () => "next",
+      },
+      cloud,
+      storage: { getItem: () => null, setItem: () => {} },
+      notify: () => {},
+    });
+    vi.useFakeTimers();
+    try {
+      await Promise.all([runtime.start(), runtime.start()]);
+      expect(cloud.subscribe).toHaveBeenCalledTimes(1);
+      runtime.stop();
+      expect(unsubscribe).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      runtime.stop();
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not save a cursor returned after the runtime was stopped", async () => {
+    let finishPull!: (cursor: string) => void;
+    const setItem = vi.fn();
+    const notify = vi.fn();
+    const runtime = createSyncRuntime({
+      engine: {
+        flush: async () => ({ applied: 0, conflicts: 0, failed: 0 }),
+        pull: () => new Promise((resolve) => (finishPull = resolve)),
+      },
+      cloud: { subscribe: () => () => {} },
+      storage: { getItem: () => null, setItem },
+      notify,
+    });
+    const starting = runtime.start();
+    await Promise.resolve();
+    runtime.stop();
+    finishPull("stale-cursor");
+    await starting;
+    expect(setItem).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("discards the old pull when stopped and restarted before it finishes", async () => {
+    let finishPull!: (cursor: string) => void;
+    const setItem = vi.fn();
+    const pull = vi
+      .fn<() => Promise<string>>()
+      .mockImplementationOnce(
+        () => new Promise((resolve) => (finishPull = resolve)),
+      )
+      .mockResolvedValue("new-cursor");
+    const unsubscribe = vi.fn();
+    const cloud = { subscribe: vi.fn(() => unsubscribe) };
+    const runtime = createSyncRuntime({
+      engine: {
+        flush: async () => ({ applied: 0, conflicts: 0, failed: 0 }),
+        pull,
+      },
+      cloud,
+      storage: { getItem: () => null, setItem },
+      notify: () => {},
+    });
+    try {
+      const starting = runtime.start();
+      await Promise.resolve();
+      runtime.stop();
+      await runtime.start();
+      finishPull("stale-cursor");
+      await starting;
+      await vi.waitFor(() =>
+        expect(setItem).toHaveBeenCalledWith(
+          "smoke-notes:sync-cursor",
+          "new-cursor",
+        ),
+      );
+      expect(setItem).toHaveBeenCalledTimes(1);
+      expect(cloud.subscribe).toHaveBeenCalledTimes(1);
+    } finally {
+      runtime.stop();
+    }
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     { failed: 0, pending: 0, rejected: 0, phase: "synced" },
     { failed: 1, pending: 1, rejected: 0, phase: "retrying" },

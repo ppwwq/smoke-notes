@@ -1,4 +1,4 @@
-import { createRef } from "react";
+import { createRef, useState } from "react";
 import {
   act,
   cleanup,
@@ -183,6 +183,40 @@ it("defers autosave and remote replacement until composition finishes", async ()
   );
 });
 
+it("keeps saving suspended when another composition starts before the previous final input settles", async () => {
+  vi.useFakeTimers();
+  const ref = createRef<RichNoteEditorHandle>();
+  const onSave = vi.fn();
+  render(<RichNoteEditor ref={ref} note={note} onSave={onSave} />);
+  const body = screen.getByRole("textbox", { name: "便签正文" });
+  fireEvent.compositionStart(body);
+  act(() => {
+    currentEditor().commands.insertContent("第一词");
+  });
+  let flushing!: Promise<void>;
+  act(() => {
+    flushing = ref.current!.flushSave();
+  });
+  fireEvent.compositionEnd(body);
+  fireEvent.compositionStart(body);
+  act(() => {
+    currentEditor().commands.insertContent("第二词");
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(700);
+  });
+  expect(onSave).not.toHaveBeenCalled();
+  fireEvent.compositionEnd(body);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+    await flushing;
+  });
+  expect(onSave).toHaveBeenCalledOnce();
+  expect(onSave).toHaveBeenCalledWith(
+    expect.objectContaining({ body: expect.stringContaining("第一词第二词") }),
+  );
+});
+
 it("does not apply an old asynchronous save response after switching notes", async () => {
   const ref = createRef<RichNoteEditorHandle>();
   let resolve!: (saved: Note) => void;
@@ -224,4 +258,75 @@ it("does not apply an old asynchronous save response after switching notes", asy
   );
   expect(currentEditor().getText()).toBe("另一段");
   expect(newSave).not.toHaveBeenCalled();
+});
+
+it("does not carry undo history into another note with matching content", () => {
+  const onSave = vi.fn();
+  const view = render(<RichNoteEditor note={note} onSave={onSave} />);
+  act(() => {
+    currentEditor().commands.insertContent("上一张的修改");
+  });
+  const next = {
+    ...note,
+    id: "two",
+    body: currentEditor().getText(),
+    contentJson: currentEditor().getJSON() as Note["contentJson"],
+  };
+  view.rerender(<RichNoteEditor note={next} onSave={onSave} />);
+  act(() => {
+    currentEditor().commands.undo();
+  });
+  expect(currentEditor().getJSON()).toEqual(next.contentJson);
+  expect(onSave).not.toHaveBeenCalled();
+});
+
+it("continues saving pending edits to a recovered copy when its ID changes", async () => {
+  const ref = createRef<RichNoteEditorHandle>();
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const save = vi.fn(async (changes: NoteEdit): Promise<Note> => {
+    if (save.mock.calls.length === 1) await pending;
+    return { ...note, ...changes, id: "recovered", conflictOf: note.id };
+  });
+  function Parent() {
+    const [current, setCurrent] = useState(note);
+    return (
+      <RichNoteEditor
+        ref={ref}
+        note={current}
+        onSave={async (changes) => {
+          const saved = await save(changes);
+          setCurrent(saved);
+          return saved;
+        }}
+      />
+    );
+  }
+  render(<Parent />);
+  fireEvent.change(screen.getByRole("textbox", { name: "便签标题" }), {
+    target: { value: "第一版" },
+  });
+  let flushing!: Promise<void>;
+  act(() => {
+    flushing = ref.current!.flushSave();
+  });
+  fireEvent.change(screen.getByRole("textbox", { name: "便签标题" }), {
+    target: { value: "继续输入" },
+  });
+  await act(async () => {
+    release();
+    await flushing;
+  });
+  expect(save).toHaveBeenCalledTimes(2);
+  expect(save).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      title: "继续输入",
+      baseSnapshot: expect.objectContaining({ id: "recovered" }),
+    }),
+  );
+  expect(screen.getByRole("textbox", { name: "便签标题" })).toHaveValue(
+    "继续输入",
+  );
 });

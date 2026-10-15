@@ -15,6 +15,11 @@ async function startMain() {
   const handlers = new Map<string, Handler>();
   const files = new Map<string, string>();
   const windows: TestWindow[] = [];
+  const appEvents = new Map<
+    string,
+    (event: { preventDefault(): void }) => void
+  >();
+  const quit = vi.fn();
   class TestWindow extends EventEmitter {
     private destroyed = false;
     private readonly contents = Object.assign(new EventEmitter(), {
@@ -58,7 +63,11 @@ async function startMain() {
       isPackaged: false,
       requestSingleInstanceLock: () => true,
       getPath: () => "test-user-data",
-      on: vi.fn(),
+      on: (
+        event: string,
+        listener: (event: { preventDefault(): void }) => void,
+      ) => appEvents.set(event, listener),
+      quit,
       whenReady: () => ({
         then: (callback: () => Promise<unknown>) => (ready = callback()),
       }),
@@ -111,7 +120,12 @@ async function startMain() {
     await invoke("note-window:open", windows[0].webContents.id, noteId);
     return windows[windows.length - 1];
   };
-  return { invoke, open, windows };
+  const requestQuit = () => {
+    const preventDefault = vi.fn();
+    appEvents.get("before-quit")?.({ preventDefault });
+    return preventDefault;
+  };
+  return { invoke, open, windows, requestQuit, quit };
 }
 
 describe("main-process note window lifecycle", () => {
@@ -126,7 +140,7 @@ describe("main-process note window lifecycle", () => {
     ).toThrow("Not a note window");
   });
 
-  it("switches to an already open note and removes the destroyed duplicate identity", async () => {
+  it("focuses an already open target and preserves both window identities and drafts", async () => {
     const { open, invoke } = await startMain();
     const source = await open("source");
     const target = await open("target");
@@ -135,11 +149,12 @@ describe("main-process note window lifecycle", () => {
 
     await invoke("note-window:switch", sourceId, "target");
 
-    expect(target.isDestroyed()).toBe(true);
+    expect(target.isDestroyed()).toBe(false);
+    expect(target.focus).toHaveBeenCalledOnce();
     expect(source.isDestroyed()).toBe(false);
     expect(() =>
       invoke("note-window:mouse-passthrough", targetId, false),
-    ).toThrow("Not a note window");
+    ).not.toThrow();
     expect(() =>
       invoke("note-window:mouse-passthrough", sourceId, false),
     ).not.toThrow();
@@ -151,15 +166,97 @@ describe("main-process note window lifecycle", () => {
       "note-window:request-close",
     );
     expect(source.isDestroyed()).toBe(false);
-    await invoke("note-window:close", sourceId, "target");
+    await invoke("note-window:close", sourceId, "source");
     expect(source.isDestroyed()).toBe(true);
-    expect(invoke("note-window:get-state", 1, "target")).toMatchObject({
-      noteId: "target",
+    expect(invoke("note-window:get-state", 1, "source")).toMatchObject({
+      noteId: "source",
       isOpen: false,
     });
     expect(() =>
       invoke("note-window:mouse-passthrough", sourceId, false),
     ).toThrow("Not a note window");
+  });
+
+  it("cancels quit when an acknowledged document reloads", async () => {
+    const { open, invoke, windows, requestQuit, quit } = await startMain();
+    const note = await open("note-1");
+    requestQuit();
+    await invoke("app:quit-result", note.webContents.id, 1, true);
+    note.webContents.emit("did-start-loading");
+    await invoke("app:quit-result", windows[0].webContents.id, 1, true);
+    expect(quit).not.toHaveBeenCalled();
+    expect(windows[0].webContents.send).toHaveBeenCalledWith(
+      "app:cancel-quit",
+      1,
+      expect.stringContaining("重新载入"),
+    );
+  });
+
+  it("does not quit during an already pending note navigation", async () => {
+    const { open, invoke, requestQuit, quit } = await startMain();
+    const note = await open("note-1");
+    let loaded!: () => void;
+    note.loadURL.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          loaded = resolve;
+        }),
+    );
+    const switching = invoke(
+      "note-window:switch",
+      note.webContents.id,
+      "note-2",
+    );
+    requestQuit();
+    await invoke("app:quit-result", note.webContents.id, 1, true);
+    await invoke("app:quit-result", 1, 1, true);
+    expect(quit).not.toHaveBeenCalled();
+    loaded();
+    await switching;
+    requestQuit();
+    await invoke("app:quit-result", note.webContents.id, 2, true);
+    await invoke("app:quit-result", 1, 2, true);
+    expect(quit).toHaveBeenCalledOnce();
+  });
+
+  it("intercepts quit until the main editor and every note have saved", async () => {
+    const { open, invoke, windows, requestQuit, quit } = await startMain();
+    const note = await open("note-1");
+    const preventDefault = requestQuit();
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(quit).not.toHaveBeenCalled();
+    expect(windows[0].webContents.send).toHaveBeenCalledWith(
+      "app:prepare-quit",
+      1,
+    );
+    expect(note.webContents.send).toHaveBeenCalledWith("app:prepare-quit", 1);
+    await invoke("app:quit-result", 1, 1, true);
+    expect(quit).not.toHaveBeenCalled();
+    await invoke("app:quit-result", note.webContents.id, 1, true);
+    expect(quit).toHaveBeenCalledOnce();
+    expect(requestQuit()).not.toHaveBeenCalled();
+    expect(invoke("note-window:get-state", 1, "note-1")).toMatchObject({
+      isOpen: true,
+    });
+  });
+
+  it("cancels quitting on save failure and permits a later successful retry", async () => {
+    const { open, invoke, windows, requestQuit, quit } = await startMain();
+    const note = await open("note-1");
+    requestQuit();
+    await invoke("app:quit-result", 1, 1, true);
+    await invoke("app:quit-result", note.webContents.id, 1, false);
+    expect(quit).not.toHaveBeenCalled();
+    expect(windows[0].webContents.send).toHaveBeenCalledWith(
+      "app:cancel-quit",
+      1,
+      expect.stringContaining("保存失败"),
+    );
+    expect(note.isDestroyed()).toBe(false);
+    requestQuit();
+    await invoke("app:quit-result", 1, 2, true);
+    await invoke("app:quit-result", note.webContents.id, 2, true);
+    expect(quit).toHaveBeenCalledOnce();
   });
 
   it("releases closed renderers while retaining the main window and reopen state", async () => {

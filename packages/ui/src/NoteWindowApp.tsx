@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import type { DesktopBridge } from "./types";
 import { useNoteTabs } from "./useNoteTabs";
+import { useDesktopQuit } from "./useDesktopQuit";
 import { useActionMenu } from "./useActionMenu";
 import { attachNoteMousePassthrough } from "./note-mouse-passthrough";
 import {
@@ -65,7 +66,44 @@ export function NoteWindowApp({
     kind: NoteKind;
   } | null>(null);
   const editorRef = useRef<RichNoteEditorHandle>(null);
+  const { preparingQuit, quitError } = useDesktopQuit(bridge, editorRef);
   const rootRef = useRef<HTMLDivElement>(null);
+  const refreshRevision = useRef(0);
+  const invalidateRefresh = useCallback(() => {
+    ++refreshRevision.current;
+  }, []);
+  const activeNoteIdRef = useRef(noteId);
+  const [recoveryTarget, setRecoveryTarget] = useState<string | null>(null);
+  const attemptedRecoveryRef = useRef<string | null>(null);
+  const openRecoveredNote = useCallback(
+    async (targetId: string) => {
+      if (switchingRef.current) return;
+      switchingRef.current = true;
+      setSwitching(true);
+      setSwitchError(null);
+      try {
+        await editorRef.current?.flushSave();
+        await bridge.switchNote(targetId);
+        setRecoveryTarget(null);
+      } catch {
+        setSwitchError("恢复副本保存或切换失败，当前草稿已保留，请重试。");
+      } finally {
+        switchingRef.current = false;
+        setSwitching(false);
+      }
+    },
+    [bridge],
+  );
+  useEffect(() => {
+    if (
+      !recoveryTarget ||
+      switching ||
+      attemptedRecoveryRef.current === recoveryTarget
+    )
+      return;
+    attemptedRecoveryRef.current = recoveryTarget;
+    void openRecoveredNote(recoveryTarget);
+  }, [openRecoveredNote, recoveryTarget, switching]);
   const closeNote = useCallback(async () => {
     if (switchingRef.current) return;
     switchingRef.current = true;
@@ -89,20 +127,34 @@ export function NoteWindowApp({
     if (rootRef.current)
       return attachNoteMousePassthrough(rootRef.current, bridge);
   }, [bridge, noteId]);
-  const refresh = useCallback(
-    async () => setNote(await repository.getNote(noteId)),
-    [repository, noteId],
-  );
+  const refresh = useCallback(async () => {
+    const revision = ++refreshRevision.current;
+    try {
+      const next = await repository.getNote(activeNoteIdRef.current);
+      if (revision !== refreshRevision.current) return;
+      // Another renderer may delete a note while this editor has unsaved
+      // changes. Preserve that draft before removing the editor.
+      if (!next) await editorRef.current?.flushSave();
+      if (revision === refreshRevision.current) setNote(next);
+    } catch {
+      if (revision === refreshRevision.current)
+        setSwitchError("读取或保存失败，当前草稿已保留，请重试。");
+    }
+  }, [repository]);
 
   useEffect(() => {
+    activeNoteIdRef.current = noteId;
     void refresh();
     void bridge.getNoteWindowState(noteId).then(setWindowState);
     const reload = () => {
       void refresh();
     };
     window.addEventListener("smoke-notes:data-changed", reload);
-    return () => window.removeEventListener("smoke-notes:data-changed", reload);
-  }, [refresh, bridge, noteId]);
+    return () => {
+      invalidateRefresh();
+      window.removeEventListener("smoke-notes:data-changed", reload);
+    };
+  }, [refresh, bridge, noteId, invalidateRefresh]);
 
   useEffect(() => {
     if (!createMenuOpen) return;
@@ -127,8 +179,14 @@ export function NoteWindowApp({
 
   if (!note)
     return (
-      <div ref={rootRef} className="note-window missing-note">
+      <div
+        ref={rootRef}
+        inert={preparingQuit}
+        className="note-window missing-note"
+      >
         <p>这张便签已被删除或无法读取。</p>
+        {quitError && <p role="alert">{quitError}</p>}
+        {switchError && <p role="alert">{switchError}</p>}
         <button
           type="button"
           disabled={switching}
@@ -177,6 +235,7 @@ export function NoteWindowApp({
   return (
     <div
       ref={rootRef}
+      inert={preparingQuit}
       className={`note-window note-window-${note.color}`}
       onFocusCapture={(event) => {
         if (!createControlRef.current?.contains(event.target)) {
@@ -323,7 +382,7 @@ export function NoteWindowApp({
             setSwitchError(null);
             try {
               await editorRef.current?.flushSave();
-              await repository.trashNote(noteId);
+              await repository.trashNote(activeNoteIdRef.current);
               window.dispatchEvent(new CustomEvent("smoke-notes:data-changed"));
               await bridge.closeNote(noteId);
             } catch {
@@ -345,6 +404,7 @@ export function NoteWindowApp({
           <X size={17} />
         </button>
       </header>
+      {quitError && <p role="alert">{quitError}</p>}
       {switchError && (
         <div role="alert">
           <p>{switchError}</p>
@@ -357,14 +417,29 @@ export function NoteWindowApp({
               重试打开新便签
             </button>
           )}
+          {recoveryTarget && (
+            <button
+              type="button"
+              disabled={switching}
+              onClick={() => void openRecoveredNote(recoveryTarget)}
+            >
+              打开恢复副本
+            </button>
+          )}
         </div>
       )}
       <RichNoteEditor
         ref={editorRef}
         note={note}
         onSave={async (changes: NoteEdit) => {
-          const updated = await repository.updateNote(noteId, changes);
+          const updated = await repository.updateNote(
+            changes.baseSnapshot?.id ?? currentNote.id,
+            changes,
+          );
+          invalidateRefresh();
+          activeNoteIdRef.current = updated.id;
           setNote(updated);
+          if (updated.id !== noteId) setRecoveryTarget(updated.id);
           window.dispatchEvent(new CustomEvent("smoke-notes:data-changed"));
           return updated;
         }}

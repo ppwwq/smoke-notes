@@ -8,7 +8,7 @@ import {
 import type { Note, Notebook, SyncEntity, SyncOperation, Todo } from "./types";
 import { SmokeNotesDatabase } from "./database";
 import { mergeNoteChanges, sameNoteContent } from "./note-merge";
-import { validateSyncRecord } from "./validation";
+import { TEXT_LIMITS, validateSyncRecord } from "./validation";
 import {
   createTaskListContent,
   migrateLegacyNoteContent,
@@ -79,27 +79,25 @@ export class LocalRepository {
   }
 
   async createNotebook(name: string): Promise<Notebook> {
-    const rank = await this.nextRank(this.database.notebooks);
-    const timestamp = this.now().toISOString();
-    const notebook: Notebook = {
-      id: this.createId(),
-      workspaceId: this.context.workspaceId,
-      name: name.trim() || "未命名便签本",
-      rank,
-      version: 1,
-      updatedAt: timestamp,
-      deletedAt: null,
-    };
-    await this.database.transaction(
+    return this.database.transaction(
       "rw",
       this.database.notebooks,
       this.database.operations,
       async () => {
+        const notebook: Notebook = {
+          id: this.createId(),
+          workspaceId: this.context.workspaceId,
+          name: name.trim() || "未命名便签本",
+          rank: await this.nextRank(this.database.notebooks),
+          version: 1,
+          updatedAt: this.now().toISOString(),
+          deletedAt: null,
+        };
         await this.database.notebooks.add(notebook);
         await this.enqueue("notebook", notebook, 0);
+        return notebook;
       },
     );
-    return notebook;
   }
 
   async createNote(
@@ -107,63 +105,67 @@ export class LocalRepository {
     content: Pick<Note, "title"> &
       Partial<Pick<Note, "body" | "contentJson" | "color" | "kind">>,
   ): Promise<Note> {
-    const current = await this.listNotes(notebookId);
-    const timestamp = this.now().toISOString();
     const kind = normalizeNoteKind(content.kind);
     const contentJson = content.contentJson
       ? normalizeRichTextDocument(content.contentJson, content.body ?? "")
       : kind === "todo"
         ? createTaskListContent(content.body ?? "")
         : migrateLegacyNoteContent(content.body ?? "");
-    const note: Note = {
-      id: this.createId(),
-      notebookId,
-      kind,
-      title: content.title.trim(),
-      contentJson,
-      body: richTextToPlainText(contentJson),
-      color: normalizeNoteColor(content.color),
-      rank: (current.at(-1)?.rank ?? 0) + RANK_GAP,
-      version: 1,
-      conflictOf: null,
-      updatedAt: timestamp,
-      deletedAt: null,
-    };
-    await this.database.transaction(
+    return this.database.transaction(
       "rw",
+      this.database.notebooks,
       this.database.notes,
       this.database.operations,
       async () => {
+        const notebook = await this.requireRecord(
+          this.database.notebooks,
+          notebookId,
+        );
+        if (notebook.deletedAt)
+          throw new Error("便签本已删除，请先恢复或选择其他便签本。");
+        const current = await this.listNotes(notebookId);
+        const note: Note = {
+          id: this.createId(),
+          notebookId,
+          kind,
+          title: content.title.trim(),
+          contentJson,
+          body: richTextToPlainText(contentJson),
+          color: normalizeNoteColor(content.color),
+          rank: (current.at(-1)?.rank ?? 0) + RANK_GAP,
+          version: 1,
+          conflictOf: null,
+          updatedAt: this.now().toISOString(),
+          deletedAt: null,
+        };
         await this.database.notes.add(note);
         await this.enqueue("note", note, 0);
+        return note;
       },
     );
-    return note;
   }
 
   async createTodo(text: string): Promise<Todo> {
-    const rank = await this.nextRank(this.database.todos);
-    const timestamp = this.now().toISOString();
-    const todo: Todo = {
-      id: this.createId(),
-      workspaceId: this.context.workspaceId,
-      text: text.trim() || "新待办",
-      completed: false,
-      rank,
-      version: 1,
-      updatedAt: timestamp,
-      deletedAt: null,
-    };
-    await this.database.transaction(
+    return this.database.transaction(
       "rw",
       this.database.todos,
       this.database.operations,
       async () => {
+        const todo: Todo = {
+          id: this.createId(),
+          workspaceId: this.context.workspaceId,
+          text: text.trim() || "新待办",
+          completed: false,
+          rank: await this.nextRank(this.database.todos),
+          version: 1,
+          updatedAt: this.now().toISOString(),
+          deletedAt: null,
+        };
         await this.database.todos.add(todo);
         await this.enqueue("todo", todo, 0);
+        return todo;
       },
     );
-    return todo;
   }
 
   async toggleTodo(id: string): Promise<Todo> {
@@ -267,6 +269,7 @@ export class LocalRepository {
       this.database.operations,
       async () => {
         const current = await this.requireRecord(this.database.notebooks, id);
+        if (current.deletedAt) return current;
         const deletedAt = this.now().toISOString();
         const updated = this.updatedRecord(current, { deletedAt });
         const childNotes = (
@@ -303,10 +306,11 @@ export class LocalRepository {
         this.database.operations,
         async () => {
           const current = await this.requireRecord(this.database.notebooks, id);
+          if (!current.deletedAt) return current;
           const updated = this.updatedRecord(current, { deletedAt: null });
           const childNotes = (
             await this.database.notes.where("notebookId").equals(id).toArray()
-          ).filter((note) => note.deletedAt);
+          ).filter((note) => note.deletedAt === current.deletedAt);
           await this.database.notebooks.put(updated);
           await this.enqueue("notebook", updated, current.version);
           for (const note of childNotes) {
@@ -321,6 +325,29 @@ export class LocalRepository {
             );
           }
           return updated;
+        },
+      );
+    }
+    if (entity === "note") {
+      return this.database.transaction(
+        "rw",
+        this.database.notebooks,
+        this.database.notes,
+        this.database.operations,
+        async () => {
+          const current = await this.requireRecord(this.database.notes, id);
+          const notebook = await this.requireRecord(
+            this.database.notebooks,
+            current.notebookId,
+          );
+          if (notebook.deletedAt) {
+            const restored = this.updatedRecord(notebook, { deletedAt: null });
+            await this.database.notebooks.put(restored);
+            await this.enqueue("notebook", restored, notebook.version);
+          }
+          return this.persistMutation(this.database.notes, "note", id, () => ({
+            deletedAt: null,
+          }));
         },
       );
     }
@@ -410,6 +437,7 @@ export class LocalRepository {
     return this.database.transaction(
       "rw",
       table,
+      this.database.notebooks,
       this.database.operations,
       async () => {
         const current = await this.requireRecord(table, id);
@@ -417,6 +445,39 @@ export class LocalRepository {
         if (entity === "note" && baseSnapshot) {
           if (baseSnapshot.id !== id)
             throw new Error("Draft belongs to a different note");
+          if (current.deletedAt) {
+            const draft = this.updatedRecord(
+              baseSnapshot as T,
+              changes(baseSnapshot as T),
+            ) as Note;
+            if (sameNoteContent(draft, baseSnapshot)) return current;
+            const copy = createConflictCopy(
+              { ...draft, id: this.createId(), rank: draft.rank + 0.5 },
+              id,
+              this.now().toISOString(),
+            );
+            const notebook = await this.database.notebooks.get(copy.notebookId);
+            if (!notebook || notebook.deletedAt) {
+              const suffix = "（恢复）";
+              const recovered: Notebook = {
+                id: this.createId(),
+                workspaceId: notebook?.workspaceId ?? this.context.workspaceId,
+                name: notebook
+                  ? `${notebook.name.slice(0, TEXT_LIMITS.notebookName - suffix.length)}${suffix}`
+                  : "恢复的便签",
+                rank: await this.nextRank(this.database.notebooks),
+                version: 1,
+                updatedAt: this.now().toISOString(),
+                deletedAt: null,
+              };
+              await this.database.notebooks.add(recovered);
+              await this.enqueue("notebook", recovered, 0);
+              copy.notebookId = recovered.id;
+            }
+            await this.database.notes.add(copy);
+            await this.enqueue("note", copy, 0);
+            return copy as T;
+          }
           const merged = mergeNoteChanges(
             updated as Note,
             current as Note,

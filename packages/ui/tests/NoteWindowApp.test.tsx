@@ -79,6 +79,170 @@ describe("NoteWindowApp", () => {
     await database.delete();
   });
 
+  it("flushes composed drafts before acknowledging quit and unlocks when cancelled", async () => {
+    let prepare!: () => Promise<void>;
+    let cancel!: (message: string) => void;
+    bridge.onPrepareQuit = (listener) => {
+      prepare = listener;
+      return () => {};
+    };
+    bridge.onQuitCancelled = (listener) => {
+      cancel = listener;
+      return () => {};
+    };
+    const { container } = render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    const title = await screen.findByRole("textbox", { name: "便签标题" });
+    fireEvent.compositionStart(title);
+    fireEvent.change(title, { target: { value: "退出时的中文草稿" } });
+    const acknowledged = vi.fn();
+    let pending!: Promise<void>;
+    await act(async () => {
+      pending = prepare().then(acknowledged);
+    });
+    expect(acknowledged).not.toHaveBeenCalled();
+    expect(container.querySelector(".note-window")).not.toHaveAttribute(
+      "inert",
+    );
+    await act(async () => {
+      fireEvent.compositionEnd(title);
+      await pending;
+    });
+    expect((await repository.getNote(noteId))?.title).toBe("退出时的中文草稿");
+    expect(acknowledged).toHaveBeenCalledOnce();
+    expect(container.querySelector(".note-window")).toHaveAttribute("inert");
+    act(() => cancel("其他窗口保存失败，退出已取消"));
+    expect(container.querySelector(".note-window")).not.toHaveAttribute(
+      "inert",
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("退出已取消");
+    expect(title).toHaveValue("退出时的中文草稿");
+  });
+
+  it("ignores a background read that finishes after a newer saved draft", async () => {
+    render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    const title = await screen.findByRole("textbox", { name: "便签标题" });
+    const original = await repository.getNote(noteId);
+    let finishOldRead!: () => void;
+    vi.spyOn(repository, "getNote").mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishOldRead = () => resolve(original);
+        }),
+    );
+    act(() =>
+      window.dispatchEvent(new CustomEvent("smoke-notes:data-changed")),
+    );
+    fireEvent.change(title, { target: { value: "已保存的新草稿" } });
+    await waitFor(async () => {
+      expect((await repository.getNote(noteId))?.title).toBe("已保存的新草稿");
+    });
+    await screen.findByRole("button", { name: "切换便签：已保存的新草稿" });
+
+    await act(async () => finishOldRead());
+
+    expect(title).toHaveValue("已保存的新草稿");
+    fireEvent.change(title, { target: { value: "继续输入的新草稿" } });
+    await waitFor(async () => {
+      expect((await repository.getNote(noteId))?.title).toBe(
+        "继续输入的新草稿",
+      );
+    });
+    expect(await repository.listNotes(original!.notebookId)).toHaveLength(1);
+  });
+
+  it("ignores an older refresh that arrives after the latest remote update", async () => {
+    render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    const title = await screen.findByRole("textbox", { name: "便签标题" });
+    const original = await repository.getNote(noteId);
+    let finishOldRead!: () => void;
+    vi.spyOn(repository, "getNote").mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishOldRead = () => resolve(original);
+        }),
+    );
+    act(() =>
+      window.dispatchEvent(new CustomEvent("smoke-notes:data-changed")),
+    );
+    await repository.updateNote(noteId, { title: "另一窗口的最新内容" });
+    act(() =>
+      window.dispatchEvent(new CustomEvent("smoke-notes:data-changed")),
+    );
+    await waitFor(() => expect(title).toHaveValue("另一窗口的最新内容"));
+
+    await act(async () => finishOldRead());
+
+    expect(title).toHaveValue("另一窗口的最新内容");
+  });
+
+  it("saves a dirty remotely deleted note into its recovery copy and retries navigation", async () => {
+    const original = (await repository.getNote(noteId))!;
+    vi.mocked(bridge.switchNote).mockRejectedValueOnce(
+      new Error("load failed"),
+    );
+    render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    fireEvent.change(await screen.findByRole("textbox", { name: "便签标题" }), {
+      target: { value: "删除时尚未保存的草稿" },
+    });
+    await repository.trashNote(noteId);
+    act(() =>
+      window.dispatchEvent(new CustomEvent("smoke-notes:data-changed")),
+    );
+
+    await waitFor(() => expect(bridge.switchNote).toHaveBeenCalledOnce());
+    const recoveredId = vi.mocked(bridge.switchNote).mock.calls[0]![0];
+    expect(recoveredId).not.toBe(noteId);
+    expect(screen.getByRole("textbox", { name: "便签标题" })).toHaveValue(
+      "删除时尚未保存的草稿（冲突副本）",
+    );
+    expect(await repository.getNote(noteId)).toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: "便签标题" }), {
+      target: { value: "继续编辑恢复副本" },
+    });
+    await waitFor(async () => {
+      expect((await repository.getNote(recoveredId))?.title).toBe(
+        "继续编辑恢复副本",
+      );
+    });
+    expect(await repository.listNotes(original.notebookId)).toHaveLength(1);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "打开恢复副本" }),
+    );
+    await waitFor(() => expect(bridge.switchNote).toHaveBeenCalledTimes(2));
+    expect(bridge.switchNote).toHaveBeenLastCalledWith(recoveredId);
+  });
+
+  it("retains the draft when flushing a remotely deleted note fails", async () => {
+    render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    fireEvent.change(await screen.findByRole("textbox", { name: "便签标题" }), {
+      target: { value: "删除后仍需保留的草稿" },
+    });
+    vi.spyOn(repository, "updateNote").mockRejectedValue(
+      new Error("disk full"),
+    );
+    await repository.trashNote(noteId);
+    act(() =>
+      window.dispatchEvent(new CustomEvent("smoke-notes:data-changed")),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("草稿已保留");
+    expect(screen.getByRole("textbox", { name: "便签标题" })).toHaveValue(
+      "删除后仍需保留的草稿",
+    );
+    expect(bridge.switchNote).not.toHaveBeenCalled();
+    expect(bridge.closeNote).not.toHaveBeenCalled();
+  });
+
   it("keeps the note and draft open when saving before deletion fails", async () => {
     database.notes.hook("updating", (changes) => {
       if ("title" in changes) throw new Error("storage unavailable");

@@ -1,5 +1,5 @@
 import { WebDialog } from "./glass/WebDialog";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Link2, RefreshCw, X } from "lucide-react";
 import type { PairingDetails } from "@smoke-notes/core";
@@ -104,8 +104,11 @@ export function PairingGate({ initialCode, onRedeem }: PairingGateProps) {
   const [code, setCode] = useState(initialCode ?? "");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const pending = useRef(false);
 
   async function submit() {
+    if (pending.current) return;
+    pending.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -115,6 +118,7 @@ export function PairingGate({ initialCode, onRedeem }: PairingGateProps) {
         reason instanceof Error ? reason.message : "配对失败，请检查配对码",
       );
     } finally {
+      pending.current = false;
       setLoading(false);
     }
   }
@@ -137,6 +141,7 @@ export function PairingGate({ initialCode, onRedeem }: PairingGateProps) {
             setCode(event.target.value.replace(/[^0-9 ]/g, ""))
           }
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing || event.keyCode === 229) return;
             if (event.key === "Enter") void submit();
           }}
         />

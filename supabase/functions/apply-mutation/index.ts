@@ -2,11 +2,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, json } from "../_shared/http.ts";
 
 type Entity = "notebook" | "note" | "todo";
-const tableFor: Record<Entity, string> = {
-  notebook: "notebooks",
-  note: "notes",
-  todo: "todos",
-};
 
 function finiteRank(value: unknown): number {
   const rank = Number(value);
@@ -66,16 +61,10 @@ function richContent(
   return normalized;
 }
 
-function mapPayload(
-  entity: Entity,
-  payload: Record<string, unknown>,
-  version: number,
-) {
+function mapPayload(entity: Entity, payload: Record<string, unknown>) {
   const shared = {
     id: String(payload.id),
     rank: finiteRank(payload.rank),
-    version,
-    updated_at: new Date().toISOString(),
     deleted_at: payload.deletedAt || null,
   };
   if (entity === "notebook")
@@ -113,11 +102,9 @@ Deno.serve(async (request) => {
     if (!authorization) return json({ error: "authentication_required" }, 401);
     const url = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const userClient = createClient(url, anonKey, {
       global: { headers: { Authorization: authorization } },
     });
-    const service = createClient(url, serviceKey);
     const auth = await userClient.auth.getUser();
     if (auth.error || !auth.data.user)
       return json({ error: "authentication_required" }, 401);
@@ -131,92 +118,29 @@ Deno.serve(async (request) => {
       operation?.payload?.id !== operation.entityId
     )
       return json({ error: "invalid_operation" }, 400);
-    const prior = await service
-      .from("applied_operations")
-      .select("result")
-      .eq("id", operation.id)
-      .eq("user_id", auth.data.user.id)
-      .maybeSingle();
-    if (prior.error) throw prior.error;
-    if (prior.data) return json(prior.data.result);
-
     const payload = operation.payload as Record<string, unknown>;
-    let workspaceId = entity === "note" ? null : String(payload.workspaceId);
-    if (entity === "note") {
-      const notebook = await service
-        .from("notebooks")
-        .select("workspace_id")
-        .eq("id", payload.notebookId)
-        .maybeSingle();
-      workspaceId = notebook.data?.workspace_id ?? null;
-    }
-    if (!workspaceId) return json({ error: "workspace_missing" }, 400);
-    const member = await service
-      .from("workspace_members")
-      .select("workspace_id")
-      .eq("workspace_id", workspaceId)
-      .eq("user_id", auth.data.user.id)
-      .maybeSingle();
-    if (!member.data) return json({ error: "workspace_forbidden" }, 403);
-
-    const table = tableFor[entity];
-    const existing = await service
-      .from(table)
-      .select("*")
-      .eq("id", operation.entityId)
-      .maybeSingle();
-    if (existing.error) throw existing.error;
-    if (
-      existing.data &&
-      entity !== "note" &&
-      existing.data.workspace_id !== workspaceId
-    ) {
-      return json({ error: "workspace_forbidden" }, 403);
-    }
-    if (existing.data && entity === "note") {
-      const originalNotebook = await service
-        .from("notebooks")
-        .select("workspace_id")
-        .eq("id", existing.data.notebook_id)
-        .maybeSingle();
-      if (originalNotebook.data?.workspace_id !== workspaceId) {
-        return json({ error: "workspace_forbidden" }, 403);
-      }
-    }
     const baseVersion = Number(operation.baseVersion);
     if (!Number.isInteger(baseVersion) || baseVersion < 0)
       return json({ error: "invalid_version" }, 400);
-    if (existing.data && Number(existing.data.version) !== baseVersion) {
-      const result = { status: "conflict", record: existing.data };
-      await service
-        .from("applied_operations")
-        .insert({ id: operation.id, user_id: auth.data.user.id, result });
-      return json(result, 200);
+    // The row change and retry receipt must commit together. Otherwise a lost
+    // response can turn a successful save into a conflict on the next attempt.
+    const { data, error } = await userClient.rpc("apply_workspace_mutation", {
+      p_operation_id: operation.id,
+      p_entity: entity,
+      p_entity_id: operation.entityId,
+      p_base_version: baseVersion,
+      p_row: mapPayload(entity, payload),
+    });
+    if (error) {
+      const status =
+        error.message === "workspace_forbidden"
+          ? 403
+          : error.message === "missing_remote_record"
+            ? 409
+            : 400;
+      return json({ error: error.message }, status);
     }
-    if (!existing.data && baseVersion !== 0)
-      return json({ error: "missing_remote_record" }, 409);
-
-    const row = mapPayload(
-      entity,
-      payload,
-      existing.data ? Number(existing.data.version) + 1 : 1,
-    );
-    const saved = existing.data
-      ? await service
-          .from(table)
-          .update(row)
-          .eq("id", operation.entityId)
-          .eq("version", baseVersion)
-          .select("*")
-          .maybeSingle()
-      : await service.from(table).insert(row).select("*").single();
-    if (saved.error) throw saved.error;
-    if (!saved.data) return json({ error: "concurrent_change_retry" }, 409);
-    const result = { status: "applied", record: saved.data };
-    await service
-      .from("applied_operations")
-      .insert({ id: operation.id, user_id: auth.data.user.id, result });
-    return json(result);
+    return json(data);
   } catch (error) {
     return json(
       { error: error instanceof Error ? error.message : "mutation_failed" },

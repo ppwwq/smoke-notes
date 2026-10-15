@@ -66,13 +66,20 @@ export function createTaskListContent(body = ""): RichTextDocument {
 
 function nodeText(node: RichTextNode): string {
   if (typeof node.text === "string") return node.text;
+  if (node.type === "hardBreak") return "\n";
   const content = node.content ?? [];
   const joined = content.map(nodeText).join("");
-  return node.type === "paragraph" ? `${joined}\n` : joined;
+  return node.type === "paragraph" ||
+    node.type === "heading" ||
+    node.type === "codeBlock"
+    ? `${joined}\n`
+    : joined;
 }
 
 export function richTextToPlainText(document: RichTextDocument): string {
-  return (document.content ?? []).map(nodeText).join("").replace(/\n+$/, "");
+  // Remove only the final block separator; blank paragraphs and hard breaks
+  // at the end of the user's content are meaningful text.
+  return (document.content ?? []).map(nodeText).join("").replace(/\n$/, "");
 }
 
 export function normalizeNoteColor(value: unknown): NoteColor {

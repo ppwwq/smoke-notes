@@ -164,7 +164,12 @@ class SupabaseSyncAdapter implements RemoteSyncAdapter {
       }
       throw error;
     }
-    if (data?.status === "conflict" && data.record) {
+    if (
+      data?.status === "conflict" &&
+      data.record?.id === operation.entityId &&
+      Number.isInteger(data.record.version) &&
+      data.record.version > 0
+    ) {
       return {
         status: "conflict",
         record: mapRemoteRecord(
@@ -173,7 +178,10 @@ class SupabaseSyncAdapter implements RemoteSyncAdapter {
         ),
       };
     }
-    return { status: "applied" };
+    if (data?.status === "applied") return { status: "applied" };
+    // HTTP success alone does not confirm that the server accepted the write.
+    // Keep the operation retryable if the response cannot acknowledge it.
+    throw new Error("Invalid mutation response");
   }
 
   async pull(

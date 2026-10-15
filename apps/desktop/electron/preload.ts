@@ -33,6 +33,34 @@ contextBridge.exposeInMainWorld("smokeDesktop", {
     return () =>
       ipcRenderer.removeListener("note-window:request-close", handler);
   },
+  onPrepareQuit: (listener: () => Promise<void>): (() => void) => {
+    const handler = async (
+      _event: Electron.IpcRendererEvent,
+      requestId: number,
+    ) => {
+      let saved = false;
+      try {
+        await listener();
+        saved = true;
+      } catch {
+        /* Keep the draft and cancel quit. */
+      }
+      await ipcRenderer
+        .invoke("app:quit-result", requestId, saved)
+        .catch(() => {});
+    };
+    ipcRenderer.on("app:prepare-quit", handler);
+    return () => ipcRenderer.removeListener("app:prepare-quit", handler);
+  },
+  onQuitCancelled: (listener: (message: string) => void): (() => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      _requestId: number,
+      message: string,
+    ) => listener(message);
+    ipcRenderer.on("app:cancel-quit", handler);
+    return () => ipcRenderer.removeListener("app:cancel-quit", handler);
+  },
   getRecentNoteIds: (currentNoteId: string, limit: number): Promise<string[]> =>
     ipcRenderer.invoke("note-window:get-recent", currentNoteId, limit),
   switchNote: (targetNoteId: string): Promise<void> =>

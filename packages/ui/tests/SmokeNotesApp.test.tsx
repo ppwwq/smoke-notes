@@ -9,6 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { Editor } from "@tiptap/react";
 import { LocalRepository, SmokeNotesDatabase } from "@smoke-notes/core";
 import { SmokeNotesApp, type DesktopBridge } from "../src/index";
 import { notebookTint } from "../src/components/notebook-tint";
@@ -117,6 +118,196 @@ describe("SmokeNotesApp", () => {
     vi.unstubAllGlobals();
     Reflect.deleteProperty(navigator, "maxTouchPoints");
     await database.delete();
+  });
+
+  it("saves the main editor before acknowledging desktop quit", async () => {
+    const bridge = desktopBridge();
+    let prepare!: () => Promise<void>;
+    let cancel!: (message: string) => void;
+    bridge.onPrepareQuit = (listener) => {
+      prepare = listener;
+      return () => {};
+    };
+    bridge.onQuitCancelled = (listener) => {
+      cancel = listener;
+      return () => {};
+    };
+    const { container } = render(
+      <SmokeNotesApp
+        repository={repository}
+        platform="desktop"
+        desktopBridge={bridge}
+      />,
+    );
+    await screen.findByText("周会记录");
+    fireEvent.click(screen.getByRole("button", { name: "新建便签" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "普通便签" }));
+    const title = await screen.findByRole("textbox", { name: "便签标题" });
+    fireEvent.change(title, { target: { value: "退出前的主窗口草稿" } });
+    await act(async () => prepare());
+    const notebooks = await repository.listNotebooks();
+    const notes = await repository.listNotes(
+      notebooks.find((item) => item.name === "工作")!.id,
+    );
+    expect(notes.some((note) => note.title === "退出前的主窗口草稿")).toBe(
+      true,
+    );
+    expect(container.querySelector(".smoke-app")).toHaveAttribute("inert");
+    act(() => cancel("退出已取消"));
+    expect(container.querySelector(".smoke-app")).not.toHaveAttribute("inert");
+    expect(screen.getByRole("alert")).toHaveTextContent("退出已取消");
+  });
+
+  it.each(["caret", "conflict"])(
+    "ignores an older background read after saving newer web edits (%s)",
+    async (check) => {
+      const update = vi.spyOn(repository, "updateNote");
+      render(<SmokeNotesApp repository={repository} platform="web" />);
+      fireEvent.click(
+        await screen.findByRole("button", { name: "打开便签：周会记录" }),
+      );
+      const body = (await screen.findByRole("textbox", {
+        name: "便签正文",
+      })) as HTMLElement & { editor: Editor };
+      const editor = body.editor;
+      const save = async () => {
+        const previousSaves = update.mock.calls.length;
+        if (check === "conflict")
+          fireEvent.click(screen.getByRole("button", { name: "保存" }));
+        await waitFor(() =>
+          expect(update).toHaveBeenCalledTimes(previousSaves + 1),
+        );
+        await waitFor(() =>
+          expect(screen.getByRole("button", { name: "保存" })).toBeEnabled(),
+        );
+        await act(async () => {
+          while (pendingReads.size) await Promise.all([...pendingReads]);
+        });
+      };
+      act(() => editor.commands.insertContent("第一次编辑"));
+      await save();
+
+      const notebook = (await repository.listNotebooks())[0];
+      const earlier = await repository.listNotes(notebook.id);
+      const delayed = deferred<typeof earlier>();
+      vi.mocked(repository.listNotes).mockReturnValueOnce(delayed.promise);
+      act(() => {
+        window.dispatchEvent(new CustomEvent("smoke-notes:data-changed"));
+      });
+      await waitFor(() =>
+        expect(repository.listNotes).toHaveLastReturnedWith(delayed.promise),
+      );
+      act(() => {
+        editor.commands.splitBlock();
+        editor.commands.insertContent("第二次编辑");
+      });
+      await save();
+      const latestText = editor.getText();
+      const latestSelection = editor.state.selection.from;
+      await act(async () => {
+        delayed.resolve(earlier);
+        await delayed.promise;
+      });
+
+      if (check === "caret") {
+        expect(editor.getText()).toBe(latestText);
+        expect(editor.state.selection.from).toBe(latestSelection);
+      } else {
+        act(() => editor.commands.insertContent("继续输入"));
+        await save();
+        expect(await repository.listNotes(notebook.id)).toHaveLength(1);
+      }
+    },
+  );
+
+  it.each(["note", "notebook"] as const)(
+    "preserves the active draft when another device deletes its %s",
+    async (entity) => {
+      const work = (await repository.listNotebooks()).find(
+        (item) => item.name === "工作",
+      )!;
+      const original = (await repository.listNotes(work.id))[0];
+      render(<SmokeNotesApp repository={repository} platform="web" />);
+      fireEvent.click(
+        await screen.findByRole("button", { name: "打开便签：周会记录" }),
+      );
+      const body = (await screen.findByRole("textbox", {
+        name: "便签正文",
+      })) as HTMLElement & { editor: Editor };
+      act(() => body.editor.commands.insertContent("尚未保存的草稿"));
+      const expectedBody = body.editor.getText();
+      if (entity === "note") await repository.trashNote(original.id);
+      else await repository.trashNotebook(work.id);
+      act(() => {
+        window.dispatchEvent(new CustomEvent("smoke-notes:data-changed"));
+      });
+      await waitFor(async () => {
+        const copies = await database.notes
+          .filter((item) => item.conflictOf === original.id)
+          .toArray();
+        expect(copies).toHaveLength(1);
+        expect(copies[0].body).toBe(expectedBody);
+        expect(copies[0].deletedAt).toBeNull();
+        expect(
+          (await database.notebooks.get(copies[0].notebookId))?.deletedAt,
+        ).toBeNull();
+      });
+      expect((await database.notes.get(original.id))?.deletedAt).not.toBeNull();
+      expect(
+        screen.getByRole("textbox", { name: "便签正文" }),
+      ).toHaveTextContent(expectedBody);
+      act(() => body.editor.commands.insertContent("继续编辑"));
+      fireEvent.click(screen.getByRole("button", { name: "保存" }));
+      await waitFor(async () => {
+        const copies = await database.notes
+          .filter((item) => item.conflictOf === original.id)
+          .toArray();
+        expect(copies).toHaveLength(1);
+        expect(copies[0].body).toContain("继续编辑");
+      });
+    },
+  );
+
+  it("saves a web draft immediately when the page moves to the background", async () => {
+    const update = vi.spyOn(repository, "updateNote");
+    render(<SmokeNotesApp repository={repository} platform="web" />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "打开便签：周会记录" }),
+    );
+    fireEvent.change(await screen.findByRole("textbox", { name: "便签标题" }), {
+      target: { value: "切到后台前的草稿" },
+    });
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    fireEvent(document, new Event("visibilitychange"));
+    expect(update).toHaveBeenCalledOnce();
+    await act(async () => {
+      await update.mock.results[0].value;
+    });
+    expect(
+      await screen.findByRole("textbox", { name: "便签标题" }),
+    ).toHaveValue("切到后台前的草稿");
+  });
+
+  it("warns before closing a web page with an unsaved draft and stops warning after saving", async () => {
+    render(<SmokeNotesApp repository={repository} platform="web" />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "打开便签：周会记录" }),
+    );
+    fireEvent.change(await screen.findByRole("textbox", { name: "便签标题" }), {
+      target: { value: "尚未落盘" },
+    });
+    const leaving = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(leaving);
+    expect(leaving.defaultPrevented).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("status", { name: "保存状态" }),
+      ).toHaveTextContent("已保存"),
+    );
+    const saved = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(saved);
+    expect(saved.defaultPrevented).toBe(false);
   });
 
   it("remembers the web paper background across remounts and can restore the default", async () => {

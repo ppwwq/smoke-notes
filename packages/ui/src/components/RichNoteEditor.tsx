@@ -139,9 +139,11 @@ export const RichNoteEditor = forwardRef<
   const { title, color } = draft;
   const [saveStatus, setSaveStatus] = useState("已自动保存");
   const [composing, setComposing] = useState(false);
-  const composition = useRef<{ done: Promise<void>; finish(): void } | null>(
-    null,
-  );
+  const composition = useRef<{
+    done: Promise<void>;
+    finish(): void;
+    ending?: object;
+  } | null>(null);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -284,10 +286,48 @@ export const RichNoteEditor = forwardRef<
           contentJson,
           body: richTextToPlainText(contentJson),
         };
-        session.baseSnapshot = saved ?? {
+        const acceptedSnapshot = saved ?? {
           ...session.baseSnapshot,
           ...accepted,
         };
+        const recovered = saved && saved.id !== session.noteId;
+        // A field edited while this write was pending may still be based on
+        // the old document. Do not rebase it onto an unseen remote merge: the
+        // next write must be able to preserve both versions as a conflict.
+        const pendingContent =
+          !recovered &&
+          !sameContent(latest.contentJson, changes.contentJson) &&
+          !sameContent(latest.contentJson, accepted.contentJson) &&
+          !sameContent(changes.contentJson, accepted.contentJson);
+        session.baseSnapshot = {
+          ...acceptedSnapshot,
+          title:
+            !recovered &&
+            latest.title !== changes.title &&
+            latest.title !== accepted.title &&
+            changes.title.trim() !== accepted.title
+              ? session.baseSnapshot.title
+              : acceptedSnapshot.title,
+          color:
+            !recovered &&
+            latest.color !== changes.color &&
+            latest.color !== accepted.color &&
+            changes.color !== accepted.color
+              ? session.baseSnapshot.color
+              : acceptedSnapshot.color,
+          ...(pendingContent
+            ? {
+                contentJson: session.baseSnapshot.contentJson,
+                body: session.baseSnapshot.body,
+              }
+            : {}),
+        };
+        if (recovered) {
+          // A recovered copy contains this draft, including its generated
+          // title suffix, so continued edits start from the copy's full state.
+          session.noteId = saved.id;
+          session.incoming = accepted;
+        }
         session.persisted = accepted;
         if (sessionRef.current === session) {
           setDraft(session.draft);
@@ -324,6 +364,7 @@ export const RichNoteEditor = forwardRef<
     if (composition.current) return;
     const incoming = noteEdit(note);
     const session = sessionRef.current;
+    const changingNote = session.noteId !== note.id;
     session.onSave = onSave;
     let next = incoming;
     if (session.noteId === note.id) {
@@ -401,6 +442,16 @@ export const RichNoteEditor = forwardRef<
     ) {
       applyRemoteContent(editor, next.contentJson);
     }
+    if (editor && changingNote) {
+      // A note switch is a new editing session. Reinitialize plugin state so
+      // undo, redo and input rules cannot replay changes from the previous note.
+      const state = editor.state;
+      editor.view.updateState(
+        state
+          .reconfigure({ plugins: [] })
+          .reconfigure({ plugins: state.plugins }),
+      );
+    }
   }, [editor, note, onSave, composing]);
 
   useEffect(() => {
@@ -420,7 +471,12 @@ export const RichNoteEditor = forwardRef<
     <section
       className={`rich-note-editor note-color-${color} ${className}${compact ? " compact-editor" : ""}`.trim()}
       onCompositionStartCapture={() => {
-        if (composition.current) return;
+        if (composition.current) {
+          // Some IMEs start the next word before the previous end callback
+          // runs. Keep the same waiters and invalidate that pending callback.
+          composition.current.ending = undefined;
+          return;
+        }
         let finish!: () => void;
         const done = new Promise<void>((resolve) => {
           finish = resolve;
@@ -430,10 +486,18 @@ export const RichNoteEditor = forwardRef<
       }}
       onCompositionEndCapture={() => {
         const current = composition.current;
+        if (!current) return;
+        const ending = {};
+        current.ending = ending;
         const session = sessionRef.current;
         // The final input/ProseMirror transaction can follow compositionend.
         window.setTimeout(() => {
-          if (composition.current !== current || !mounted.current) return;
+          if (
+            composition.current !== current ||
+            current.ending !== ending ||
+            !mounted.current
+          )
+            return;
           if (sessionRef.current === session && !editor.isDestroyed) {
             const contentJson = editor.getJSON() as RichTextDocument;
             updateDraft({
@@ -443,7 +507,7 @@ export const RichNoteEditor = forwardRef<
           }
           composition.current = null;
           setComposing(false);
-          current?.finish();
+          current.finish();
         }, 0);
       }}
     >

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -81,6 +81,7 @@ export function SortableStack<T extends RankedItem>({
   onMove,
   className = "",
 }: SortableStackProps<T>) {
+  const [error, setError] = useState("");
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, {
@@ -98,13 +99,20 @@ export function SortableStack<T extends RankedItem>({
     const withoutActive = items.filter((item) => item.id !== activeId);
     const targetIndex = withoutActive.findIndex((item) => item.id === overId);
     const originalIndex = items.findIndex((item) => item.id === activeId);
+    // Sync or filtering may remove either item while the drag is in progress.
+    if (originalIndex < 0 || targetIndex < 0) return;
     const insertIndex =
       originalIndex < items.findIndex((item) => item.id === overId)
         ? targetIndex + 1
         : targetIndex;
     const previousRank = withoutActive[insertIndex - 1]?.rank ?? null;
     const nextRank = withoutActive[insertIndex]?.rank ?? null;
-    await onMove(activeId, previousRank, nextRank);
+    setError("");
+    try {
+      await onMove(activeId, previousRank, nextRank);
+    } catch {
+      setError("排序失败，请重试");
+    }
   }
 
   return (
@@ -125,6 +133,7 @@ export function SortableStack<T extends RankedItem>({
           ))}
         </div>
       </SortableContext>
+      {error && <p role="alert">{error}</p>}
     </DndContext>
   );
 }

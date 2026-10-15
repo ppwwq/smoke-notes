@@ -173,6 +173,26 @@ describe("mutation validation responses", () => {
       await expect(cloud.syncAdapter.push(operation)).rejects.toThrow();
     },
   );
+
+  it.each([
+    null,
+    {},
+    { status: "unknown" },
+    { status: "conflict" },
+    { status: "conflict", record: { id: "another-note", version: 2 } },
+  ])("does not acknowledge an invalid success response: %j", async (body) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify(body), {
+            headers: { "Content-Type": "application/json" },
+          }),
+      ),
+    );
+
+    await expect(cloud.syncAdapter.push(operation)).rejects.toThrow();
+  });
 });
 
 describe("cloud pull", () => {
