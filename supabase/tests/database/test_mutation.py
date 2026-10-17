@@ -74,9 +74,15 @@ class AtomicMutationTests(unittest.TestCase):
           grant usage on schema auth to anon, authenticated;
           create publication supabase_realtime;
         """)
+        baseline = json.loads((ROOT / "supabase/migration-baseline.json").read_text())
+        baseline_end = list(baseline["migrations"])[-1]
         for migration in sorted((ROOT / "supabase/migrations").glob("*.sql")):
             try:
                 cls.sql(migration.read_text())
+                if migration.name == baseline_end:
+                    result = cls.sql((ROOT / "tools/deployment/baseline-check.sql").read_text())
+                    if result.stdout.strip() != "t":
+                        raise RuntimeError("Frozen baseline catalog checks failed in local PostgreSQL")
             except subprocess.CalledProcessError as error:
                 raise RuntimeError(f"{migration.name}: {error.stderr}") from error
 

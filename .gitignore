@@ -15,3 +15,8 @@ test-results/
 /outputs/
 /work/
 /@smoke-notesdesktop/
+
+# Local deployment state and Python test caches must not enter releases.
+.wrangler/
+supabase/.temp/
+__pycache__/
