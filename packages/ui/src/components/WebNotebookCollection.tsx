@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type RefObject } from "react";
 import { ArrowUpRight, ChevronDown, Layers, Plus } from "lucide-react";
 import {
   RecordValidationError,
@@ -10,6 +10,8 @@ interface Props {
   notebooks: Notebook[];
   expanded?: boolean;
   onExpandedChange?(expanded: boolean): void;
+  onManage?(): void;
+  manageRef?: RefObject<HTMLButtonElement | null>;
   onSelect(id: string): void;
   onCreate(name: string): Promise<void>;
 }
@@ -19,6 +21,8 @@ export function WebNotebookCollection({
   notebooks,
   expanded: controlledExpanded,
   onExpandedChange,
+  onManage,
+  manageRef,
   onSelect,
   onCreate,
 }: Props) {
@@ -106,6 +110,16 @@ export function WebNotebookCollection({
       {error && <p role="alert">{error}</p>}
       <div className="web-section-heading">
         <h2>我的收藏</h2>
+        {onManage && (
+          <button
+            type="button"
+            className="collection-manage"
+            ref={manageRef}
+            onClick={onManage}
+          >
+            管理便签本
+          </button>
+        )}
         <button
           type="button"
           className="collection-expand"

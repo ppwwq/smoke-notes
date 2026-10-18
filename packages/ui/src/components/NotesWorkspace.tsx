@@ -11,6 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { SortableStack } from "./SortableStack";
+import { RecordActions } from "./RecordActions";
 
 interface NotesWorkspaceProps {
   web?: boolean;
@@ -36,6 +37,7 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
     onKeyDown,
   } = useActionMenu();
   const [creating, setCreating] = useState(false);
+  const [arranging, setArranging] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const pending = useRef(false);
   async function create(kind: NoteKind) {
@@ -63,14 +65,16 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
         <h1>先建立一个便签本</h1>
         <p>
           {props.web
-            ? "打开便签本导航，点「＋」建立一个空间。工作、生活、灵感，都可以各有一处。"
+            ? "在下方「便签本」中建立一个空间。工作、生活、灵感，都可以各有一处。"
             : "左侧的「＋」是入口。工作、生活、灵感，都可以各有一处安静空间。"}
         </p>
       </main>
     );
 
   return (
-    <main className="notes-board">
+    <main
+      className={`notes-board${props.web && arranging ? " arranging" : ""}`}
+    >
       <header className="notes-board-header">
         <div>
           <p className="eyebrow">
@@ -131,6 +135,20 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
         <p role="alert" className="create-note-error">
           {createError}
         </p>
+      )}
+      {props.web && (
+        <div className="list-context-bar">
+          <span>
+            {arranging ? "拖动手柄，调整便签顺序" : "你的记录，都在这里"}
+          </span>
+          <button
+            type="button"
+            aria-pressed={arranging}
+            onClick={() => setArranging(!arranging)}
+          >
+            {arranging ? "完成整理" : "整理便签"}
+          </button>
+        </div>
       )}
       <section
         className="notes-board-scroll"
@@ -194,7 +212,7 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
         {props.web && (
           <div className="web-section-heading">
             <h2>全部便签</h2>
-            <span>拖动手柄，自由整理</span>
+            <span>点「整理」，调整顺序</span>
           </div>
         )}
         {props.notes.length === 0 ? (
@@ -217,44 +235,55 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
             renderItem={(note) => {
               const displayTitle = note.title || "无标题便签";
               return (
-                <article className={`sticky-card note-color-${note.color}`}>
-                  <button
-                    type="button"
-                    className="sticky-card-open"
-                    aria-label={`打开便签：${displayTitle}`}
-                    onClick={() => {
-                      if (props.openOnSingleClick) props.onOpenNote(note.id);
-                    }}
-                    onDoubleClick={() => props.onOpenNote(note.id)}
-                  >
-                    <span className="sticky-card-accent" />
-                    {note.kind === "todo" && (
-                      <span
-                        className="note-kind-marker"
-                        aria-label={`待办便签：${displayTitle}`}
+                <div className="note-card-shell">
+                  <article className={`sticky-card note-color-${note.color}`}>
+                    <button
+                      type="button"
+                      className="sticky-card-open"
+                      aria-label={`打开便签：${displayTitle}`}
+                      onClick={() => {
+                        if (props.openOnSingleClick) props.onOpenNote(note.id);
+                      }}
+                      onDoubleClick={() => props.onOpenNote(note.id)}
+                    >
+                      <span className="sticky-card-accent" />
+                      {note.kind === "todo" && (
+                        <span
+                          className="note-kind-marker"
+                          aria-label={`待办便签：${displayTitle}`}
+                        >
+                          <CheckSquare2 size={13} />
+                        </span>
+                      )}
+                      <strong>{displayTitle}</strong>
+                      <p>{note.body || "空白便签"}</p>
+                      <time>
+                        {new Date(note.updatedAt).toLocaleDateString("zh-HK", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </time>
+                      <ExternalLink size={14} className="sticky-open-icon" />
+                    </button>
+                    {!props.web && (
+                      <button
+                        type="button"
+                        className="sticky-card-delete"
+                        aria-label={`删除便签：${displayTitle}`}
+                        onClick={() => void props.onTrashNote(note.id)}
                       >
-                        <CheckSquare2 size={13} />
-                      </span>
+                        <Trash2 size={14} />
+                      </button>
                     )}
-                    <strong>{displayTitle}</strong>
-                    <p>{note.body || "空白便签"}</p>
-                    <time>
-                      {new Date(note.updatedAt).toLocaleDateString("zh-HK", {
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </time>
-                    <ExternalLink size={14} className="sticky-open-icon" />
-                  </button>
-                  <button
-                    type="button"
-                    className="sticky-card-delete"
-                    aria-label={`删除便签：${displayTitle}`}
-                    onClick={() => void props.onTrashNote(note.id)}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </article>
+                  </article>
+                  {props.web && (
+                    <RecordActions
+                      name={displayTitle}
+                      kind="便签"
+                      onTrash={() => props.onTrashNote(note.id)}
+                    />
+                  )}
+                </div>
               );
             }}
           />

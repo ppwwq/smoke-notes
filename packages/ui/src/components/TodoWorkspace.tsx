@@ -6,6 +6,7 @@ import {
 } from "@smoke-notes/core";
 import { Plus, Trash2 } from "lucide-react";
 import { SortableStack } from "./SortableStack";
+import { RecordActions } from "./RecordActions";
 
 export type TodoFilter = "all" | "open" | "done";
 
@@ -99,6 +100,7 @@ function TodoTextInput({
 
 export function TodoWorkspace(props: TodoWorkspaceProps) {
   const [text, setText] = useState("");
+  const [arranging, setArranging] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const createPending = useRef(false);
@@ -158,7 +160,9 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
   }
 
   return (
-    <main className="todo-workspace">
+    <main
+      className={`todo-workspace${props.web && arranging ? " arranging" : ""}`}
+    >
       <header className="todo-hero">
         <div>
           <p className="eyebrow">TODAY · FOCUS</p>
@@ -258,6 +262,16 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
             {value === "all" ? "全部" : value === "open" ? "未完成" : "已完成"}
           </button>
         ))}
+        {props.web && (
+          <button
+            type="button"
+            className="arrange-todos"
+            aria-pressed={arranging}
+            onClick={() => setArranging(!arranging)}
+          >
+            {arranging ? "完成整理" : "整理待办"}
+          </button>
+        )}
       </div>
 
       {actionError && <p role="alert">{actionError}</p>}
@@ -298,14 +312,22 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
                   <span />
                 </button>
                 <TodoTextInput todo={todo} onUpdate={props.onUpdate} />
-                <button
-                  type="button"
-                  className="row-delete"
-                  aria-label={`删除：${todo.text}`}
-                  onClick={() => void props.onTrash(todo.id)}
-                >
-                  <Trash2 size={15} />
-                </button>
+                {props.web ? (
+                  <RecordActions
+                    name={todo.text}
+                    kind="待办"
+                    onTrash={() => props.onTrash(todo.id)}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="row-delete"
+                    aria-label={`删除：${todo.text}`}
+                    onClick={() => void props.onTrash(todo.id)}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                )}
               </article>
             )}
           />

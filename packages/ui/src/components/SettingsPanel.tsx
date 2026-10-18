@@ -8,6 +8,9 @@ import {
   Power,
   SlidersHorizontal,
   X,
+  ArrowLeft,
+  ChevronRight,
+  Palette,
 } from "lucide-react";
 import type { DesktopBridge } from "../types";
 import type { WebBackground } from "../useWebBackground";
@@ -46,6 +49,13 @@ export function SettingsPanel({
   const [launchAtLogin, setLaunchAtLogin] = useState(false);
   const [launchAtLoginBusy, setLaunchAtLoginBusy] = useState(Boolean(bridge));
   const launchAtLoginRequest = useRef(0);
+  const [section, setSection] = useState<
+    "overview" | "appearance" | "sync" | "trash"
+  >("overview");
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const restorePending = useRef(false);
+  const [restoreError, setRestoreError] = useState("");
+  const web = webBackground !== undefined;
 
   useEffect(() => {
     if (!bridge) return;
@@ -80,23 +90,85 @@ export function SettingsPanel({
   }, [bridge]);
 
   return (
-    <WebDialog
-      web={webBackground !== undefined}
-      kind="settings"
-      label="设置与同步"
-      onClose={onClose}
-    >
+    <WebDialog web={web} kind="settings" label="设置与同步" onClose={onClose}>
       <header>
         <div>
+          {web && section !== "overview" && (
+            <button
+              type="button"
+              className="settings-back"
+              aria-label="返回设置"
+              onClick={() => setSection("overview")}
+            >
+              <ArrowLeft size={16} />
+              设置
+            </button>
+          )}
           <p className="eyebrow">PREFERENCES</p>
-          <h2>设置与同步</h2>
+          <h2>
+            {web
+              ? {
+                  overview: "设置",
+                  appearance: "外观与阅读",
+                  sync: "手机与同步",
+                  trash: "最近删除",
+                }[section]
+              : "设置与同步"}
+          </h2>
         </div>
         <button type="button" aria-label="关闭设置" onClick={onClose}>
           <X size={18} />
         </button>
       </header>
 
-      {webBackground !== undefined && (
+      {web && section === "overview" && (
+        <div className="settings-sections">
+          <button
+            type="button"
+            className="settings-entry"
+            onClick={() => setSection("appearance")}
+          >
+            <Palette size={22} />
+            <span>
+              <strong>外观与阅读</strong>
+              <small>背景、纸面与透明效果</small>
+            </span>
+            <ChevronRight size={18} />
+          </button>
+          <button
+            type="button"
+            className="settings-entry"
+            onClick={() => setSection("sync")}
+          >
+            <Link2 size={22} />
+            <span>
+              <strong>手机与同步</strong>
+              <small>连接设备，接续记录</small>
+            </span>
+            <ChevronRight size={18} />
+          </button>
+          <button
+            type="button"
+            className="settings-entry"
+            onClick={() => {
+              setRestoreError("");
+              setSection("trash");
+            }}
+          >
+            <ArchiveRestore size={22} />
+            <span>
+              <strong>最近删除</strong>
+              <small>
+                {trash.length
+                  ? `${trash.length} 项内容可恢复`
+                  : "这里收好暂时移走的内容"}
+              </small>
+            </span>
+            <ChevronRight size={18} />
+          </button>
+        </div>
+      )}
+      {webBackground !== undefined && section === "appearance" && (
         <div className="settings-group">
           <h3>外观</h3>
           <fieldset className="web-background-options">
@@ -236,12 +308,16 @@ export function SettingsPanel({
         </div>
       )}
 
-      <div className="settings-group">
+      <div className="settings-group" hidden={web && section !== "sync"}>
         <h3>
           <Link2 size={16} />
           手机同步
         </h3>
-        <p>生成一次性二维码和 6 位码，将手机加入你的私人空间。</p>
+        <p>
+          {web
+            ? "连接设备，让便签在手机与电脑之间接续。"
+            : "生成一次性二维码和 6 位码，将手机加入你的私人空间。"}
+        </p>
         <button
           type="button"
           className="pairing-action"
@@ -251,7 +327,10 @@ export function SettingsPanel({
         </button>
       </div>
 
-      <div className="settings-group trash-group">
+      <div
+        className="settings-group trash-group"
+        hidden={web && section !== "trash"}
+      >
         <h3>
           <ArchiveRestore size={16} />
           最近删除
@@ -268,12 +347,30 @@ export function SettingsPanel({
                     ? item.record.title
                     : item.record.text}
               </span>
-              <button type="button" onClick={() => void onRestore(item)}>
+              <button
+                type="button"
+                disabled={restoreBusy}
+                onClick={async () => {
+                  if (restorePending.current) return;
+                  restorePending.current = true;
+                  setRestoreBusy(true);
+                  setRestoreError("");
+                  try {
+                    await onRestore(item);
+                  } catch {
+                    setRestoreError("恢复失败，内容仍在最近删除中，请重试。");
+                  } finally {
+                    restorePending.current = false;
+                    setRestoreBusy(false);
+                  }
+                }}
+              >
                 恢复
               </button>
             </div>
           ))
         )}
+        {restoreError && <p role="alert">{restoreError}</p>}
       </div>
     </WebDialog>
   );

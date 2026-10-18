@@ -11,11 +11,15 @@ import {
   Plus,
   Settings2,
   Trash2,
+  X,
 } from "lucide-react";
 import { SortableStack } from "./SortableStack";
 import { notebookTint } from "./notebook-tint";
+import { RecordActions } from "./RecordActions";
 
 interface SidebarProps {
+  web?: boolean;
+  onClose?(): void;
   notebooks: Notebook[];
   selectedNotebookId: string | null;
   view: "notes" | "todos";
@@ -97,6 +101,16 @@ export function Sidebar(props: SidebarProps) {
           <span>SMOKE NOTES</span>
         </div>
       </div>
+      {props.onClose && (
+        <button
+          type="button"
+          className="sidebar-close"
+          aria-label="关闭便签本管理"
+          onClick={props.onClose}
+        >
+          <X size={20} />
+        </button>
+      )}
 
       <button
         type="button"
@@ -195,26 +209,41 @@ export function Sidebar(props: SidebarProps) {
                     <span>{notebook.name}</span>
                   </button>
                 )}
-                <button
-                  type="button"
-                  className="notebook-action"
-                  aria-label={`重命名便签本：${notebook.name}`}
-                  onClick={() => {
-                    renameRevision.current += 1;
-                    setRenamingId(notebook.id);
-                    setRenameValue(notebook.name);
-                  }}
-                >
-                  <Pencil size={12} />
-                </button>
-                <button
-                  type="button"
-                  className="notebook-action notebook-delete"
-                  aria-label={`删除便签本：${notebook.name}`}
-                  onClick={() => void props.onTrashNotebook(notebook.id)}
-                >
-                  <Trash2 size={12} />
-                </button>
+                {props.web ? (
+                  <RecordActions
+                    name={notebook.name}
+                    kind="便签本"
+                    onRename={() => {
+                      renameRevision.current += 1;
+                      setRenamingId(notebook.id);
+                      setRenameValue(notebook.name);
+                    }}
+                    onTrash={() => props.onTrashNotebook(notebook.id)}
+                  />
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="notebook-action"
+                      aria-label={`重命名便签本：${notebook.name}`}
+                      onClick={() => {
+                        renameRevision.current += 1;
+                        setRenamingId(notebook.id);
+                        setRenameValue(notebook.name);
+                      }}
+                    >
+                      <Pencil size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      className="notebook-action notebook-delete"
+                      aria-label={`删除便签本：${notebook.name}`}
+                      onClick={() => void props.onTrashNotebook(notebook.id)}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </>
+                )}
               </div>
             )}
           />

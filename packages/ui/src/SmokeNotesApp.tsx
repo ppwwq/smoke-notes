@@ -29,6 +29,7 @@ import {
   Wifi,
   WifiOff,
   X,
+  Palette,
 } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { WebNotebookCollection } from "./components/WebNotebookCollection";
@@ -118,7 +119,12 @@ export function SmokeNotesApp({
   const { preparingQuit, quitError } = useDesktopQuit(desktopBridge, editorRef);
   const activeNoteRef = useRef<Note | null>(null);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
-  const [editorMenu, setEditorMenu] = useState<"format" | "more" | null>(null);
+  const [editorMenu, setEditorMenu] = useState<
+    "format" | "more" | "appearance" | null
+  >(null);
+  const [editorActionError, setEditorActionError] = useState("");
+  const editorDeletePending = useRef(false);
+  const [editorDeleting, setEditorDeleting] = useState(false);
   const closeEditorMenu = useCallback(() => setEditorMenu(null), []);
   const refreshRevision = useRef(0);
   const invalidateRefresh = useCallback(() => {
@@ -285,15 +291,19 @@ export function SmokeNotesApp({
         ".notes-board, .notes-board-scroll, .todo-workspace, .web-notebook-collection",
       )
       .forEach((element) => {
-        element.scrollTop = positions?.get(element.className) ?? 0;
+        element.scrollTop = positions?.get(element.classList[0]) ?? 0;
       });
   }, [platform, browseKey, webEditing]);
   const { style: viewportStyle, compactEditing } = useWebViewport(webEditing);
   useEffect(() => {
     setEditorMenu(null);
+    setEditorActionError("");
   }, [compactEditing, selectedNoteId]);
   useEffect(() => {
     if (editorMenu !== "more") return;
+    moreButtonRef.current?.parentElement
+      ?.querySelector<HTMLElement>('[role="menuitem"]')
+      ?.focus();
     const outside = (event: PointerEvent) => {
       if (
         event.target instanceof Element &&
@@ -380,7 +390,7 @@ export function SmokeNotesApp({
             </button>
           </header>
         )}
-        {!webEditing && (
+        {!webEditing && platform !== "web" && (
           <button
             type="button"
             className="mobile-menu"
@@ -411,6 +421,8 @@ export function SmokeNotesApp({
             onClick={() => setMobileNavOpen(false)}
           />
           <Sidebar
+            web={platform === "web"}
+            onClose={platform === "web" && mobile ? closeMobileNav : undefined}
             notebooks={notebooks}
             selectedNotebookId={selectedNotebookId}
             view={view}
@@ -465,7 +477,7 @@ export function SmokeNotesApp({
               return;
             const positions =
               browsePositions.current.get(browseKey) ?? new Map();
-            positions.set(element.className, element.scrollTop);
+            positions.set(element.classList[0], element.scrollTop);
             browsePositions.current.set(browseKey, positions);
           }}
         >
@@ -485,6 +497,8 @@ export function SmokeNotesApp({
               notebooks={notebooks}
               expanded={notebookCardsExpanded}
               onExpandedChange={setNotebookCardsExpanded}
+              onManage={() => setMobileNavOpen(true)}
+              manageRef={triggerRef}
               onSelect={(id) => {
                 setNotebookCollectionOpen(false);
                 void selectNotebook(id);
@@ -572,7 +586,7 @@ export function SmokeNotesApp({
                   {manualSaving ? "保存中…" : "保存"}
                 </button>
                 <div className="editor-more-control">
-                  {compactEditing && (
+                  {(compactEditing || platform === "web") && (
                     <button
                       type="button"
                       ref={moreButtonRef}
@@ -587,37 +601,118 @@ export function SmokeNotesApp({
                       <MoreHorizontal size={18} />
                     </button>
                   )}
-                  {(!compactEditing || editorMenu === "more") && (
+                  {((platform !== "web" && !compactEditing) ||
+                    editorMenu === "more") && (
                     <div
-                      role={compactEditing ? "menu" : undefined}
-                      className={
-                        compactEditing ? "editor-more-menu" : undefined
+                      role={
+                        compactEditing || platform === "web"
+                          ? "menu"
+                          : undefined
                       }
+                      className={
+                        compactEditing || platform === "web"
+                          ? "editor-more-menu"
+                          : undefined
+                      }
+                      onKeyDown={(event) => {
+                        if (
+                          !["ArrowDown", "ArrowUp", "Home", "End"].includes(
+                            event.key,
+                          )
+                        )
+                          return;
+                        event.preventDefault();
+                        const items = Array.from(
+                          event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                            '[role="menuitem"]',
+                          ),
+                        );
+                        const current = items.indexOf(
+                          document.activeElement as HTMLButtonElement,
+                        );
+                        items[
+                          event.key === "Home"
+                            ? 0
+                            : event.key === "End"
+                              ? items.length - 1
+                              : (current +
+                                  (event.key === "ArrowUp" ? -1 : 1) +
+                                  items.length) %
+                                items.length
+                        ]?.focus();
+                      }}
                     >
+                      {platform === "web" && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => setEditorMenu("appearance")}
+                        >
+                          <Palette size={18} />
+                          便签外观
+                        </button>
+                      )}
+                      {platform === "web" && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            closeEditorMenu();
+                            setSettingsOpen(true);
+                          }}
+                        >
+                          <Settings2 size={18} />
+                          应用设置
+                        </button>
+                      )}
                       <button
                         type="button"
                         aria-label="删除便签"
-                        role={compactEditing ? "menuitem" : undefined}
+                        role={
+                          compactEditing || platform === "web"
+                            ? "menuitem"
+                            : undefined
+                        }
+                        className="destructive-action"
+                        disabled={editorDeleting}
                         onClick={async () => {
+                          if (editorDeletePending.current) return;
+                          editorDeletePending.current = true;
+                          setEditorDeleting(true);
                           closeEditorMenu();
-                          if (!(await saveBeforeLeaving())) return;
-                          await repository.trashNote(selectedNote.id);
-                          setLastTrashed({
-                            entity: "note",
-                            id: selectedNote.id,
-                            label: selectedNote.title,
-                          });
-                          setSelectedNoteId(null);
-                          await refreshAfterMutation(selectedNotebookId);
+                          setEditorActionError("");
+                          try {
+                            if (!(await saveBeforeLeaving())) return;
+                            await repository.trashNote(selectedNote.id);
+                            setLastTrashed({
+                              entity: "note",
+                              id: selectedNote.id,
+                              label: selectedNote.title,
+                            });
+                            setSelectedNoteId(null);
+                            await refreshAfterMutation(selectedNotebookId);
+                          } catch {
+                            setEditorActionError(
+                              "删除失败，便签和当前内容已保留，请重试。",
+                            );
+                          } finally {
+                            editorDeletePending.current = false;
+                            setEditorDeleting(false);
+                          }
                         }}
                       >
                         <Trash2 size={17} />
-                        {compactEditing && "删除便签"}
+                        {(compactEditing || platform === "web") && "删除便签"}
                       </button>
                     </div>
                   )}
                 </div>
               </header>
+              {editorActionError && (
+                <p role="alert" className="editor-action-error">
+                  {editorActionError}
+                </p>
+              )}
               <Suspense
                 fallback={
                   <div role="status" className="rich-editor-loading">
@@ -628,8 +723,14 @@ export function SmokeNotesApp({
                 <RichNoteEditor
                   ref={editorRef}
                   compact={compactEditing}
+                  progressive={platform === "web"}
                   formatOpen={editorMenu === "format"}
                   onFormatClose={closeEditorMenu}
+                  onFormatToggle={() =>
+                    setEditorMenu(editorMenu === "format" ? null : "format")
+                  }
+                  appearanceOpen={editorMenu === "appearance"}
+                  onAppearanceClose={closeEditorMenu}
                   note={selectedNote}
                   onSaveStatusChange={setSaveStatus}
                   onSave={async (changes) => {

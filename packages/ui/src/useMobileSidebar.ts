@@ -24,10 +24,17 @@ export function useMobileSidebar(open: boolean, close: () => void) {
         panel?.querySelectorAll<HTMLElement>(
           'button:not(:disabled), input:not(:disabled), [tabindex="0"]',
         ) ?? [],
-      ).filter((element) => !element.closest("[inert]"));
+      ).filter(
+        (element) =>
+          !element.closest("[inert]") &&
+          getComputedStyle(element).display !== "none" &&
+          getComputedStyle(element).visibility !== "hidden",
+      );
     panel?.querySelector<HTMLElement>(".sidebar button")?.focus();
     const keydown = (event: KeyboardEvent) => {
       if (event.isComposing) return;
+      // A record action dialog owns focus/Escape while above this management panel.
+      if (document.querySelector(".web-dialog[role=dialog]")) return;
       if (event.key === "Escape") {
         event.preventDefault();
         close();
