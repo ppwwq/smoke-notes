@@ -10,5 +10,5 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: url("/icon-192.png") center / contain no-repeat;
+  background: url("/icon-192.png?v=glass-20261018") center / contain no-repeat;
 }
