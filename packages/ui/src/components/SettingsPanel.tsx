@@ -125,7 +125,7 @@ export function SettingsPanel({
                       ? "米黄色横线纸"
                       : value === "glass"
                         ? "通透边缘与柔和高光"
-                        : "深色烟雾背景"}
+                        : "暖白底色与柔和色块"}
                   </small>
                 </span>
               </label>

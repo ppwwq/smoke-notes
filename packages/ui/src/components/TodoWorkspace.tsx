@@ -10,6 +10,7 @@ import { SortableStack } from "./SortableStack";
 type Filter = "all" | "open" | "done";
 
 interface TodoWorkspaceProps {
+  web?: boolean;
   todos: Todo[];
   onCreate: (text: string) => Promise<void>;
   onToggle: (id: string) => Promise<void>;
@@ -145,18 +146,49 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
               : "从一件小事开始。"}
           </p>
         </div>
-        <div
-          className="progress-orbit"
-          aria-label={`完成 ${completed} 项，共 ${props.todos.length} 项`}
-        >
-          <span>
+        {!props.web && (
+          <div
+            className="progress-orbit"
+            aria-label={`完成 ${completed} 项，共 ${props.todos.length} 项`}
+          >
+            <span>
+              {props.todos.length
+                ? Math.round((completed / props.todos.length) * 100)
+                : 0}
+            </span>
+            <small>%</small>
+          </div>
+        )}
+      </header>
+
+      {props.web && (
+        <section className="web-progress-card" aria-label="待办进度">
+          <div>
+            <p>一步一步，慢慢完成。</p>
+            <h2>
+              {props.todos.length && completed === props.todos.length
+                ? "今天的清单，完成了。"
+                : "每一件小事，都算数。"}
+            </h2>
+            <span>
+              {props.todos.length - completed} 件待完成 · {completed} 件已完成
+            </span>
+          </div>
+          <strong
+            aria-label={`完成 ${completed} 项，共 ${props.todos.length} 项`}
+          >
             {props.todos.length
               ? Math.round((completed / props.todos.length) * 100)
               : 0}
-          </span>
-          <small>%</small>
-        </div>
-      </header>
+            <small>%</small>
+          </strong>
+          <progress
+            value={completed}
+            max={props.todos.length || 1}
+            aria-label="完成进度"
+          />
+        </section>
+      )}
 
       <div className="todo-composer">
         <Plus size={17} />
@@ -191,6 +223,7 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
             type="button"
             key={value}
             className={filter === value ? "active" : ""}
+            aria-pressed={filter === value}
             onClick={() => setFilter(value)}
           >
             {value === "all" ? "全部" : value === "open" ? "未完成" : "已完成"}
@@ -217,6 +250,7 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
                 <button
                   type="button"
                   className="completion-ring"
+                  aria-pressed={todo.completed}
                   aria-label={`${todo.completed ? "恢复" : "完成"}：${todo.text}`}
                   onClick={() => void props.onToggle(todo.id)}
                 >

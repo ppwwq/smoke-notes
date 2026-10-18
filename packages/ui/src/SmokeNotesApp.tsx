@@ -22,6 +22,8 @@ import {
   Menu,
   Minus,
   MoreHorizontal,
+  Settings2,
+  Library,
   NotebookPen,
   Trash2,
   Wifi,
@@ -47,31 +49,6 @@ import { useWebBackground } from "./useWebBackground";
 import { useDesktopQuit } from "./useDesktopQuit";
 import { GlassContext } from "./components/glass/GlassContext";
 import { GlassSurface } from "./components/glass/GlassSurface";
-const LiquiNav = lazy(() =>
-  import("./components/glass/LiquiNav").catch(() => ({ default: PlainWebNav })),
-);
-function PlainWebNav({
-  view,
-  onChange,
-}: {
-  view: "notes" | "todos";
-  onChange: (value: "notes" | "todos") => void;
-}) {
-  return (
-    <nav className="mobile-bottom-nav" aria-label="手机主导航">
-      {(["notes", "todos"] as const).map((value) => (
-        <button
-          type="button"
-          key={value}
-          aria-current={view === value ? "page" : undefined}
-          onClick={() => onChange(value)}
-        >
-          {value === "notes" ? "便签" : "待办"}
-        </button>
-      ))}
-    </nav>
-  );
-}
 import "./styles.css";
 
 interface SmokeNotesAppProps {
@@ -458,6 +435,7 @@ export function SmokeNotesApp({
           )}
           {view === "todos" ? (
             <TodoWorkspace
+              web={platform === "web"}
               todos={todos}
               onCreate={async (text) => {
                 await repository.createTodo(text);
@@ -627,6 +605,7 @@ export function SmokeNotesApp({
             </main>
           ) : (
             <NotesWorkspace
+              web={platform === "web"}
               notebook={selectedNotebook}
               notes={notes}
               openOnSingleClick={platform === "web"}
@@ -669,26 +648,53 @@ export function SmokeNotesApp({
         </div>
 
         <div style={{ display: "contents" }} inert={mobile && mobileNavOpen}>
-          {!webEditing && platform === "web" && background === "glass" && (
-            <Suspense
-              fallback={
-                <PlainWebNav
-                  view={view}
-                  onChange={(value) =>
-                    value === "todos" ? void showTodos() : setView("notes")
-                  }
-                />
-              }
-            >
-              <LiquiNav
-                view={view}
-                onChange={(value) =>
-                  value === "todos" ? void showTodos() : setView("notes")
-                }
-              />
-            </Suspense>
+          {!webEditing && platform === "web" && (
+            <nav className="web-dock" aria-label="手机主导航">
+              <button
+                type="button"
+                aria-label="便签"
+                aria-current={view === "notes" ? "page" : undefined}
+                onClick={() => setView("notes")}
+              >
+                <NotebookPen size={20} />
+                <span>便签</span>
+              </button>
+              <button
+                type="button"
+                aria-label="待办"
+                aria-current={view === "todos" ? "page" : undefined}
+                onClick={() => void showTodos()}
+              >
+                <CheckCircle2 size={20} />
+                <span>待办</span>
+              </button>
+              <button
+                type="button"
+                aria-label="浏览便签本"
+                onClick={() => {
+                  if (mobile) setMobileNavOpen(true);
+                  else
+                    document
+                      .querySelector<HTMLButtonElement>(
+                        ".sidebar .notebook-link, .sidebar-heading button",
+                      )
+                      ?.focus();
+                }}
+              >
+                <Library size={20} />
+                <span>便签本</span>
+              </button>
+              <button
+                type="button"
+                aria-label="打开设置"
+                onClick={() => setSettingsOpen(true)}
+              >
+                <Settings2 size={20} />
+                <span>设置</span>
+              </button>
+            </nav>
           )}
-          {!webEditing && !(platform === "web" && background === "glass") && (
+          {!webEditing && platform === "desktop" && (
             <nav
               className="mobile-bottom-nav"
               aria-label="手机主导航"

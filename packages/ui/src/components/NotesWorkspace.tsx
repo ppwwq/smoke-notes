@@ -2,15 +2,18 @@ import { useRef, useState } from "react";
 import { useActionMenu } from "../useActionMenu";
 import type { Note, NoteKind, Notebook } from "@smoke-notes/core";
 import {
+  ArrowUpRight,
   CheckSquare2,
   ExternalLink,
   FilePlus2,
+  NotebookPen,
   StickyNote,
   Trash2,
 } from "lucide-react";
 import { SortableStack } from "./SortableStack";
 
 interface NotesWorkspaceProps {
+  web?: boolean;
   notebook: Notebook | null;
   notes: Note[];
   openOnSingleClick: boolean;
@@ -66,9 +69,13 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
     <main className="notes-board">
       <header className="notes-board-header">
         <div>
-          <p className="eyebrow">STICKY NOTES</p>
+          <p className="eyebrow">
+            {props.web ? "YOUR EVERYDAY SPACE" : "STICKY NOTES"}
+          </p>
           <h1>{props.notebook.name}</h1>
-          <span>{props.notes.length} 张桌面便签</span>
+          <span>
+            {props.notes.length} 张{props.web ? "" : "桌面"}便签
+          </span>
         </div>
         <div
           className="create-note-control"
@@ -125,6 +132,67 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
         className="notes-board-scroll"
         aria-label={`${props.notebook.name}便签列表`}
       >
+        {props.web && (
+          <div className="web-note-overview">
+            <section className="web-collection-card" aria-label="便签本概览">
+              <div className="overview-label">
+                <span>一点一滴，都在这里</span>
+                <NotebookPen size={22} />
+              </div>
+              <div className="collection-total">
+                <strong>{String(props.notes.length).padStart(2, "0")}</strong>
+                <span>张便签</span>
+              </div>
+              <div className="collection-breakdown">
+                <span>
+                  随手记{" "}
+                  <b>
+                    {props.notes.filter((note) => note.kind === "note").length}
+                  </b>
+                </span>
+                <span>
+                  待办清单{" "}
+                  <b>
+                    {props.notes.filter((note) => note.kind === "todo").length}
+                  </b>
+                </span>
+              </div>
+            </section>
+            <section className="web-capture-card" aria-label="快速记录">
+              <div>
+                <p>MAKE ROOM FOR IDEAS</p>
+                <h2>
+                  想到了，
+                  <br />
+                  就记下来。
+                </h2>
+              </div>
+              <div className="paper-stack" aria-hidden="true">
+                <i />
+                <i />
+                <i>
+                  <span />
+                  <span />
+                  <span />
+                </i>
+              </div>
+              <button
+                type="button"
+                disabled={creating}
+                onClick={() => void create("note")}
+              >
+                <span>写一张便签</span>
+                <ArrowUpRight size={19} />
+              </button>
+            </section>
+          </div>
+        )}
+        {props.web && (
+          <div className="web-section-heading">
+            <h2>全部便签</h2>
+            <span>拖动手柄，自由整理</span>
+          </div>
+        )}
         {props.notes.length === 0 ? (
           <button
             type="button"
