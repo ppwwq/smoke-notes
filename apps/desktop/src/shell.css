@@ -75,9 +75,9 @@ textarea {
   -webkit-app-region: no-drag;
 }
 .note-window .note-tools-panel {
-  position: absolute;
-  top: 30px;
-  right: -65px;
+  position: fixed;
+  top: 36px;
+  right: 9px;
   width: min(220px, calc(100vw - 18px));
   max-height: calc(100vh - 45px);
   overflow-y: auto;

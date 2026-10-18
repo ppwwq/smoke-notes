@@ -1,57 +1,47 @@
-# SmokeNotes 0.1.11-rc.1 Windows release candidate
+# SmokeNotes 0.1.11-rc.2 Windows candidate
 
-Status: candidate built and tested locally on 2026-10-18; not approved for public release. This is the full application, with the existing main window, notebooks, settings, pairing, sync runtime and trash recovery. It is not the separate Clear Preview product.
+Updated 2026-10-18. This is the full SmokeNotes application, including notebooks, settings, pairing, synchronization, trash recovery and independent desktop notes. It is an unsigned release candidate, not a completed or publicly published production release. No installed copy of 0.1.10 was installed over, uninstalled or modified.
 
-## Changes
+## Behavior and fixes
 
-- Creating a desktop note opens its native 320 × 400 window while retaining the main editor. Explicit saved sizes and positions remain unchanged.
-- Notes use a transparent native window and a translucent colored background, initially 28% opaque. Text stays opaque. The narrow bar provides tools, minimize, explicit pin state, opacity and close. Formatting, colors, recent notes and deletion remain available.
-- This implementation is transparency, not live blur of windows behind it. It does not present Mica or a CSS blur as native background blur.
-- Main-window sync status now reflects the sync runtime instead of reporting a cloud connection merely because the network is online.
-- Release builds require HTTPS cloud/web endpoints and a public Supabase key. Missing/sample settings and secret/service-role keys fail the release build. Existing development and isolated preview workflows remain available.
-- The NSIS installer retains the existing `com.smokenotes.desktop` identity and `烟笺` product name. It does not automatically launch at completion and does not delete application data on uninstall.
-- An explicit absolute `--user-data-dir` isolates both Electron profile and session data before initialization. This mode retains the full UI and sync code but suppresses all launch-at-login changes. Without this argument, normal application behavior is preserved.
+- New desktop notes open at 320 × 400 with a native transparent window, 28% background opacity, a weak border and opaque text. Existing explicitly saved sizes remain supported. Formatting, colors, recent notes, pinning and deletion remain accessible through the compact bar. This is transparency, not native background blur.
+- A quit requested while a document initializes waits for its save handler. A 30-second readiness timeout cancels the request without discarding drafts or quitting unexpectedly later. Failure to restore a window no longer leaves surviving editors permanently unable to quit. Save failures still cancel exit.
+- Automatic-save failures are visible even when formatting controls are folded; successful recovery clears the warning. The pin button waits for initial saved window state, avoiding a toggle based on an uninitialized value.
+- The tools menu remains inside 250, 286, 300 and 320 pixel windows. The previous menu was clipped at narrower widths.
+- Main-window cloud status reflects the sync runtime. Release builds validate HTTPS endpoints and public browser keys. Explicit absolute `--user-data-dir` isolates the whole test profile and suppresses login-item changes.
+- The NSIS identity remains `com.smokenotes.desktop`, product name `烟笺`. Installer configuration retains application data on uninstall and does not automatically launch after installation. These configuration facts do not constitute an executed installer lifecycle test.
 
-## Validation completed
+## Evidence
 
-- 40 test files / 361 tests passed, plus `pnpm typecheck` and `pnpm lint`.
-- A synthetic version-1 IndexedDB fixture upgrades to the existing version-3 schema, preserving note identity, Chinese text, blank paragraphs, trashed records and queued operations. This change adds no database schema version.
-- The packaged full application was tested with an explicit workspace-only synthetic profile and an application-only localhost proxy blocking external access. Preview mode was false; main window, settings and native note windows worked. No real notes, credentials or cloud accounts were used.
-- Normal creation, editing, native 320 × 400 bounds, opacity, pin on/off, deletion and restoration of the same note ID, position persistence and save-before-quit passed.
-- After full exit, the synthetic profile was copied to a backup and a second restore directory. The final candidate reopened the restored copy and preserved the same note ID, exact title/body, 320 × 400 dimensions, position and 28% opacity. Its blocked cloud connection correctly displayed sync failure, not a successful connection.
-- Chromium composition events and renderer zoom at 100%, 125% and 150% passed. These do not constitute physical Windows IME or Windows DPI acceptance.
-- The production public configuration was recovered from the existing public deployment at `https://smoke-notes-philipwwq.pages.dev`. A read-only Supabase auth-settings request returned HTTP 200. No anonymous signup, pairing or cloud write was performed.
+Current source passed **367 tests across 40 files**, `pnpm typecheck`, and `pnpm lint`. Full diff review covered base `2032276` through the final working tree. Additional regressions cover startup restoration failure, pending initialization quit, visible autosave failure/recovery, and pin state initialization.
 
-## Build
+| Check                               | Observed result                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Genuine Chinese input               | Native Windows key events `nihao` and Space produced `你好` in the real editor. Trusted beforeinput/input events were recorded. Exact note ID, title and body survived full exit and the final candidate restart; pending queue was zero.                                                                                                                         |
+| Quit during initialization          | In the final packaged application, a single quit was requested during an actual document's `did-start-loading` event, with `isLoading=true`. The application later emitted `will-quit` and its process exited.                                                                                                                                                    |
+| Actual Windows scaling              | Windows Settings selected 125% and 150%; Electron display scale and renderer DPR matched, renderer zoom stayed 1, no horizontal overflow occurred, and pin hit testing plus both toggle directions matched native/UI/persisted state.                                                                                                                             |
+| Scaling restoration                 | Original 100% and 2560 × 1440 were restored. A width change from 320 to 375 was observed after the round trip; the test note was reset to its original 320 × 400 and position. Dimension stability is not accepted as passed.                                                                                                                                     |
+| Native screenshot                   | Cropped real window capture contains only fictional test content and a task-created background. Capture pinning was restored, the temporary backdrop was destroyed, the application exited, and ports 9330/9331 closed.                                                                                                                                           |
+| Live sync, from the preceding run   | Exactly two already-authorized anonymous identities paired into one fictional-data workspace. Desktop→web, web→desktop, offline reconnect and concurrent body conflict preservation passed; both queues reached zero. No new identities were created in this continuation. The second endpoint was a persistent web client/mobile viewport, not a physical phone. |
+| Earlier lifecycle evidence retained | Full-app note creation/edit/delete/restore, same-ID recovery, position/opacity persistence, pending queue restart, synthetic v1→v3 database upgrade and closed-profile backup/restore passed. No new database schema is introduced.                                                                                                                               |
+| Artifact inspection                 | Packaged main/preload/renderer bytes match the final build. No test profiles, environment files or credentials are included. Authenticode reports NotSigned.                                                                                                                                                                                                      |
 
-Provide `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` and `VITE_WEB_APP_URL` via the established deployment environment or ignored local configuration. Only public browser configuration belongs in a desktop bundle. Then run:
+Evidence logs and JSON are included in the delivery ZIP. The two test accounts and fictional workspace remain available; they were not deleted. User accounts and real-note storage were not used.
 
-```sh
-pnpm install --frozen-lockfile
-pnpm test
-pnpm typecheck
-pnpm lint
-pnpm --filter @smoke-notes/desktop package
-```
+## Remaining acceptance limits
 
-The local candidate used the already installed Electron 44.0.0 distribution and cached builder/NSIS tools. Signing was explicitly disabled for that local build only; production configuration does not disable signing. The candidate is unsigned and must not be represented as a signed release. Do not bypass Windows warnings to validate it.
+1. **Installation, upgrade, uninstall and reinstall remain untested.** The user has 0.1.10 installed and no spare Windows environment; this installer was never executed. Validate that lifecycle using synthetic data in an isolated Windows environment before calling this a fully accepted release.
+2. **DPI round-trip geometry remains a known limitation.** Controls and content passed at 125%/150%, but native window width changed on returning to 100%. Multiple active monitors, unplug/reconnect and cross-monitor movement were not tested.
+3. **Native IME interruption coverage is incomplete.** Actual Chinese candidate output and save/restart passed. This IME emitted trusted text input, without observable DOM composition events. Candidate cancellation, focus interruption and quitting while a native candidate is open have not been accepted; synthetic composition regressions are separate evidence.
+4. Physical-phone/PWA installation and Windows sign-out/reboot startup behavior remain outside executed acceptance.
+5. The user accepted unsigned distribution. No signing credentials were created or purchased, no security warning was bypassed, and the package is not represented as signed. There was no main-branch merge, public Release, backend migration or deployment.
 
-## Backup, upgrade and rollback procedure
+## Build and recovery
 
-Run this procedure first in a dedicated Windows VM or test user with synthetic data. Do not run the candidate installer against the user's installed 0.1.10 during development.
+The build used existing Electron 44.0.0 and cached NSIS tools, with public production configuration from the established deployment. Source release configuration still allows an authorized signing setup; signing was disabled only for this local candidate command.
 
-1. Record the installed version and actual Electron user-data directory; do not guess its path from the translated product name. Close the application using tray Quit and verify its processes have exited.
-2. Copy the entire application user-data directory to a separate backup, preserving IndexedDB, Local Storage and window preferences together. Do not copy an open database. Keep backups private because a real profile can contain notes and session credentials.
-3. Install the candidate and verify synthetic notes, notebooks, trash, pending sync queue, main settings, native windows and startup preference. Verify shortcuts, installer version metadata and a second launch.
-4. Quit, uninstall and confirm application data is retained. Reinstall and verify the same data. Confirm no launch-at-login entry was added or changed by the test procedure.
-5. For rollback, quit fully, keep a separate copy of the candidate profile, reinstall the prior trusted version, and restore the complete pre-upgrade backup. Do not merge individual database files. Cloud changes would require separate reconciliation; local backup does not undo server writes.
+Before any future upgrade, quit normally and copy the **entire closed profile** to a private backup. Preserve IndexedDB, Local Storage and window preferences together. Test installation, data retention after uninstall, reinstall and rollback in an isolated account/VM first. Do not merge individual database files or copy an open database. Restoring a local backup does not undo cloud writes.
 
-## Required release gates
+Installer: `SmokeNotes-Setup-0.1.11-rc.2.exe` (113,293,459 bytes).
 
-- Installer install/upgrade/uninstall/reinstall on isolated Windows: pending. The current computer already has 0.1.10 installed; Windows Sandbox and Hyper-V tooling were not available. The candidate installer was built but not executed on that account.
-- Physical Chinese Windows IME candidate selection, interruption, focus changes and rapid quit: pending user/device acceptance. Synthetic composition is not a substitute.
-- Actual Windows scaling at 100%, 125% and 150%, second-monitor movement and unplug/reconnect: pending. Current observed display is one 2560 × 1440 monitor at scale factor 1.
-- Live desktop/mobile pairing, two-client sync, offline reconnection, concurrent conflict recovery and pending-write quit: pending an authorized isolated cloud workspace/accounts. Public endpoint HTTP 200 does not prove these flows.
-- Signing and distribution trust: no current-user code-signing certificate or existing repository release workflow was found. Obtain an authorized signing route and verify signature/timestamp before formal publication; do not purchase or bypass warnings automatically.
-
-No main-branch merge, formal GitHub Release, replacement of the installed application, new startup entry or system-setting change is part of this candidate work.
+SHA-256: `49c3edbc50d64c301b1691c0e2a527bee45a9ca9e78dea2ead25dea8cb004344`.

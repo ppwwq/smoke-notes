@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { runInNewContext } from "node:vm";
 import { describe, expect, it, vi } from "vitest";
 
@@ -9,17 +9,26 @@ import { describe, expect, it, vi } from "vitest";
 // native window properties before emitting `closed`.
 async function startMain(
   previewMode: boolean | "packaged" | "release-test" = false,
+  editorReady = true,
+  restoreFailure?: Error,
+  quitDuringRestore = false,
 ) {
   const paths = new Map<string, string>();
   const startup: string[] = [];
   const trayCreated = vi.fn();
   const beforeRequest = vi.fn();
+  const startupError = vi.fn();
   type Handler = (
     event: { sender: { id: number } },
     ...args: unknown[]
   ) => unknown;
   const handlers = new Map<string, Handler>();
   const files = new Map<string, string>();
+  if (restoreFailure)
+    files.set(
+      join("test-user-data", "note-window-states.json"),
+      JSON.stringify([{ noteId: "restore-failure", isOpen: true }]),
+    );
   const windows: TestWindow[] = [];
   const appEvents = new Map<
     string,
@@ -55,8 +64,15 @@ async function startMain(
     hide = vi.fn();
     setMenuBarVisibility = vi.fn();
     setIgnoreMouseEvents = vi.fn();
-    loadURL = vi.fn(async () => {});
-    loadFile = vi.fn(async () => {});
+    private async loadRenderer() {
+      if (restoreFailure && this.contents.id > 1) {
+        if (quitDuringRestore)
+          appEvents.get("before-quit")?.({ preventDefault: vi.fn() });
+        throw restoreFailure;
+      }
+    }
+    loadURL = vi.fn(() => this.loadRenderer());
+    loadFile = vi.fn(() => this.loadRenderer());
     getBounds = () => ({ x: 0, y: 0, width: 490, height: 500 });
     isAlwaysOnTop = () => false;
     isDestroyed = () => this.destroyed;
@@ -140,7 +156,7 @@ async function startMain(
       argv:
         previewMode === true ? ["smoke-notes", "--preview"] : ["smoke-notes"],
     },
-    console,
+    console: { ...console, error: startupError },
     setTimeout,
     clearTimeout,
   });
@@ -152,8 +168,12 @@ async function startMain(
   };
   const open = async (noteId: string) => {
     await invoke("note-window:open", windows[0].webContents.id, noteId);
+    if (editorReady && handlers.has("app:editor-ready"))
+      invoke("app:editor-ready", windows.at(-1)!.webContents.id, true);
     return windows[windows.length - 1];
   };
+  if (editorReady && handlers.has("app:editor-ready"))
+    invoke("app:editor-ready", 1, true);
   const requestQuit = () => {
     const preventDefault = vi.fn();
     appEvents.get("before-quit")?.({ preventDefault });
@@ -170,10 +190,96 @@ async function startMain(
     trayCreated,
     beforeRequest,
     files,
+    startupError,
   };
 }
 
 describe("main-process note window lifecycle", () => {
+  it.each([false, true])(
+    "allows safe quit after restoring a note fails (quit during restore: %s)",
+    async (quitDuringRestore) => {
+      const failure = new Error("Restored note could not load");
+      const { invoke, windows, requestQuit, quit, startupError, files } =
+        await startMain(false, true, failure, quitDuringRestore);
+      expect(startupError).toHaveBeenCalledWith(
+        "Could not initialize application windows",
+        failure,
+      );
+      expect(windows[1].isDestroyed()).toBe(true);
+      expect(
+        JSON.parse(
+          files.get(join("test-user-data", "note-window-states.json"))!,
+        ),
+      ).toEqual([
+        expect.objectContaining({ noteId: "restore-failure", isOpen: true }),
+      ]);
+      if (!quitDuringRestore) requestQuit();
+      await vi.waitFor(() =>
+        expect(windows[0].webContents.send).toHaveBeenCalledWith(
+          "app:prepare-quit",
+          1,
+        ),
+      );
+      expect(quit).not.toHaveBeenCalled();
+      invoke("app:quit-result", 1, 1, false);
+      expect(quit).not.toHaveBeenCalled();
+      expect(windows[0].webContents.send).toHaveBeenCalledWith(
+        "app:cancel-quit",
+        1,
+        expect.any(String),
+      );
+      requestQuit();
+      invoke("app:quit-result", 1, 2, true);
+      expect(quit).toHaveBeenCalledOnce();
+    },
+  );
+  it("cancels a stuck initialization without discarding drafts or quitting later unexpectedly", async () => {
+    vi.useFakeTimers();
+    try {
+      const { invoke, windows, requestQuit, quit } = await startMain(
+        false,
+        false,
+      );
+      requestQuit();
+      await expect(invoke("note-window:open", 1, "blocked")).rejects.toThrow();
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(quit).not.toHaveBeenCalled();
+      expect(windows[0].webContents.send).toHaveBeenCalledWith(
+        "app:cancel-quit",
+        0,
+        expect.stringContaining("准备超时"),
+      );
+      invoke("app:editor-ready", 1, true);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(quit).not.toHaveBeenCalled();
+      requestQuit();
+      invoke("app:quit-result", 1, 1, true);
+      expect(quit).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("honors one quit requested before editors finish initialization", async () => {
+    const { open, invoke, windows, requestQuit, quit } = await startMain(
+      false,
+      false,
+    );
+    const note = await open("initializing");
+    requestQuit();
+    expect(windows[0].webContents.send).not.toHaveBeenCalledWith(
+      "app:prepare-quit",
+      expect.anything(),
+    );
+    invoke("app:editor-ready", 1, true);
+    expect(quit).not.toHaveBeenCalled();
+    invoke("app:editor-ready", note.webContents.id, true);
+    await vi.waitFor(() =>
+      expect(note.webContents.send).toHaveBeenCalledWith("app:prepare-quit", 1),
+    );
+    invoke("app:quit-result", 1, 1, true);
+    invoke("app:quit-result", note.webContents.id, 1, true);
+    expect(quit).toHaveBeenCalledOnce();
+  });
   it("keeps the full production app in an explicit isolated data directory without changing login items", async () => {
     const { invoke, paths, startup, trayCreated, beforeRequest, windows } =
       await startMain("release-test");
@@ -312,7 +418,7 @@ describe("main-process note window lifecycle", () => {
     );
   });
 
-  it("does not quit during an already pending note navigation", async () => {
+  it("waits for pending navigation and then honors the original quit request", async () => {
     const { open, invoke, requestQuit, quit } = await startMain();
     const note = await open("note-1");
     let loaded!: () => void;
@@ -333,9 +439,12 @@ describe("main-process note window lifecycle", () => {
     expect(quit).not.toHaveBeenCalled();
     loaded();
     await switching;
-    requestQuit();
-    await invoke("app:quit-result", note.webContents.id, 2, true);
-    await invoke("app:quit-result", 1, 2, true);
+    invoke("app:editor-ready", note.webContents.id, true);
+    await vi.waitFor(() =>
+      expect(note.webContents.send).toHaveBeenCalledWith("app:prepare-quit", 1),
+    );
+    await invoke("app:quit-result", note.webContents.id, 1, true);
+    await invoke("app:quit-result", 1, 1, true);
     expect(quit).toHaveBeenCalledOnce();
   });
 

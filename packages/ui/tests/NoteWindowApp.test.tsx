@@ -85,6 +85,60 @@ describe("NoteWindowApp", () => {
     await database.delete();
   });
 
+  it("keeps pin disabled until the persisted window state is known", async () => {
+    const saved = await bridge.getNoteWindowState(noteId);
+    let finishState!: (state: typeof saved) => void;
+    vi.mocked(bridge.getNoteWindowState).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishState = resolve;
+        }),
+    );
+    render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    const pin = await screen.findByRole("button", { name: "窗口置顶" });
+    expect(pin).toBeDisabled();
+    fireEvent.click(pin);
+    expect(bridge.setAlwaysOnTop).not.toHaveBeenCalled();
+    await act(async () => finishState({ ...saved, alwaysOnTop: true }));
+    expect(screen.getByRole("button", { name: "取消置顶" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "取消置顶" }));
+    await waitFor(() =>
+      expect(bridge.setAlwaysOnTop).toHaveBeenCalledWith(false),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "窗口置顶" })).toBeEnabled(),
+    );
+  });
+
+  it("shows an autosave failure with tools closed and clears it after recovery", async () => {
+    vi.spyOn(repository, "updateNote").mockRejectedValueOnce(
+      new Error("disk full"),
+    );
+    render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    const title = await screen.findByRole("textbox", { name: "便签标题" });
+    fireEvent.change(title, { target: { value: "尚未保存的草稿" } });
+    const error = await screen.findByRole("alert");
+    expect(error).toBeVisible();
+    expect(error).toHaveTextContent("保存失败");
+    expect(
+      screen.queryByRole("toolbar", { name: "文字格式" }),
+    ).not.toBeInTheDocument();
+    expect(title).toHaveValue("尚未保存的草稿");
+    expect((await repository.getNote(noteId))?.title).toBe("桌面便签");
+    fireEvent.change(title, { target: { value: "恢复保存的草稿" } });
+    await waitFor(async () =>
+      expect((await repository.getNote(noteId))?.title).toBe("恢复保存的草稿"),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
+    );
+    expect(title).toHaveValue("恢复保存的草稿");
+  });
+
   it("offers formatting and note colors from the tools menu", async () => {
     render(
       <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
