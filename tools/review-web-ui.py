@@ -82,7 +82,10 @@ with sync_playwright() as p:
     # Keyboard reordering uses the existing dnd-kit handle and writes the original records.
     previous_order = page.locator('.sticky-card strong').all_text_contents()
     handle = page.get_by_role('button', name='拖动：周末的小计划', exact=True)
-    handle.focus(); page.keyboard.press('Space'); page.keyboard.press('ArrowDown'); page.keyboard.press('Space')
+    handle.focus(); page.keyboard.press('Space')
+    expect(page.locator('.sticky-card-grid > .sortable-row.is-dragging')).to_have_count(1)
+    page.wait_for_timeout(100)
+    page.keyboard.press('ArrowDown'); page.wait_for_timeout(150); page.keyboard.press('Space')
     page.wait_for_function('(before) => JSON.stringify([...document.querySelectorAll(".sticky-card strong")].map(el => el.textContent)) !== JSON.stringify(before)', arg=previous_order)
     check('Keyboard note reorder changes the rendered record order')
     page.get_by_role('button', name='打开设置', exact=True).click()
