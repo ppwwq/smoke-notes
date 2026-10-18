@@ -31,6 +31,7 @@ import {
   X,
 } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
+import { WebNotebookCollection } from "./components/WebNotebookCollection";
 import { NotesWorkspace } from "./components/NotesWorkspace";
 import { TodoWorkspace } from "./components/TodoWorkspace";
 import { SettingsPanel } from "./components/SettingsPanel";
@@ -91,6 +92,7 @@ export function SmokeNotesApp({
   );
   const selectedNotebookIdRef = useRef<string | null>(null);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+  const [notebookCollectionOpen, setNotebookCollectionOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
@@ -293,6 +295,14 @@ export function SmokeNotesApp({
     };
   }, [editorMenu, closeEditorMenu]);
 
+  async function createNotebook(name: string) {
+    if (!(await saveBeforeLeaving())) return;
+    const created = await repository.createNotebook(name);
+    setNotebookCollectionOpen(false);
+    setView("notes");
+    await refreshAfterMutation(created.id);
+  }
+
   async function saveManually() {
     if (manualSavePending.current) return;
     manualSavePending.current = true;
@@ -384,14 +394,15 @@ export function SmokeNotesApp({
             notebooks={notebooks}
             selectedNotebookId={selectedNotebookId}
             view={view}
-            onSelectNotebook={(id) => void selectNotebook(id)}
-            onShowTodos={() => void showTodos()}
-            onCreateNotebook={async (name) => {
-              if (!(await saveBeforeLeaving())) return;
-              const created = await repository.createNotebook(name);
-              setView("notes");
-              await refreshAfterMutation(created.id);
+            onSelectNotebook={(id) => {
+              setNotebookCollectionOpen(false);
+              void selectNotebook(id);
             }}
+            onShowTodos={() => {
+              setNotebookCollectionOpen(false);
+              void showTodos();
+            }}
+            onCreateNotebook={createNotebook}
             onMoveNotebook={async (id, previous, next) => {
               await repository.moveNotebook(id, previous, next);
               await refreshAfterMutation(selectedNotebookId);
@@ -433,7 +444,16 @@ export function SmokeNotesApp({
               <span>{online ? "已连接" : "离线中"}</span>
             </div>
           )}
-          {view === "todos" ? (
+          {platform === "web" && notebookCollectionOpen ? (
+            <WebNotebookCollection
+              notebooks={notebooks}
+              onSelect={(id) => {
+                setNotebookCollectionOpen(false);
+                void selectNotebook(id);
+              }}
+              onCreate={createNotebook}
+            />
+          ) : view === "todos" ? (
             <TodoWorkspace
               web={platform === "web"}
               todos={todos}
@@ -653,8 +673,15 @@ export function SmokeNotesApp({
               <button
                 type="button"
                 aria-label="便签"
-                aria-current={view === "notes" ? "page" : undefined}
-                onClick={() => setView("notes")}
+                aria-current={
+                  !notebookCollectionOpen && view === "notes"
+                    ? "page"
+                    : undefined
+                }
+                onClick={() => {
+                  setNotebookCollectionOpen(false);
+                  setView("notes");
+                }}
               >
                 <NotebookPen size={20} />
                 <span>便签</span>
@@ -662,8 +689,15 @@ export function SmokeNotesApp({
               <button
                 type="button"
                 aria-label="待办"
-                aria-current={view === "todos" ? "page" : undefined}
-                onClick={() => void showTodos()}
+                aria-current={
+                  !notebookCollectionOpen && view === "todos"
+                    ? "page"
+                    : undefined
+                }
+                onClick={() => {
+                  setNotebookCollectionOpen(false);
+                  void showTodos();
+                }}
               >
                 <CheckCircle2 size={20} />
                 <span>待办</span>
@@ -671,15 +705,8 @@ export function SmokeNotesApp({
               <button
                 type="button"
                 aria-label="浏览便签本"
-                onClick={() => {
-                  if (mobile) setMobileNavOpen(true);
-                  else
-                    document
-                      .querySelector<HTMLButtonElement>(
-                        ".sidebar .notebook-link, .sidebar-heading button",
-                      )
-                      ?.focus();
-                }}
+                aria-current={notebookCollectionOpen ? "page" : undefined}
+                onClick={() => setNotebookCollectionOpen(true)}
               >
                 <Library size={20} />
                 <span>便签本</span>
@@ -703,7 +730,10 @@ export function SmokeNotesApp({
               <button
                 type="button"
                 className={view === "notes" ? "active" : ""}
-                onClick={() => setView("notes")}
+                onClick={() => {
+                  setNotebookCollectionOpen(false);
+                  setView("notes");
+                }}
               >
                 <NotebookPen size={19} />
                 <span>便签</span>
@@ -711,7 +741,10 @@ export function SmokeNotesApp({
               <button
                 type="button"
                 className={view === "todos" ? "active" : ""}
-                onClick={() => void showTodos()}
+                onClick={() => {
+                  setNotebookCollectionOpen(false);
+                  void showTodos();
+                }}
               >
                 <CheckCircle2 size={19} />
                 <span>待办</span>

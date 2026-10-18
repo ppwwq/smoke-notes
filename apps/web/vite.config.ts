@@ -20,8 +20,8 @@ export default defineConfig({
         name: "烟笺 Smoke Notes",
         short_name: "烟笺",
         description: "安静、离线可用的便签与待办。",
-        theme_color: "#0d1013",
-        background_color: "#0d1013",
+        theme_color: "#fbfaf8",
+        background_color: "#fbfaf8",
         display: "standalone",
         start_url: "/",
         icons: [

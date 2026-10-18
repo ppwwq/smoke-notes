@@ -101,6 +101,26 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
   const [createError, setCreateError] = useState("");
   const createPending = useRef(false);
   const draftRevision = useRef(0);
+  const [actionError, setActionError] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const togglePending = useRef(new Set<string>());
+  const [busyIds, setBusyIds] = useState<string[]>([]);
+  async function toggle(todo: Todo) {
+    if (togglePending.current.has(todo.id)) return;
+    togglePending.current.add(todo.id);
+    setBusyIds((current) => [...current, todo.id]);
+    setActionError("");
+    setFeedback("");
+    try {
+      await props.onToggle(todo.id);
+      setFeedback(todo.completed ? "已放回待办清单。" : "做得好，又完成一件。");
+    } catch {
+      setActionError("更新失败，请重试。内容已保留。");
+    } finally {
+      togglePending.current.delete(todo.id);
+      setBusyIds((current) => current.filter((id) => id !== todo.id));
+    }
+  }
   const [filter, setFilter] = useState<Filter>("all");
   const visible = useMemo(
     () =>
@@ -162,13 +182,16 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
       </header>
 
       {props.web && (
-        <section className="web-progress-card" aria-label="待办进度">
+        <section
+          className={`web-progress-card${props.todos.length && completed / props.todos.length >= 0.75 ? " nearly-done" : ""}`}
+          aria-label="待办进度"
+        >
           <div>
             <p>一步一步，慢慢完成。</p>
             <h2>
               {props.todos.length && completed === props.todos.length
-                ? "今天的清单，完成了。"
-                : "每一件小事，都算数。"}
+                ? "今天的清单，\n完成了。"
+                : "每一件小事，\n都算数。"}
             </h2>
             <span>
               {props.todos.length - completed} 件待完成 · {completed} 件已完成
@@ -231,6 +254,17 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
         ))}
       </div>
 
+      {actionError && <p role="alert">{actionError}</p>}
+      {props.web && (
+        <p
+          className="todo-feedback"
+          role="status"
+          aria-label="待办操作反馈"
+          aria-live="polite"
+        >
+          {feedback}
+        </p>
+      )}
       <div className="todo-list-scroll">
         {visible.length === 0 ? (
           <div className="todo-empty">
@@ -252,7 +286,8 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
                   className="completion-ring"
                   aria-pressed={todo.completed}
                   aria-label={`${todo.completed ? "恢复" : "完成"}：${todo.text}`}
-                  onClick={() => void props.onToggle(todo.id)}
+                  disabled={busyIds.includes(todo.id)}
+                  onClick={() => void toggle(todo)}
                 >
                   <span />
                 </button>

@@ -1,0 +1,106 @@
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  LocalRepository,
+  SmokeNotesDatabase,
+  type NoteColor,
+} from "@smoke-notes/core";
+import { SmokeNotesApp } from "@smoke-notes/ui/app";
+import "./web.css";
+import "./brand.css";
+import "./glass.css";
+import "./redesign.css";
+import "./review.css";
+
+// A separate origin AND database. This entry never constructs a cloud client.
+const database = new SmokeNotesDatabase("smoke-notes-ui-review-v1");
+const repository = new LocalRepository(database, {
+  workspaceId: "smoke-review-workspace",
+  deviceId: "smoke-review-device",
+});
+
+async function seedExamples() {
+  await database.transaction(
+    "rw",
+    database.notebooks,
+    database.notes,
+    database.todos,
+    database.operations,
+    async () => {
+      // Count tombstones too, so deleting every notebook never resets the demo.
+      if (await database.notebooks.count()) return;
+      const notebook = await repository.createNotebook("日常灵感");
+      await repository.createNotebook("工作与计划");
+      await repository.createNotebook("生活碎片");
+      await repository.createNotebook("阅读摘记");
+      const notes: Array<[string, string, NoteColor]> = [
+        [
+          "一个轻盈的开始",
+          "留一点空白，给今天的新想法。\n把日子过成自己喜欢的样子。",
+          "violet",
+        ],
+        [
+          "周末的小计划",
+          "去逛一家没去过的书店\n买一束花，散步到河边。",
+          "sage",
+        ],
+        [
+          "关于这次设计",
+          "让界面安静一些，让内容清楚一些。\n每一次记录，都可以很轻松。",
+          "amber",
+        ],
+        ["读到的一句话", "生活的美，往往藏在那些不经意的小事里。", "rose"],
+        [
+          "下周见面聊什么",
+          "整理新版本的思路和反馈\n把需要确认的问题写在这里。",
+          "sky",
+        ],
+        [
+          "旅行清单",
+          "相机、一本书、一双舒服的鞋。\n剩下的，留给路上。",
+          "graphite",
+        ],
+      ];
+      for (const [title, body, color] of notes)
+        await repository.createNote(notebook.id, { title, body, color });
+      await repository.createNote(notebook.id, {
+        title: "今天慢慢做",
+        kind: "todo",
+        color: "sage",
+        body: "整理书桌\n给绿植浇水\n读二十页书",
+      });
+      for (const text of [
+        "整理这一周的灵感",
+        "读二十页喜欢的书",
+        "给家人打个电话",
+        "出门散步三十分钟",
+      ])
+        await repository.createTodo(text);
+      const todos = await repository.listTodos();
+      await repository.toggleTodo(todos[0].id);
+    },
+  );
+}
+
+const root = createRoot(document.getElementById("root")!);
+seedExamples()
+  .then(() => {
+    root.render(
+      <StrictMode>
+        <div className="review-shell">
+          <div className="review-banner">
+            交互预览 · 示例数据 · 修改仅保存在此浏览器
+          </div>
+          <SmokeNotesApp repository={repository} platform="web" />
+        </div>
+      </StrictMode>,
+    );
+  })
+  .catch(() => {
+    root.render(
+      <main className="review-error">
+        <h1>暂时无法打开预览</h1>
+        <p>请允许浏览器使用本地存储后刷新。已有记录不会被清除。</p>
+      </main>,
+    );
+  });

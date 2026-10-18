@@ -1,47 +1,75 @@
 # SmokeNotes Web redesign review
 
-Base: `main` at `5e669b2278a42733baaf3126b0b9c4472b8b732e`. Dedicated branch: `codex/smoke-notes-ui-redesign`. PR #1 is unrelated and untouched.
+Base: `5e669b2278a42733baaf3126b0b9c4472b8b732e` (main when work began). Branch: `codex/smoke-notes-ui-redesign`. Review covers the entire branch, including the initial `5f27093` presentation checkpoint. PR #1 is separate and untouched.
 
-## Reference and scope
+## Implemented design
 
-Web only, responsive desktop and mobile. Verified Douyin reference: warm off-white canvas, heavy black sans-serif titles, generous space, large softly rounded pastel/lilac cards, near-black action cards, lime action buttons, light separators, black floating capsule navigation with a white selected pill. Motion chapters: completion feedback, linked checkboxes, stacked expansion, snapping cards, inertia, circular reveal. Apply only where the existing notes workflow benefits. No timer, finance, or unrelated dashboard features.
+The web application now uses a warm ivory canvas, heavy sans-serif headings, lilac overview/progress cards, near-black capture cards, lime actions, large rounded cards, subtle shadows and a black floating capsule dock. The notebook browser uses real existing notebooks in lilac/lime/white/black stacked cards, with an accessible expand/collapse control. Todo progress turns soft green at 75%; completion feedback is announced only after a successful update. Failed completion writes retain the task and show an error; duplicate pending toggles are blocked.
 
-No applicable repository AGENTS.md or local engineering/design SKILL.md was found (dependency guidance does not apply to application code); cloud skills are unavailable in this execution environment.
+Parent-verified video values: ivory `#FBFAF8`, black `#111111`, lilac `#C4BBFE`, lime `#D4E73E`, orange `#FF6825`, completed progress `#C5E882`. Orange/time wheels/timers were not imposed on unrelated note operations. The reference's narrow mobile layout is adapted to a persistent desktop notebook sidebar and two-column note cards. Mobile overview cards use native horizontal scroll snapping; note lists scroll vertically. No scrolling animation loop or new motion dependency was added.
 
-## Feature preservation checklist (verified from code)
+Reference evidence was the parent's direct video inspection and supplied measurements. Library metadata for the seven reference screenshots was accessible, but their image-byte downloads failed in this execution environment. Therefore this is a reference-led adaptation, not a claimed pixel-for-pixel comparison of those source images. Actual implemented desktop/mobile screenshots were visually inspected here.
 
-- [ ] Existing workspace/device localStorage keys and `smoke-notes-web` IndexedDB schema remain unchanged. No data reset or migration.
-- [ ] Notebook create, rename, select, drag/keyboard reorder, delete with cascading trash, restore.
-- [ ] Normal and checklist notes: create, open, edit title/body, six note colors, preview, reorder, delete, immediate undo, Recently Deleted restore.
-- [ ] Tiptap rich text: bold, italic, underline, strike, task list, text color/highlight palettes and clear actions; keyboard editing/undo and IME composition.
-- [ ] Debounced autosave, explicit save, save status/error/retry, flush before navigation, background save, unsaved unload warning.
-- [ ] Preserve drafts during stale reads, remote updates, delete/restore, save races, IME and viewport changes; conflict copy behavior unchanged.
-- [ ] Standalone todos: create, edit on blur, complete/reopen, all/open/done filters, progress, drag/keyboard reorder, delete/undo/restore, failed drafts retained.
-- [ ] Web pairing gate: numeric code, URL code, anonymous auth, workspace persistence and existing error/loading handling.
-- [ ] Pairing settings entry/error state retained. Current web bootstrap does not supply a pairing-generation controller (existing limitation); desktop generates QR/codes. Do not falsely claim web generates codes.
-- [ ] Offline-first rendering before network auth; sync queue, retries, realtime refresh, conflict handling, sync status. PWA manifest/service worker/cache behavior retained.
-- [ ] Default/paper/glass background choices, browser persistence, reduced transparency and system preferences retained.
-- [ ] Mobile drawer focus trap, Escape/outside close, focus restoration; dialog focus behavior; compact keyboard editing and safe-area support.
-- [ ] Desktop bridge, window state, recent tabs, transparency, pin, startup, tray and quit-save coordination remain untouched; shared regressions run.
+Alignment QA checked common content edges, card padding, title baselines, icon/text gaps, navigation pill balance, card proportions, dialog margins and compact editor height. Small optical offsets apply only to the up-right arrow and notebook icon. A reduced-transparency theme conflict found in screenshot review was fixed by removing legacy dark glass overrides. Compact touch editing now uses the full width and a shorter header, preserving the same editor instance.
 
-## Regression coverage and boundaries
+No applicable repository AGENTS.md or local engineering/design SKILL.md was found. When cloud skills were available, the Library and React best-practices skills were read; the static single-file preview skill was inspected and excluded because this is a multi-file repository project.
 
-Existing suite: 36 files / 341 tests documented on main; baseline rerun passed: 36 files / 341 tests. Includes core repository/domain/content/merge/cloud/sync/runtime tests; UI editor/drafts/IME/viewport/dialog/navigation/reorder/todos/pairing/status tests; Electron window lifecycle/quit tests; web offline/auth bootstrap tests. PostgreSQL integration tests exist but no backend changes are planned, and this task must not access a production database.
+## Feature preservation checklist
 
-Browser validation uses isolated example data on a separate preview origin. Live hosted auth, real paired devices and native Windows behavior are not asserted by local browser tests.
+Checked means preserved by code review and the listed local regression evidence, not live production acceptance.
 
-## Delivery
+- [x] Existing workspace/device storage keys and `smoke-notes-web` IndexedDB schema unchanged. No data reset or migration.
+- [x] Notebook create, rename, select, pointer/keyboard reorder, delete with cascading trash and restore. Existing repository methods are reused by the new browser.
+- [x] Normal/checklist note creation, opening, title/body editing, six note colors, previews, ordering, deletion, immediate undo and Recently Deleted restore.
+- [x] Tiptap bold, italic, underline, strike, task lists, text/highlight palettes and clear actions; undo and IME behavior retained. Stored color values are unchanged; their light-theme display is adjusted for legibility.
+- [x] Autosave, explicit save, status/error/retry, save-before-navigation, background save and unsaved-unload warning remain in the original editor/application logic.
+- [x] Draft protections for stale reads, remote refreshes/deletions, save races, IME and viewport changes, and note conflict copies retained; core/editor regression suites pass.
+- [x] Standalone todos: create, edit-on-blur, complete/reopen, all/open/done filters, progress, reorder, delete/undo/restore and failed-draft retention. New completion pending/error feedback has regression coverage.
+- [x] Pairing code/URL gate, anonymous auth, workspace persistence and loading/error handling unchanged. Existing pairing unit and web bootstrap regressions pass.
+- [x] Pairing settings/error entry retained. Existing limitation: web bootstrap does not provide a code-generation controller; desktop generates QR/codes. The preview explicitly shows the existing unavailable state and does not simulate cloud pairing success.
+- [x] Offline-first rendering, sync queue/retries/realtime refresh/conflicts/status contracts unchanged. Actual built PWA was reloaded offline, opened cached editor code, saved and survived a second reload.
+- [x] Default/paper/glass choices and persistence, reduced transparency, forced-color fallback and reduced motion retained. Theme toggles do not replace the editor.
+- [x] Mobile drawer/dialog focus handling, Escape, compact keyboard viewport and safe areas retained. Browser checks cover widths 320, 390, 768, 1024 and 1440 without document overflow.
+- [x] Desktop bridge/window state/recent tabs/transparency/pin/startup/tray/quit-save code untouched. Existing desktop regressions and build pass.
 
-Implementation, checks, screenshots, and preview verification will be recorded here after completion. No merge or production deployment is authorized.
+## Validation
 
-## Safe checkpoint for xhigh continuation
+- Before changes: 36 files / 341 tests passed.
+- After changes: 37 files / 345 tests passed. Four added cases cover notebook identity/expansion, failed/IME creation, duplicate creation/newer drafts, and failed/duplicate completion writes.
+- TypeScript, ESLint, Prettier and `git diff --check` pass. Generated `dist-review` is excluded using the same conventions as existing build output; no test or lint rule was disabled.
+- `pnpm build` passes for web/PWA, desktop renderer and Electron. The existing large-chunk warning remains on the regular build. `pnpm --filter @smoke-notes/web build:review` passes.
+- `tools/review-web-ui.py` exercises real browser interactions against the built isolated review. It checks CRUD/undo, notebook selection and expansion, keyboard reorder operation, todo filters/progress, theme persistence, dialogs, offline editing, compact draft retention and reduced motion. No page errors were observed.
+- Separate built-PWA browser check: service worker activation, offline reload, cached lazy editor opening, offline save and another reload all passed.
+- Keyboard viewport coverage is synthetic Chromium visual-viewport shrinkage; it is not a real iOS/Android keyboard test. Live hosted auth/multi-device sync and native Windows behavior were not exercised. No production database was accessed.
 
-- Baseline verified with `pnpm_config_verify_deps_before_run=false pnpm test` (the environment supplies pnpm 11, whose default dependency check tries to reinstall the existing pnpm 10 tree; the environment-only flag avoids that and does not change repo configuration).
-- Initial web-only presentation markup added: four-action capsule navigation; notebook summary and quick-capture cards; todo progress card. Desktop rendering retains existing markup branches.
-- **Not visually finished**: `apps/web/src/redesign.css` still needs to be implemented and imported after `glass.css`. No screenshots or accessible preview have yet been delivered. No branch push, PR, merge, deployment, database, credentials or CI changes.
-- Python Playwright and `/usr/bin/chromium` are installed. Use real browser automation with isolated sample data for screenshots. Node Playwright is not available at repo root. Browser artifacts should be saved under `/workspace/shared` and uploaded through Library tools, returning `library_file_id` per user request.
-- Available hosting tools discovered are Sites and Vercel; Sites tool documentation explicitly calls all its URLs production, so do not use it for this no-production task. Inspect alternative preview support or a temporary tunnel, and verify accessibility before claiming delivery.
-- Verified reference updates received: warm off-white / cream background, heavy black sans serif Today / Focus headings, ample whitespace, large round lilac progress card; near-black Focus card with lime Done button and little stacked-books illustration; black floating capsule dock with four white icons and a white selected capsule; flat cards, subtle shadows, compact black/white rows and fine gray separators. Parent may send further screenshots.
-- User prioritizes actual desktop/mobile webpage screenshots, including main screens and expanded states; upload full-resolution originals to Library. Keep production untouched until review.
+The environment's pnpm 11 default dependency check tries to reinstall the pre-existing pnpm 10 dependency tree. Commands used `pnpm_config_verify_deps_before_run=false` without modifying the lockfile or package-manager configuration.
 
-Additional verified reference: Lists uses full-width large-round cards (lilac Home, lime Work, white Learn, near-black Travel), stacked when collapsed and separated vertically when expanded; small uppercase subtitles, task rows, right-aligned counts. Plan uses a narrow vertical timeline and rounded time blocks with orange selection. Remind uses oversized time, two-column wheel, lavender selected capsule and black full-width pill action. Habits uses near-black canvas with lime figures/dots and thin lilac/lime/orange progress bars. These are visual/interaction references only, not authorization to add unrelated modules. No official demo URL was verified in the video description.
+## Full-baseline diff review
+
+| File(s)                                                                             | Purpose / scope assessment                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/ui/src/SmokeNotesApp.tsx`                                                 | Web notebook-browser routing and capsule dock; original save/refresh/repository callbacks retained. Notebook creation handler extracted unchanged and reused. Desktop navigation retains its original path.                                 |
+| `packages/ui/src/components/NotesWorkspace.tsx`                                     | Web-only notebook counts and capture presentation; existing note list, menus, open/delete/reorder handlers retained.                                                                                                                        |
+| `packages/ui/src/components/WebNotebookCollection.tsx`                              | New web view of the existing notebook records; accessible expansion, selection and guarded creation. No second notebook store.                                                                                                              |
+| `packages/ui/src/components/TodoWorkspace.tsx`                                      | Web progress card and success feedback; toggle failure/pending guard. Existing editing/filtering/reorder/delete flows retained.                                                                                                             |
+| `packages/ui/src/components/SettingsPanel.tsx`                                      | Default-theme description updated to match the ivory design; no settings operation removed.                                                                                                                                                 |
+| `apps/web/src/redesign.css`                                                         | Web-scoped layout, responsive typography/materials, focus/contrast/reduced-motion rules and compact editing. Not imported by desktop.                                                                                                       |
+| `apps/web/src/glass.css`                                                            | Replaced dark theme overrides with lightweight light-material support; reduced transparency no longer causes black-on-dark content. Existing optional optics component retained.                                                            |
+| `apps/web/src/main.tsx`                                                             | One stylesheet import only. Auth, cloud setup, storage names and bootstrap unchanged.                                                                                                                                                       |
+| `apps/web/index.html`, `apps/web/vite.config.ts`                                    | Browser/PWA launch color updated to ivory. Manifest identity, service worker caching, runtime routes and icon paths retained.                                                                                                               |
+| `apps/web/review.html`, `src/review.tsx`, `src/review.css`, `vite.review.config.ts` | Independent review entry/build using sample data in `smoke-notes-ui-review-v1`; no cloud client, no service worker, no production data or credentials. Sample seeding is transactional and never resets existing/tombstoned demo notebooks. |
+| `apps/web/package.json`                                                             | Added review build/serve scripts; dependencies and existing commands unchanged.                                                                                                                                                             |
+| `packages/ui/tests/WebNotebookCollection.test.tsx`, `TodoWorkspace.test.tsx`        | Four regression cases for new interactions and failure/race behavior. Existing coverage retained.                                                                                                                                           |
+| `tools/review-web-ui.py`                                                            | Reproducible isolated Chromium acceptance and screenshot capture. Never defaults to production.                                                                                                                                             |
+| `.gitignore`, `.prettierignore`, `eslint.config.js`                                 | Ignore the new generated review build directory. No permissions, CI workflows or lint rules changed.                                                                                                                                        |
+| `docs/ui-redesign-review.md`                                                        | Scope, evidence, preservation checklist and delivery limits.                                                                                                                                                                                |
+
+Compared with the exact base using status, name/status, full patch and whitespace checks, including added files. No core, backend, database, Electron, CI, credential, dependency or lockfile changes. No unrelated source deletion or whole-repository formatting sweep. Old glass-specific dark styles were intentionally removed because the replacement theme uses light ink/surface tokens.
+
+## Review delivery
+
+16 actual browser screenshots were saved to Library: desktop/mobile main notes, todos and completed progress, stacked/expanded notebook browser, editors, settings and mobile creation menu. Originals and the browser JSON report are in `/workspace/shared/smoke-ui-review/`; `library-files.json` records their Library identities outside the repository. The compact-editor screenshot's Library file was updated to its final verified version.
+
+Local preview: build with `pnpm --filter @smoke-notes/web build:review`, then serve `apps/web/dist-review` and open `/review.html`. The preview is clearly labelled as example data saved only in that browser. Its lack of cloud sync is intentional and does not change the normal production entry point.
+
+Public preview remains blocked. A temporary Cloudflare tunnel could not resolve its service endpoint. A separate Vercel project `smoke-notes-ui-review-20261018` was created, but automatic approval rejected uploading any app artifact because explicit authorization to share the payload with Vercel is required. No application payload was uploaded and no deployment exists. User approval is required before retrying that specific upload; do not work around the rejection. No production deployment, merge, database/credential/CI-permission change, or modification to PR #1 occurred.

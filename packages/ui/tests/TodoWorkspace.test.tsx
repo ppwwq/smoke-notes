@@ -139,3 +139,29 @@ it("saves a return to the original text after an earlier edit is still pending",
     expect(callbacks.onUpdate).toHaveBeenLastCalledWith(todo.id, "旧文字"),
   );
 });
+
+it("blocks duplicate completion writes and reports a failed toggle without claiming success", async () => {
+  let reject!: (error: Error) => void;
+  const onToggle = vi.fn(
+    () =>
+      new Promise<void>((_resolve, fail) => {
+        reject = fail;
+      }),
+  );
+  render(
+    <TodoWorkspace todos={[todo]} {...handlers()} web onToggle={onToggle} />,
+  );
+  const button = screen.getByRole("button", {
+    name: `完成：${todo.text}`,
+  });
+  fireEvent.click(button);
+  fireEvent.click(button);
+  expect(onToggle).toHaveBeenCalledTimes(1);
+  expect(button).toBeDisabled();
+  reject(new Error("write failed"));
+  expect(await screen.findByRole("alert")).toHaveTextContent("更新失败");
+  expect(button).toHaveAttribute("aria-pressed", "false");
+  expect(
+    screen.getByRole("status", { name: "待办操作反馈" }),
+  ).not.toHaveTextContent("做得好");
+});

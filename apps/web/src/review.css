@@ -1,0 +1,27 @@
+.review-banner {
+  position: relative;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 28px;
+  background: #eae8df;
+  color: #646057;
+  font:
+    10px/1.4 Arial,
+    "Microsoft YaHei",
+    sans-serif;
+  letter-spacing: 0.025em;
+}
+.review-shell .platform-web {
+  height: calc(100dvh - 28px);
+}
+.review-shell .platform-web.web-editing {
+  top: calc(var(--web-viewport-top, 0px) + 28px);
+  height: calc(var(--web-viewport-height, 100dvh) - 28px);
+}
+.review-error {
+  padding: 40px;
+  color: #111;
+  font-family: Arial, sans-serif;
+}
