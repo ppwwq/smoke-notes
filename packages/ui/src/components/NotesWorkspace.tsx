@@ -2,15 +2,19 @@ import { useRef, useState } from "react";
 import { useActionMenu } from "../useActionMenu";
 import type { Note, NoteKind, Notebook } from "@smoke-notes/core";
 import {
+  ArrowUpRight,
   CheckSquare2,
   ExternalLink,
   FilePlus2,
+  Notebook as NotebookPen,
   StickyNote,
   Trash2,
-} from "lucide-react";
+} from "../icons";
 import { SortableStack } from "./SortableStack";
+import { RecordActions } from "./RecordActions";
 
 interface NotesWorkspaceProps {
+  web?: boolean;
   notebook: Notebook | null;
   notes: Note[];
   openOnSingleClick: boolean;
@@ -33,6 +37,7 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
     onKeyDown,
   } = useActionMenu();
   const [creating, setCreating] = useState(false);
+  const [arranging, setArranging] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const pending = useRef(false);
   async function create(kind: NoteKind) {
@@ -58,17 +63,27 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
         </span>
         <p className="eyebrow">NO NOTEBOOK YET</p>
         <h1>先建立一个便签本</h1>
-        <p>左侧的「＋」是入口。工作、生活、灵感，都可以各有一处安静空间。</p>
+        <p>
+          {props.web
+            ? "在下方「便签本」中建立一个空间。工作、生活、灵感，都可以各有一处。"
+            : "左侧的「＋」是入口。工作、生活、灵感，都可以各有一处安静空间。"}
+        </p>
       </main>
     );
 
   return (
-    <main className="notes-board">
+    <main
+      className={`notes-board${props.web && arranging ? " arranging" : ""}`}
+    >
       <header className="notes-board-header">
         <div>
-          <p className="eyebrow">STICKY NOTES</p>
+          <p className="eyebrow">
+            {props.web ? "YOUR EVERYDAY SPACE" : "STICKY NOTES"}
+          </p>
           <h1>{props.notebook.name}</h1>
-          <span>{props.notes.length} 张桌面便签</span>
+          <span>
+            {props.notes.length} 张{props.web ? "" : "桌面"}便签
+          </span>
         </div>
         <div
           className="create-note-control"
@@ -121,10 +136,85 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
           {createError}
         </p>
       )}
+      {props.web && (
+        <div className="list-context-bar">
+          <span>
+            {arranging ? "拖动手柄，调整便签顺序" : "你的记录，都在这里"}
+          </span>
+          <button
+            type="button"
+            aria-pressed={arranging}
+            onClick={() => setArranging(!arranging)}
+          >
+            {arranging ? "完成整理" : "整理便签"}
+          </button>
+        </div>
+      )}
       <section
         className="notes-board-scroll"
         aria-label={`${props.notebook.name}便签列表`}
       >
+        {props.web && (
+          <div className="web-note-overview">
+            <section className="web-collection-card" aria-label="便签本概览">
+              <div className="overview-label">
+                <span>一点一滴，都在这里</span>
+                <NotebookPen size={22} />
+              </div>
+              <div className="collection-total">
+                <strong>{String(props.notes.length).padStart(2, "0")}</strong>
+                <span>张便签</span>
+              </div>
+              <div className="collection-breakdown">
+                <span>
+                  随手记{" "}
+                  <b>
+                    {props.notes.filter((note) => note.kind === "note").length}
+                  </b>
+                </span>
+                <span>
+                  待办清单{" "}
+                  <b>
+                    {props.notes.filter((note) => note.kind === "todo").length}
+                  </b>
+                </span>
+              </div>
+            </section>
+            <section className="web-capture-card" aria-label="快速记录">
+              <div>
+                <p>MAKE ROOM FOR IDEAS</p>
+                <h2>
+                  想到了，
+                  <br />
+                  就记下来。
+                </h2>
+              </div>
+              <div className="paper-stack" aria-hidden="true">
+                <i />
+                <i />
+                <i>
+                  <span />
+                  <span />
+                  <span />
+                </i>
+              </div>
+              <button
+                type="button"
+                disabled={creating}
+                onClick={() => void create("note")}
+              >
+                <span>写一张便签</span>
+                <ArrowUpRight size={19} />
+              </button>
+            </section>
+          </div>
+        )}
+        {props.web && (
+          <div className="web-section-heading">
+            <h2>全部便签</h2>
+            <span>点「整理」，调整顺序</span>
+          </div>
+        )}
         {props.notes.length === 0 ? (
           <button
             type="button"
@@ -145,44 +235,55 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
             renderItem={(note) => {
               const displayTitle = note.title || "无标题便签";
               return (
-                <article className={`sticky-card note-color-${note.color}`}>
-                  <button
-                    type="button"
-                    className="sticky-card-open"
-                    aria-label={`打开便签：${displayTitle}`}
-                    onClick={() => {
-                      if (props.openOnSingleClick) props.onOpenNote(note.id);
-                    }}
-                    onDoubleClick={() => props.onOpenNote(note.id)}
-                  >
-                    <span className="sticky-card-accent" />
-                    {note.kind === "todo" && (
-                      <span
-                        className="note-kind-marker"
-                        aria-label={`待办便签：${displayTitle}`}
+                <div className="note-card-shell">
+                  <article className={`sticky-card note-color-${note.color}`}>
+                    <button
+                      type="button"
+                      className="sticky-card-open"
+                      aria-label={`打开便签：${displayTitle}`}
+                      onClick={() => {
+                        if (props.openOnSingleClick) props.onOpenNote(note.id);
+                      }}
+                      onDoubleClick={() => props.onOpenNote(note.id)}
+                    >
+                      <span className="sticky-card-accent" />
+                      {note.kind === "todo" && (
+                        <span
+                          className="note-kind-marker"
+                          aria-label={`待办便签：${displayTitle}`}
+                        >
+                          <CheckSquare2 size={13} />
+                        </span>
+                      )}
+                      <strong>{displayTitle}</strong>
+                      <p>{note.body || "空白便签"}</p>
+                      <time>
+                        {new Date(note.updatedAt).toLocaleDateString("zh-HK", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </time>
+                      <ExternalLink size={14} className="sticky-open-icon" />
+                    </button>
+                    {!props.web && (
+                      <button
+                        type="button"
+                        className="sticky-card-delete"
+                        aria-label={`删除便签：${displayTitle}`}
+                        onClick={() => void props.onTrashNote(note.id)}
                       >
-                        <CheckSquare2 size={13} />
-                      </span>
+                        <Trash2 size={14} />
+                      </button>
                     )}
-                    <strong>{displayTitle}</strong>
-                    <p>{note.body || "空白便签"}</p>
-                    <time>
-                      {new Date(note.updatedAt).toLocaleDateString("zh-HK", {
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </time>
-                    <ExternalLink size={14} className="sticky-open-icon" />
-                  </button>
-                  <button
-                    type="button"
-                    className="sticky-card-delete"
-                    aria-label={`删除便签：${displayTitle}`}
-                    onClick={() => void props.onTrashNote(note.id)}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </article>
+                  </article>
+                  {props.web && (
+                    <RecordActions
+                      name={displayTitle}
+                      kind="便签"
+                      onTrash={() => props.onTrashNote(note.id)}
+                    />
+                  )}
+                </div>
               );
             }}
           />

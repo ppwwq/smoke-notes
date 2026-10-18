@@ -1,4 +1,5 @@
 import { GlassSurface } from "./glass/GlassSurface";
+import { WebDialog } from "./glass/WebDialog";
 import {
   forwardRef,
   useCallback,
@@ -33,10 +34,12 @@ import {
   Highlighter,
   Italic,
   List,
-  Palette,
+  TextColor as Palette,
   Strikethrough,
   Underline as UnderlineIcon,
-} from "lucide-react";
+  Type,
+  X,
+} from "../icons";
 
 export type NoteEdit = Pick<
   Note,
@@ -51,6 +54,10 @@ interface RichNoteEditorProps {
   compact?: boolean;
   formatOpen?: boolean;
   onFormatClose?(): void;
+  progressive?: boolean;
+  onFormatToggle?(): void;
+  appearanceOpen?: boolean;
+  onAppearanceClose?(): void;
 }
 
 export interface RichNoteEditorHandle {
@@ -132,6 +139,10 @@ export const RichNoteEditor = forwardRef<
     compact = false,
     formatOpen = false,
     onFormatClose,
+    progressive = false,
+    onFormatToggle,
+    appearanceOpen = false,
+    onAppearanceClose,
   },
   ref,
 ) {
@@ -229,7 +240,7 @@ export const RichNoteEditor = forwardRef<
     onFormatClose?.();
   }, [onFormatClose]);
   useEffect(() => {
-    if (!compact || !formatOpen) return;
+    if (!(compact || progressive) || !formatOpen) return;
     const outside = (event: PointerEvent) => {
       const target = event.target;
       if (
@@ -250,7 +261,7 @@ export const RichNoteEditor = forwardRef<
       document.removeEventListener("pointerdown", outside);
       document.removeEventListener("keydown", escape);
     };
-  }, [compact, formatOpen, closeFormat, editor]);
+  }, [compact, progressive, formatOpen, closeFormat, editor]);
 
   const flushSave = useCallback(async () => {
     const session = sessionRef.current;
@@ -469,7 +480,7 @@ export const RichNoteEditor = forwardRef<
 
   return (
     <section
-      className={`rich-note-editor note-color-${color} ${className}${compact ? " compact-editor" : ""}`.trim()}
+      className={`rich-note-editor note-color-${color} ${className}${compact ? " compact-editor" : ""}${progressive ? " progressive-editor" : ""}`.trim()}
       onCompositionStartCapture={() => {
         if (composition.current) {
           // Some IMEs start the next word before the previous end callback
@@ -522,20 +533,22 @@ export const RichNoteEditor = forwardRef<
             scrollPosition.current.body = target.scrollTop;
         }}
       >
-        <div className="note-color-strip" aria-label="便签颜色">
-          {NOTE_COLORS.map((item) => (
-            <button
-              key={item}
-              type="button"
-              className={`note-color-dot note-color-dot-${item}${color === item ? " active" : ""}`}
-              aria-label={`便签颜色：${item}`}
-              aria-pressed={color === item}
-              onClick={() => updateDraft({ color: item })}
-            >
-              {color === item && <Check size={11} />}
-            </button>
-          ))}
-        </div>
+        {!progressive && (
+          <div className="note-color-strip" aria-label="便签颜色">
+            {NOTE_COLORS.map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={`note-color-dot note-color-dot-${item}${color === item ? " active" : ""}`}
+                aria-label={`便签颜色：${item}`}
+                aria-pressed={color === item}
+                onClick={() => updateDraft({ color: item })}
+              >
+                {color === item && <Check size={11} />}
+              </button>
+            ))}
+          </div>
+        )}
         <input
           className="rich-note-title"
           aria-label="便签标题"
@@ -546,11 +559,27 @@ export const RichNoteEditor = forwardRef<
         />
         <EditorContent editor={editor} className="rich-note-body" />
       </div>
+      {progressive && !compact && (
+        <div className="editor-tool-entry">
+          <button
+            type="button"
+            data-format-toggle
+            aria-label="格式"
+            aria-expanded={formatOpen}
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={onFormatToggle}
+          >
+            <Type size={19} />
+            <span>文字格式</span>
+          </button>
+          <span>自动保存到本机</span>
+        </div>
+      )}
       <footer
         ref={toolbarRef}
-        hidden={compact && !formatOpen}
+        hidden={(compact || progressive) && !formatOpen}
         role="toolbar"
-        className={`format-toolbar${compact ? " floating-format-toolbar" : ""}`}
+        className={`format-toolbar${compact || progressive ? " floating-format-toolbar" : ""}`}
         aria-label="文字格式"
         onClick={(event) => {
           if (!compact) return;
@@ -741,6 +770,79 @@ export const RichNoteEditor = forwardRef<
           {saveStatus}
         </span>
       </footer>
+      {progressive && appearanceOpen && (
+        <WebDialog
+          web
+          kind="appearance"
+          label="便签外观"
+          onClose={() => {
+            void flushSave()
+              .then(onAppearanceClose)
+              .catch(() => {});
+          }}
+        >
+          <header>
+            <div>
+              <p className="eyebrow">NOTE APPEARANCE</p>
+              <h2>便签外观</h2>
+            </div>
+            <button
+              type="button"
+              aria-label="关闭便签外观"
+              onClick={() => {
+                void flushSave()
+                  .then(onAppearanceClose)
+                  .catch(() => {});
+              }}
+            >
+              <X size={20} />
+            </button>
+          </header>
+          <p>给这张便签选一个底色。文字颜色和高亮在「格式」中调整。</p>
+          <div className="note-appearance-options" aria-label="便签底色">
+            {NOTE_COLORS.map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={`appearance-option note-color-${item}`}
+                aria-label={`便签颜色：${item}`}
+                aria-pressed={color === item}
+                onClick={() => updateDraft({ color: item })}
+              >
+                <span className="appearance-swatch">
+                  {color === item && <Check size={18} />}
+                </span>
+                <span>
+                  {
+                    {
+                      amber: "暖沙",
+                      rose: "浅玫",
+                      sage: "鼠尾草",
+                      sky: "晴空",
+                      violet: "淡紫",
+                      graphite: "雾灰",
+                    }[item]
+                  }
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="appearance-footer">
+            <span role="status">{saveStatus}</span>
+            <button
+              type="button"
+              disabled={saveStatus === "保存中…"}
+              onClick={() => {
+                void flushSave()
+                  .then(onAppearanceClose)
+                  .catch(() => {});
+              }}
+            >
+              完成
+            </button>
+          </div>
+        </WebDialog>
+      )}
     </section>
   );
 });

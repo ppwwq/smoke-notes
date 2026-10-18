@@ -12,7 +12,7 @@ export function WebDialog({
   children,
 }: {
   web: boolean;
-  kind: "settings" | "pairing";
+  kind: "settings" | "pairing" | "actions" | "appearance";
   label: string;
   onClose: () => void;
   children: ReactNode;
@@ -23,7 +23,12 @@ export function WebDialog({
       ? document.activeElement
       : null,
   );
-  const panel = kind === "settings" ? "settings-panel" : "pairing-dialog";
+  const panel = kind === "pairing" ? "pairing-dialog" : `${kind}-panel`;
+  // Record actions may originate inside clipped/translated cards. Keep their
+  // modal in the themed app root, outside every scrolling card and drag layer.
+  const appRoot = web
+    ? document.querySelector<HTMLElement>(".platform-web")
+    : null;
   return (
     <Dialog.Root
       open
@@ -32,15 +37,15 @@ export function WebDialog({
       }}
     >
       <div ref={portalHost} style={{ display: "contents" }} />
-      <Dialog.Portal container={portalHost}>
+      <Dialog.Portal container={appRoot ?? portalHost}>
         <div className={`${kind}-backdrop`}>
           <Dialog.Popup
             className={`${panel}${web ? " web-dialog" : ""}`}
             aria-label={label}
             finalFocus={() =>
-              returnTarget?.closest("[inert]")
+              !returnTarget?.isConnected || returnTarget.closest("[inert]")
                 ? document.querySelector<HTMLElement>(
-                    '[aria-label="打开便签本"]',
+                    '.sidebar-shell.mobile-open .sidebar-close, .mobile-note-header [aria-label="更多操作"], .web-dock button, [aria-label="打开便签本"]',
                   )
                 : returnTarget
             }

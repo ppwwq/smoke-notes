@@ -20,7 +20,7 @@ import {
   StickyNote,
   Trash2,
   X,
-} from "lucide-react";
+} from "./icons";
 import type { DesktopBridge } from "./types";
 import { useNoteTabs } from "./useNoteTabs";
 import { useDesktopQuit } from "./useDesktopQuit";

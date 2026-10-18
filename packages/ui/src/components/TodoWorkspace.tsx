@@ -4,12 +4,16 @@ import {
   TEXT_LIMITS,
   type Todo,
 } from "@smoke-notes/core";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "../icons";
 import { SortableStack } from "./SortableStack";
+import { RecordActions } from "./RecordActions";
 
-type Filter = "all" | "open" | "done";
+export type TodoFilter = "all" | "open" | "done";
 
 interface TodoWorkspaceProps {
+  web?: boolean;
+  filter?: TodoFilter;
+  onFilterChange?(filter: TodoFilter): void;
   todos: Todo[];
   onCreate: (text: string) => Promise<void>;
   onToggle: (id: string) => Promise<void>;
@@ -96,11 +100,33 @@ function TodoTextInput({
 
 export function TodoWorkspace(props: TodoWorkspaceProps) {
   const [text, setText] = useState("");
+  const [arranging, setArranging] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const createPending = useRef(false);
   const draftRevision = useRef(0);
-  const [filter, setFilter] = useState<Filter>("all");
+  const [actionError, setActionError] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const togglePending = useRef(new Set<string>());
+  const [busyIds, setBusyIds] = useState<string[]>([]);
+  async function toggle(todo: Todo) {
+    if (togglePending.current.has(todo.id)) return;
+    togglePending.current.add(todo.id);
+    setBusyIds((current) => [...current, todo.id]);
+    setActionError("");
+    setFeedback("");
+    try {
+      await props.onToggle(todo.id);
+      setFeedback(todo.completed ? "已放回待办清单。" : "做得好，又完成一件。");
+    } catch {
+      setActionError("更新失败，请重试。内容已保留。");
+    } finally {
+      togglePending.current.delete(todo.id);
+      setBusyIds((current) => current.filter((id) => id !== todo.id));
+    }
+  }
+  const [localFilter, setLocalFilter] = useState<TodoFilter>("all");
+  const filter = props.filter ?? localFilter;
   const visible = useMemo(
     () =>
       props.todos.filter(
@@ -134,7 +160,9 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
   }
 
   return (
-    <main className="todo-workspace">
+    <main
+      className={`todo-workspace${props.web && arranging ? " arranging" : ""}`}
+    >
       <header className="todo-hero">
         <div>
           <p className="eyebrow">TODAY · FOCUS</p>
@@ -145,18 +173,52 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
               : "从一件小事开始。"}
           </p>
         </div>
-        <div
-          className="progress-orbit"
-          aria-label={`完成 ${completed} 项，共 ${props.todos.length} 项`}
+        {!props.web && (
+          <div
+            className="progress-orbit"
+            aria-label={`完成 ${completed} 项，共 ${props.todos.length} 项`}
+          >
+            <span>
+              {props.todos.length
+                ? Math.round((completed / props.todos.length) * 100)
+                : 0}
+            </span>
+            <small>%</small>
+          </div>
+        )}
+      </header>
+
+      {props.web && (
+        <section
+          className={`web-progress-card${props.todos.length && completed / props.todos.length >= 0.75 ? " nearly-done" : ""}`}
+          aria-label="待办进度"
         >
-          <span>
+          <div>
+            <p>一步一步，慢慢完成。</p>
+            <h2>
+              {props.todos.length && completed === props.todos.length
+                ? "今天的清单，\n完成了。"
+                : "每一件小事，\n都算数。"}
+            </h2>
+            <span>
+              {props.todos.length - completed} 件待完成 · {completed} 件已完成
+            </span>
+          </div>
+          <strong
+            aria-label={`完成 ${completed} 项，共 ${props.todos.length} 项`}
+          >
             {props.todos.length
               ? Math.round((completed / props.todos.length) * 100)
               : 0}
-          </span>
-          <small>%</small>
-        </div>
-      </header>
+            <small>%</small>
+          </strong>
+          <progress
+            value={completed}
+            max={props.todos.length || 1}
+            aria-label="完成进度"
+          />
+        </section>
+      )}
 
       <div className="todo-composer">
         <Plus size={17} />
@@ -191,13 +253,38 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
             type="button"
             key={value}
             className={filter === value ? "active" : ""}
-            onClick={() => setFilter(value)}
+            aria-pressed={filter === value}
+            onClick={() => {
+              setLocalFilter(value);
+              props.onFilterChange?.(value);
+            }}
           >
             {value === "all" ? "全部" : value === "open" ? "未完成" : "已完成"}
           </button>
         ))}
+        {props.web && (
+          <button
+            type="button"
+            className="arrange-todos"
+            aria-pressed={arranging}
+            onClick={() => setArranging(!arranging)}
+          >
+            {arranging ? "完成整理" : "整理待办"}
+          </button>
+        )}
       </div>
 
+      {actionError && <p role="alert">{actionError}</p>}
+      {props.web && (
+        <p
+          className="todo-feedback"
+          role="status"
+          aria-label="待办操作反馈"
+          aria-live="polite"
+        >
+          {feedback}
+        </p>
+      )}
       <div className="todo-list-scroll">
         {visible.length === 0 ? (
           <div className="todo-empty">
@@ -217,20 +304,30 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
                 <button
                   type="button"
                   className="completion-ring"
+                  aria-pressed={todo.completed}
                   aria-label={`${todo.completed ? "恢复" : "完成"}：${todo.text}`}
-                  onClick={() => void props.onToggle(todo.id)}
+                  disabled={busyIds.includes(todo.id)}
+                  onClick={() => void toggle(todo)}
                 >
                   <span />
                 </button>
                 <TodoTextInput todo={todo} onUpdate={props.onUpdate} />
-                <button
-                  type="button"
-                  className="row-delete"
-                  aria-label={`删除：${todo.text}`}
-                  onClick={() => void props.onTrash(todo.id)}
-                >
-                  <Trash2 size={15} />
-                </button>
+                {props.web ? (
+                  <RecordActions
+                    name={todo.text}
+                    kind="待办"
+                    onTrash={() => props.onTrash(todo.id)}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="row-delete"
+                    aria-label={`删除：${todo.text}`}
+                    onClick={() => void props.onTrash(todo.id)}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                )}
               </article>
             )}
           />

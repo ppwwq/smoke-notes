@@ -1,4 +1,5 @@
 **/dist/
+**/dist-review/
 **/dist-electron/
 **/release/
 **/release-*/

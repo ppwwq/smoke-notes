@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "build:review": "vite build --config vite.review.config.ts",
+    "preview:review": "vite preview --config vite.review.config.ts --host 0.0.0.0"
   },
   "dependencies": {
     "@smoke-notes/core": "workspace:*",

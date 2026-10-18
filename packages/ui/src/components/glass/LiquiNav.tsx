@@ -1,7 +1,7 @@
 // Adapted from Liqui Tab Bar: the same clear bar, lens maps and press spring.
 // Search/drag-to-select are omitted: these are two navigation buttons, not tabs.
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, NotebookPen } from "lucide-react";
+import { CheckCircle2, NotebookPen } from "../../icons";
 import { GlassSurface } from "./GlassSurface";
 import { useGlass } from "./GlassContext";
 import {

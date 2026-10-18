@@ -2,6 +2,7 @@ node_modules/
 .pnpm-store/
 .worktrees/
 dist/
+dist-review/
 dist-electron/
 release/
 release-*/

@@ -1,7 +1,7 @@
 import { WebDialog } from "./glass/WebDialog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { Link2, RefreshCw, X } from "lucide-react";
+import { Link2, RefreshCw, X } from "../icons";
 import type { PairingDetails } from "@smoke-notes/core";
 import type { PairingController } from "../types";
 
