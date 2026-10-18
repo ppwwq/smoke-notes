@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { NoteWindowState, WindowState } from "@smoke-notes/core";
 
 contextBridge.exposeInMainWorld("smokeDesktop", {
+  getPreviewMode: (): Promise<boolean> =>
+    ipcRenderer.invoke("app:preview-mode"),
   getWindowState: (): Promise<WindowState> =>
     ipcRenderer.invoke("window:get-state"),
   setBackgroundOpacity: (value: number): Promise<number> =>

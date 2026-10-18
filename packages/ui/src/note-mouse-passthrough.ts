@@ -15,7 +15,8 @@ function contains(rect: DOMRect, point: Point) {
 export function isNoteInteractive(root: HTMLElement, point: Point): boolean {
   const bounds = root.getBoundingClientRect();
   if (!contains(bounds, point)) return false;
-  const inset = Number.parseFloat(getComputedStyle(root).paddingLeft) || 100;
+  const padding = Number.parseFloat(getComputedStyle(root).paddingLeft);
+  const inset = Number.isFinite(padding) ? padding : 100;
   if (point.x >= bounds.left + inset) return true;
   return Array.from(
     root.querySelectorAll<HTMLElement>(".recent-note-tab"),

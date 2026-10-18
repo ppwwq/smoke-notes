@@ -7,7 +7,11 @@ import { describe, expect, it, vi } from "vitest";
 
 // Exercise the real main-process IPC and window callbacks. Electron invalidates
 // native window properties before emitting `closed`.
-async function startMain() {
+async function startMain(previewMode = false) {
+  const paths = new Map<string, string>();
+  const startup: string[] = [];
+  const trayCreated = vi.fn();
+  const beforeRequest = vi.fn();
   type Handler = (
     event: { sender: { id: number } },
     ...args: unknown[]
@@ -44,11 +48,13 @@ async function startMain() {
       return windows.filter((window) => !window.destroyed);
     }
     show = vi.fn();
+    showInactive = vi.fn();
     focus = vi.fn();
     hide = vi.fn();
     setMenuBarVisibility = vi.fn();
     setIgnoreMouseEvents = vi.fn();
     loadURL = vi.fn(async () => {});
+    loadFile = vi.fn(async () => {});
     getBounds = () => ({ x: 0, y: 0, width: 490, height: 500 });
     isAlwaysOnTop = () => false;
     isDestroyed = () => this.destroyed;
@@ -61,8 +67,15 @@ async function startMain() {
   const electron = {
     app: {
       isPackaged: false,
-      requestSingleInstanceLock: () => true,
-      getPath: () => "test-user-data",
+      setPath: (name: string, path: string) => {
+        paths.set(name, path);
+        startup.push(name);
+      },
+      requestSingleInstanceLock: () => {
+        startup.push("lock");
+        return true;
+      },
+      getPath: (name: string) => paths.get(name) ?? "test-user-data",
       on: (
         event: string,
         listener: (event: { preventDefault(): void }) => void,
@@ -80,12 +93,19 @@ async function startMain() {
     session: {
       defaultSession: {
         setPermissionRequestHandler: vi.fn(),
-        webRequest: { onHeadersReceived: vi.fn() },
+        webRequest: {
+          onHeadersReceived: vi.fn(),
+          onBeforeRequest: beforeRequest,
+        },
       },
     },
     nativeImage: { createEmpty: vi.fn() },
     Menu: { buildFromTemplate: vi.fn() },
     Tray: class extends EventEmitter {
+      constructor() {
+        super();
+        trayCreated();
+      }
       setToolTip = vi.fn();
       setContextMenu = vi.fn();
     },
@@ -97,6 +117,7 @@ async function startMain() {
       if (id === "electron") return electron;
       if (id === "node:fs" || id === "fs")
         return {
+          mkdirSync: vi.fn(),
           existsSync: (path: string) => files.has(path),
           readFileSync: (path: string) => files.get(path),
           writeFileSync: (path: string, value: string) =>
@@ -105,7 +126,9 @@ async function startMain() {
       return require(id);
     },
     __dirname: dirname(bundlePath),
-    process: { argv: ["smoke-notes"] },
+    process: {
+      argv: previewMode ? ["smoke-notes", "--preview"] : ["smoke-notes"],
+    },
     console,
     setTimeout,
     clearTimeout,
@@ -125,10 +148,71 @@ async function startMain() {
     appEvents.get("before-quit")?.({ preventDefault });
     return preventDefault;
   };
-  return { invoke, open, windows, requestQuit, quit };
+  return {
+    invoke,
+    open,
+    windows,
+    requestQuit,
+    quit,
+    paths,
+    startup,
+    trayCreated,
+    beforeRequest,
+    files,
+  };
 }
 
 describe("main-process note window lifecycle", () => {
+  it("isolates preview storage before the instance lock, denies external requests and exits after its final note", async () => {
+    const {
+      invoke,
+      open,
+      windows,
+      paths,
+      startup,
+      trayCreated,
+      beforeRequest,
+      files,
+      quit,
+    } = await startMain(true);
+    expect(startup.slice(0, 3)).toEqual(["userData", "sessionData", "lock"]);
+    expect(paths.get("userData")).toBe(paths.get("sessionData"));
+    expect(paths.get("userData")).toContain("desktop-preview");
+    expect(invoke("app:preview-mode", 1)).toBe(true);
+    expect(invoke("app:set-launch-at-login", 1, true)).toBe(false);
+    expect(trayCreated).not.toHaveBeenCalled();
+    expect(windows[0].loadFile).toHaveBeenCalled();
+    expect(windows[0].show).not.toHaveBeenCalled();
+    const callback = vi.fn();
+    const filter = beforeRequest.mock.calls[0][0];
+    filter({ url: "https://example.com" }, callback);
+    expect(callback).toHaveBeenLastCalledWith({ cancel: true });
+    filter({ url: "file:///preview/index.html" }, callback);
+    expect(callback).toHaveBeenLastCalledWith({ cancel: false });
+    const note = await open("sample");
+    await open("sample");
+    expect(note.showInactive).toHaveBeenCalled();
+    expect(note.focus).not.toHaveBeenCalled();
+    invoke("window:set-background-opacity", note.webContents.id, 0.28);
+    expect(
+      [...files.keys()].every((path) =>
+        path.startsWith(paths.get("userData")!),
+      ),
+    ).toBe(true);
+    await invoke("note-window:close", note.webContents.id, "sample");
+    expect(quit).toHaveBeenCalledOnce();
+  });
+
+  it("persists a clear note background while retaining the main window opacity floor", async () => {
+    const { open, invoke } = await startMain();
+    const note = await open("clear");
+    const sender = note.webContents.id;
+    expect(invoke("window:set-background-opacity", sender, 0.28)).toBe(0.28);
+    expect(invoke("note-window:get-state", sender, "clear")).toMatchObject({
+      backgroundOpacity: 0.28,
+    });
+    expect(invoke("window:set-background-opacity", 1, 0.28)).toBe(0.45);
+  });
   it("cleans up a destroyed note without reading its native properties", async () => {
     const { open, invoke } = await startMain();
     const note = await open("note-1");
@@ -269,9 +353,9 @@ describe("main-process note window lifecycle", () => {
     expect(windows[0].isDestroyed()).toBe(false);
     expect(invoke("note-window:get-state", 1, "note-1")).toMatchObject({
       noteId: "note-1",
-      x: 70,
+      x: 0,
       y: 0,
-      width: 420,
+      width: 490,
       height: 500,
       isOpen: false,
     });

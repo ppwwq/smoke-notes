@@ -7,6 +7,8 @@
   "type": "module",
   "main": "dist-electron/main.cjs",
   "scripts": {
+    "preview:build": "vite build --mode preview && pnpm build:electron",
+    "preview:desktop": "pnpm preview:build && node ../../tools/start-desktop-preview.mjs",
     "dev": "pnpm build:electron && concurrently -k \"vite --host 127.0.0.1 --port 5173 --strictPort\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "build:renderer": "vite build",
     "build:electron": "tsup --config tsup.config.ts",

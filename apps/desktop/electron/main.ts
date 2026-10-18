@@ -8,10 +8,11 @@ import {
   session,
   Tray,
 } from "electron";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   clampOpacity,
+  clampNoteOpacity,
   normalizeNoteWindowState,
   type NoteWindowState,
   type WindowState,
@@ -38,6 +39,15 @@ import {
   normalizeWindowState,
   toPersistedNoteWindowBounds,
 } from "./window-config";
+
+// Set isolation before the instance lock, any state reads, or browser session creation.
+const previewMode = !app.isPackaged && process.argv.includes("--preview");
+if (previewMode) {
+  const profile = join(__dirname, "../../../work/desktop-preview");
+  mkdirSync(profile, { recursive: true });
+  app.setPath("userData", profile);
+  app.setPath("sessionData", profile);
+}
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -124,7 +134,7 @@ async function loadRenderer(window: BrowserWindow, noteId?: string) {
   saveBeforeQuit.cancel("窗口正在打开或切换，退出已取消，请稍后重试。");
   try {
     const query = noteId ? `?noteId=${encodeURIComponent(noteId)}` : "";
-    if (app.isPackaged)
+    if (app.isPackaged || previewMode)
       await window.loadFile(
         join(__dirname, "../dist/index.html"),
         noteId ? { query: { noteId } } : undefined,
@@ -171,7 +181,9 @@ const noteWindowManager = new NoteWindowManager(
       if (currentNoteId) clearNoteStateSave(currentNoteId);
       noteIdByWebContents.delete(webContentsId);
     });
-    window.once("ready-to-show", () => window.show());
+    window.once("ready-to-show", () =>
+      previewMode ? window.showInactive() : window.show(),
+    );
     try {
       await loadRenderer(window, state.noteId);
     } catch (error) {
@@ -179,8 +191,10 @@ const noteWindowManager = new NoteWindowManager(
       throw error;
     }
     return {
-      show: () => window.show(),
-      focus: () => window.focus(),
+      show: () => (previewMode ? window.showInactive() : window.show()),
+      focus: () => {
+        if (!previewMode) window.focus();
+      },
       hide: () => window.hide(),
       destroy: () => window.destroy(),
       isDestroyed: () => window.isDestroyed(),
@@ -242,6 +256,7 @@ function closeSavedNote(noteId: string) {
   }
   clearNoteStateSave(noteId);
   noteWindowManager.close(noteId);
+  if (previewMode && noteIdByWebContents.size === 0) app.quit();
 }
 
 function trustedWindow(event: Electron.IpcMainInvokeEvent): BrowserWindow {
@@ -307,6 +322,10 @@ function requireNotQuitting() {
 }
 
 function registerIpc() {
+  ipcMain.handle("app:preview-mode", (event) => {
+    trustedWindow(event);
+    return previewMode;
+  });
   ipcMain.handle(
     "app:quit-result",
     (event, requestId: unknown, saved: unknown) => {
@@ -332,10 +351,14 @@ function registerIpc() {
     "window:set-background-opacity",
     (event, rawValue: unknown) => {
       trustedWindow(event);
-      const value = clampOpacity(
-        typeof rawValue === "number" ? rawValue : 0.82,
-      );
       const noteId = noteIdByWebContents.get(event.sender.id);
+      const value = noteId
+        ? clampNoteOpacity(rawValue)
+        : clampOpacity(
+            typeof rawValue === "number" && Number.isFinite(rawValue)
+              ? rawValue
+              : 0.82,
+          );
       if (noteId)
         noteWindowManager.update(noteId, { backgroundOpacity: value });
       else saveMainState({ backgroundOpacity: value });
@@ -376,12 +399,12 @@ function registerIpc() {
   ipcMain.handle("app:get-launch-at-login", (event) => {
     if (trustedWindow(event) !== mainWindow)
       throw new Error("Only the main window may change launch settings");
-    return readLaunchAtLogin(app);
+    return previewMode ? false : readLaunchAtLogin(app);
   });
   ipcMain.handle("app:set-launch-at-login", (event, rawValue: unknown) => {
     if (trustedWindow(event) !== mainWindow)
       throw new Error("Only the main window may change launch settings");
-    return writeLaunchAtLogin(app, rawValue === true);
+    return previewMode ? false : writeLaunchAtLogin(app, rawValue === true);
   });
   ipcMain.handle("note-window:open", async (event, rawNoteId: unknown) => {
     trustedWindow(event);
@@ -505,26 +528,37 @@ function activateMainWindow() {
 if (registerSingleInstance(app, activateMainWindow)) {
   app.whenReady().then(async () => {
     try {
-      ensureBackgroundLaunchAtLogin(app);
+      if (!previewMode) ensureBackgroundLaunchAtLogin(app);
     } catch (error) {
       console.warn("Could not update the login launch mode", error);
     }
     session.defaultSession.setPermissionRequestHandler(
       (_webContents, _permission, callback) => callback(false),
     );
+    if (previewMode) {
+      session.defaultSession.webRequest.onBeforeRequest((details, callback) =>
+        callback({
+          cancel:
+            !details.url.startsWith("file:") &&
+            !details.url.startsWith("data:"),
+        }),
+      );
+    }
     session.defaultSession.webRequest.onHeadersReceived((details, callback) =>
       callback({
         responseHeaders: {
           ...details.responseHeaders,
           "Content-Security-Policy": [
-            createContentSecurityPolicy(app.isPackaged),
+            previewMode
+              ? "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'none'"
+              : createContentSecurityPolicy(app.isPackaged),
           ],
         },
       }),
     );
     registerIpc();
-    await createMainWindow(shouldShowMainWindow(process.argv));
-    createTray();
+    await createMainWindow(!previewMode && shouldShowMainWindow(process.argv));
+    if (!previewMode) createTray();
     await noteWindowManager.restoreOpen();
   });
 

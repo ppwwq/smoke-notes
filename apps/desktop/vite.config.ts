@@ -2,8 +2,11 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 
-export default defineConfig({
-  envDir: fileURLToPath(new URL("../../", import.meta.url)),
+export default defineConfig(({ mode }) => ({
+  envDir:
+    mode === "preview"
+      ? false
+      : fileURLToPath(new URL("../../", import.meta.url)),
   base: "./",
   plugins: [react()],
   server: {
@@ -19,4 +22,4 @@ export default defineConfig({
     },
   },
   build: { outDir: "dist", emptyOutDir: true },
-});
+}));
