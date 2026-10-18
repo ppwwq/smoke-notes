@@ -1,7 +1,9 @@
 # Clear desktop note preview
 
 Implemented locally from main `2032276` on `desktop/clear-note-local-preview`.
-This is source and an uninstalled development preview, not a released installer.
+This is an isolated test build, not a production release. A separate unsigned
+Windows test installer is now available; see
+[installation and rollback](desktop-preview-install-and-rollback.md).
 
 ## Desktop behavior
 
@@ -46,6 +48,8 @@ opacity and pin controls, switching, closing, and reopening.
 The final screenshot captures only the native note over a controlled
 background and is saved in Library as `SmokeNotes-integrated-clear.png`.
 Physical multi-monitor DPI transitions and an actual IME composition
-session have not been manually tested. Automated composition-saving tests pass.
-No installer, startup entry, system setting change, real note data, or account
-credentials are part of this preview.
+session have not been manually tested. Chromium composition and 100%, 125%,
+150% renderer zoom tests pass; these are not OS input-method or physical DPI tests.
+The separate packaged preview also passed immediate-save, full-exit and reopen
+verification using its own sample profile. No installer was run, and no startup
+entry, system setting, real note data or account credentials were changed.

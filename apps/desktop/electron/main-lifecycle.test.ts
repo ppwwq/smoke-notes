@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 
 // Exercise the real main-process IPC and window callbacks. Electron invalidates
 // native window properties before emitting `closed`.
-async function startMain(previewMode = false) {
+async function startMain(previewMode: boolean | "packaged" = false) {
   const paths = new Map<string, string>();
   const startup: string[] = [];
   const trayCreated = vi.fn();
@@ -66,7 +66,8 @@ async function startMain(previewMode = false) {
   let ready: Promise<unknown> | undefined;
   const electron = {
     app: {
-      isPackaged: false,
+      isPackaged: previewMode === "packaged",
+      getName: () => "SmokeNotes Clear Preview",
       setPath: (name: string, path: string) => {
         paths.set(name, path);
         startup.push(name);
@@ -127,7 +128,8 @@ async function startMain(previewMode = false) {
     },
     __dirname: dirname(bundlePath),
     process: {
-      argv: previewMode ? ["smoke-notes", "--preview"] : ["smoke-notes"],
+      argv:
+        previewMode === true ? ["smoke-notes", "--preview"] : ["smoke-notes"],
     },
     console,
     setTimeout,
@@ -163,6 +165,18 @@ async function startMain(previewMode = false) {
 }
 
 describe("main-process note window lifecycle", () => {
+  it("isolates the packaged preview without command-line flags or startup changes", async () => {
+    const { invoke, paths, startup, trayCreated, beforeRequest, windows } =
+      await startMain("packaged");
+    expect(invoke("app:preview-mode", 1)).toBe(true);
+    expect(paths.get("userData")).toContain("SmokeNotes Clear Preview");
+    expect(paths.get("userData")).toBe(paths.get("sessionData"));
+    expect(startup.slice(0, 3)).toEqual(["userData", "sessionData", "lock"]);
+    expect(invoke("app:set-launch-at-login", 1, true)).toBe(false);
+    expect(trayCreated).not.toHaveBeenCalled();
+    expect(beforeRequest).toHaveBeenCalledOnce();
+    expect(windows[0].show).not.toHaveBeenCalled();
+  });
   it("isolates preview storage before the instance lock, denies external requests and exits after its final note", async () => {
     const {
       invoke,

@@ -41,9 +41,14 @@ import {
 } from "./window-config";
 
 // Set isolation before the instance lock, any state reads, or browser session creation.
-const previewMode = !app.isPackaged && process.argv.includes("--preview");
+const packagedPreview =
+  app.isPackaged && app.getName() === "SmokeNotes Clear Preview";
+const previewMode =
+  packagedPreview || (!app.isPackaged && process.argv.includes("--preview"));
 if (previewMode) {
-  const profile = join(__dirname, "../../../work/desktop-preview");
+  const profile = packagedPreview
+    ? join(app.getPath("appData"), "SmokeNotes Clear Preview")
+    : join(__dirname, "../../../work/desktop-preview");
   mkdirSync(profile, { recursive: true });
   app.setPath("userData", profile);
   app.setPath("sessionData", profile);
