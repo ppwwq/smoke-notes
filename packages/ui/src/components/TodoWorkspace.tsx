@@ -4,7 +4,7 @@ import {
   TEXT_LIMITS,
   type Todo,
 } from "@smoke-notes/core";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "../icons";
 import { SortableStack } from "./SortableStack";
 import { RecordActions } from "./RecordActions";
 

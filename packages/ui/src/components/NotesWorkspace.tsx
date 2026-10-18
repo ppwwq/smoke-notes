@@ -6,10 +6,10 @@ import {
   CheckSquare2,
   ExternalLink,
   FilePlus2,
-  NotebookPen,
+  Notebook as NotebookPen,
   StickyNote,
   Trash2,
-} from "lucide-react";
+} from "../icons";
 import { SortableStack } from "./SortableStack";
 import { RecordActions } from "./RecordActions";
 

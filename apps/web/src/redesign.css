@@ -1773,17 +1773,8 @@ body,
   color: var(--muted);
   font-size: 11px;
 }
-/* The arrow's visible stroke is top/right weighted. Shift only these arrows, not all icons. */
-.web-capture-card button svg,
-.collection-card-top > svg {
-  transform: translate(-0.5px, 0.5px);
-}
 .platform-web[data-web-background] .web-dock svg {
   flex-shrink: 0;
-  stroke-width: 1.8;
-}
-.platform-web[data-web-background] .web-dock button[aria-label="便签"] svg {
-  transform: translateY(-0.5px);
 }
 @media (max-width: 760px) {
   .platform-web[data-web-background] .web-notebook-collection {

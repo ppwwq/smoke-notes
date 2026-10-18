@@ -6,13 +6,13 @@ import {
 } from "@smoke-notes/core";
 import {
   CheckCircle2,
-  NotebookPen,
+  Notebook as NotebookPen,
   Pencil,
   Plus,
   Settings2,
   Trash2,
   X,
-} from "lucide-react";
+} from "../icons";
 import { SortableStack } from "./SortableStack";
 import { notebookTint } from "./notebook-tint";
 import { RecordActions } from "./RecordActions";

@@ -34,12 +34,12 @@ import {
   Highlighter,
   Italic,
   List,
-  Palette,
+  TextColor as Palette,
   Strikethrough,
   Underline as UnderlineIcon,
   Type,
   X,
-} from "lucide-react";
+} from "../icons";
 
 export type NoteEdit = Pick<
   Note,

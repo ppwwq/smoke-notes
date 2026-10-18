@@ -29,8 +29,8 @@ import {
   Wifi,
   WifiOff,
   X,
-  Palette,
-} from "lucide-react";
+  NoteAppearance as Palette,
+} from "./icons";
 import { Sidebar } from "./components/Sidebar";
 import { WebNotebookCollection } from "./components/WebNotebookCollection";
 import { NotesWorkspace } from "./components/NotesWorkspace";

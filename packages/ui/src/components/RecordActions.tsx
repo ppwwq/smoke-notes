@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { MoreHorizontal, Pencil, Trash2, X } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2, X } from "../icons";
 import { WebDialog } from "./glass/WebDialog";
 
 /** Secondary record actions, separate from opening/editing/completing a record. */

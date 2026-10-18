@@ -1,5 +1,5 @@
 import { useRef, useState, type RefObject } from "react";
-import { ArrowUpRight, ChevronDown, Layers, Plus } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Layers, Plus } from "../icons";
 import {
   RecordValidationError,
   TEXT_LIMITS,

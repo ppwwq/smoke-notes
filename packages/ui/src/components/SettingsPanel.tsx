@@ -10,8 +10,8 @@ import {
   X,
   ArrowLeft,
   ChevronRight,
-  Palette,
-} from "lucide-react";
+  Appearance as Palette,
+} from "../icons";
 import type { DesktopBridge } from "../types";
 import type { WebBackground } from "../useWebBackground";
 
