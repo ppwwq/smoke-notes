@@ -14,7 +14,6 @@ export default defineConfig({
         "apple-touch-icon.png",
         "icon-192.png",
         "icon-512.png",
-        "icon-maskable-512.png",
       ],
       manifest: {
         name: "烟笺 Smoke Notes",
@@ -26,22 +25,16 @@ export default defineConfig({
         start_url: "/",
         icons: [
           {
-            src: "/icon-192.png?v=glass-20261018",
+            src: "/icon-192.png?v=transparent-20261019",
             sizes: "192x192",
             type: "image/png",
             purpose: "any",
           },
           {
-            src: "/icon-512.png?v=glass-20261018",
+            src: "/icon-512.png?v=transparent-20261019",
             sizes: "512x512",
             type: "image/png",
             purpose: "any",
-          },
-          {
-            src: "/icon-maskable-512.png?v=glass-20261018",
-            sizes: "512x512",
-            type: "image/png",
-            purpose: "maskable",
           },
         ],
       },
