@@ -9,7 +9,7 @@ import {
   Tray,
 } from "electron";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import {
   clampOpacity,
   clampNoteOpacity,
@@ -45,6 +45,11 @@ const packagedPreview =
   app.isPackaged && app.getName() === "SmokeNotes Clear Preview";
 const previewMode =
   packagedPreview || (!app.isPackaged && process.argv.includes("--preview"));
+const customDataDirectory = previewMode
+  ? ""
+  : app.commandLine.getSwitchValue("user-data-dir");
+if (customDataDirectory && !isAbsolute(customDataDirectory))
+  throw new Error("--user-data-dir must be an absolute path");
 if (previewMode) {
   const profile = packagedPreview
     ? join(app.getPath("appData"), "SmokeNotes Clear Preview")
@@ -52,7 +57,12 @@ if (previewMode) {
   mkdirSync(profile, { recursive: true });
   app.setPath("userData", profile);
   app.setPath("sessionData", profile);
+} else if (customDataDirectory) {
+  mkdirSync(customDataDirectory, { recursive: true });
+  app.setPath("userData", customDataDirectory);
+  app.setPath("sessionData", customDataDirectory);
 }
+const isolatedProfile = previewMode || Boolean(customDataDirectory);
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -404,12 +414,12 @@ function registerIpc() {
   ipcMain.handle("app:get-launch-at-login", (event) => {
     if (trustedWindow(event) !== mainWindow)
       throw new Error("Only the main window may change launch settings");
-    return previewMode ? false : readLaunchAtLogin(app);
+    return isolatedProfile ? false : readLaunchAtLogin(app);
   });
   ipcMain.handle("app:set-launch-at-login", (event, rawValue: unknown) => {
     if (trustedWindow(event) !== mainWindow)
       throw new Error("Only the main window may change launch settings");
-    return previewMode ? false : writeLaunchAtLogin(app, rawValue === true);
+    return isolatedProfile ? false : writeLaunchAtLogin(app, rawValue === true);
   });
   ipcMain.handle("note-window:open", async (event, rawNoteId: unknown) => {
     trustedWindow(event);
@@ -533,7 +543,7 @@ function activateMainWindow() {
 if (registerSingleInstance(app, activateMainWindow)) {
   app.whenReady().then(async () => {
     try {
-      if (!previewMode) ensureBackgroundLaunchAtLogin(app);
+      if (!isolatedProfile) ensureBackgroundLaunchAtLogin(app);
     } catch (error) {
       console.warn("Could not update the login launch mode", error);
     }

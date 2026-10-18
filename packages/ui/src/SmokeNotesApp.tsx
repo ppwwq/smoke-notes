@@ -486,10 +486,30 @@ export function SmokeNotesApp({
           ) : (
             <div
               className="connection-chip"
-              title={online ? "设备在线" : "离线记录中"}
+              role="status"
+              aria-label="同步状态"
+              title={
+                syncStatus
+                  ? "云同步状态；未同步的修改保留在本地"
+                  : online
+                    ? "设备网络在线"
+                    : "离线记录中"
+              }
             >
               {online ? <Wifi size={13} /> : <WifiOff size={13} />}
-              <span>{online ? "已连接" : "离线中"}</span>
+              <span>
+                {syncStatus
+                  ? {
+                      syncing: "正在同步",
+                      synced: "已同步",
+                      retrying: "等待重试",
+                      offline: "离线中",
+                      error: "同步失败",
+                    }[syncStatus.phase]
+                  : online
+                    ? "网络在线"
+                    : "离线中"}
+              </span>
             </div>
           )}
           {platform === "web" && notebookCollectionOpen ? (
@@ -786,6 +806,8 @@ export function SmokeNotesApp({
                   });
                   await refreshAfterMutation(selectedNotebookId);
                   setSelectedNoteId(note.id);
+                  if (platform === "desktop")
+                    await desktopBridge?.openNote(note.id);
                 } finally {
                   creatingRef.current = false;
                 }

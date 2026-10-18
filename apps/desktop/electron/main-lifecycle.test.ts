@@ -7,7 +7,9 @@ import { describe, expect, it, vi } from "vitest";
 
 // Exercise the real main-process IPC and window callbacks. Electron invalidates
 // native window properties before emitting `closed`.
-async function startMain(previewMode: boolean | "packaged" = false) {
+async function startMain(
+  previewMode: boolean | "packaged" | "release-test" = false,
+) {
   const paths = new Map<string, string>();
   const startup: string[] = [];
   const trayCreated = vi.fn();
@@ -66,8 +68,15 @@ async function startMain(previewMode: boolean | "packaged" = false) {
   let ready: Promise<unknown> | undefined;
   const electron = {
     app: {
-      isPackaged: previewMode === "packaged",
-      getName: () => "SmokeNotes Clear Preview",
+      isPackaged: previewMode === "packaged" || previewMode === "release-test",
+      getName: () =>
+        previewMode === "packaged" ? "SmokeNotes Clear Preview" : "烟笺",
+      commandLine: {
+        getSwitchValue: (name: string) =>
+          name === "user-data-dir" && previewMode === "release-test"
+            ? resolve("work/release-acceptance")
+            : "",
+      },
       setPath: (name: string, path: string) => {
         paths.set(name, path);
         startup.push(name);
@@ -165,6 +174,19 @@ async function startMain(previewMode: boolean | "packaged" = false) {
 }
 
 describe("main-process note window lifecycle", () => {
+  it("keeps the full production app in an explicit isolated data directory without changing login items", async () => {
+    const { invoke, paths, startup, trayCreated, beforeRequest, windows } =
+      await startMain("release-test");
+    expect(invoke("app:preview-mode", 1)).toBe(false);
+    expect(paths.get("userData")).toBe(resolve("work/release-acceptance"));
+    expect(paths.get("sessionData")).toBe(paths.get("userData"));
+    expect(startup.slice(0, 3)).toEqual(["userData", "sessionData", "lock"]);
+    expect(trayCreated).toHaveBeenCalledOnce();
+    expect(beforeRequest).not.toHaveBeenCalled();
+    windows[0].emit("ready-to-show");
+    expect(windows[0].show).toHaveBeenCalled();
+    expect(invoke("app:set-launch-at-login", 1, true)).toBe(false);
+  });
   it("isolates the packaged preview without command-line flags or startup changes", async () => {
     const { invoke, paths, startup, trayCreated, beforeRequest, windows } =
       await startMain("packaged");

@@ -7,6 +7,7 @@ import {
   SyncEngine,
   createSyncRuntime,
   type CloudConfig,
+  type SyncStatus,
 } from "@smoke-notes/core";
 import type { PairingController } from "@smoke-notes/ui";
 import "@smoke-notes/ui/styles.css";
@@ -60,6 +61,14 @@ async function bootstrap() {
     : undefined;
 
   const root = createRoot(document.getElementById("root")!);
+  let syncStatus: SyncStatus | undefined = cloud
+    ? {
+        phase: navigator.onLine ? "syncing" : "offline",
+        pending: 0,
+        initial: true,
+      }
+    : undefined;
+  let renderMain: (() => void) | undefined;
   if (noteId) {
     const { NoteWindowApp } = await import("@smoke-notes/ui/note-window");
     root.render(
@@ -73,16 +82,19 @@ async function bootstrap() {
     );
   } else {
     const { SmokeNotesApp } = await import("@smoke-notes/ui/app");
-    root.render(
-      <StrictMode>
-        <SmokeNotesApp
-          repository={repository}
-          platform="desktop"
-          desktopBridge={window.smokeDesktop}
-          pairingController={pairingController}
-        />
-      </StrictMode>,
-    );
+    renderMain = () =>
+      root.render(
+        <StrictMode>
+          <SmokeNotesApp
+            repository={repository}
+            platform="desktop"
+            desktopBridge={window.smokeDesktop}
+            pairingController={pairingController}
+            syncStatus={syncStatus}
+          />
+        </StrictMode>,
+      );
+    renderMain();
   }
 
   if (cloud && !noteId) {
@@ -95,12 +107,17 @@ async function bootstrap() {
           return engine.flush();
         },
         pull: (cursor) => engine.pull(cursor),
+        getQueueState: () => engine.getQueueState(),
       },
       cloud,
       storage: localStorage,
       notify: () =>
         window.dispatchEvent(new CustomEvent("smoke-notes:data-changed")),
       onError: (error) => console.warn("Background sync paused", error),
+      onStatusChange: (status) => {
+        syncStatus = status;
+        renderMain?.();
+      },
     });
     await runtime.start();
     window.addEventListener("beforeunload", () => runtime.stop(), {
