@@ -68,6 +68,10 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let quitting = false;
 let loadingRenderers = 0;
+let starting = true;
+let quitWhenReady = false;
+let quitReadyTimer: NodeJS.Timeout | null = null;
+const readyEditors = new Set<number>();
 let persistTimer: NodeJS.Timeout | null = null;
 const notePersistTimers = new Map<string, NodeJS.Timeout>();
 const noteIdByWebContents = new Map<number, string>();
@@ -134,9 +138,17 @@ function configureRenderer(window: BrowserWindow) {
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   const cancelQuit = () =>
     saveBeforeQuit.cancel("窗口正在重新载入，退出已取消，请稍后重试。");
-  window.webContents.on("did-start-loading", cancelQuit);
+  const senderId = window.webContents.id;
+  window.webContents.on("did-start-loading", () => {
+    readyEditors.delete(senderId);
+    cancelQuit();
+  });
   window.webContents.on("did-finish-load", cancelQuit);
   window.webContents.on("render-process-gone", cancelQuit);
+  window.on("closed", () => {
+    readyEditors.delete(senderId);
+    setTimeout(resumePendingQuit, 0);
+  });
   window.webContents.on("will-navigate", (event, url) => {
     const allowedDevUrl =
       !app.isPackaged && url.startsWith("http://127.0.0.1:5173");
@@ -146,6 +158,7 @@ function configureRenderer(window: BrowserWindow) {
 
 async function loadRenderer(window: BrowserWindow, noteId?: string) {
   ++loadingRenderers;
+  readyEditors.delete(window.webContents.id);
   saveBeforeQuit.cancel("窗口正在打开或切换，退出已取消，请稍后重试。");
   try {
     const query = noteId ? `?noteId=${encodeURIComponent(noteId)}` : "";
@@ -159,6 +172,7 @@ async function loadRenderer(window: BrowserWindow, noteId?: string) {
     --loadingRenderers;
     // An acknowledgement from the old document cannot cover its replacement.
     saveBeforeQuit.cancel("窗口已切换，退出已取消，请稍后重试。");
+    setTimeout(resumePendingQuit, 0);
   }
 }
 
@@ -332,11 +346,49 @@ const saveBeforeQuit = new SaveBeforeQuit(
 );
 
 function requireNotQuitting() {
-  if (saveBeforeQuit.preparing || quitting)
+  if (quitWhenReady || saveBeforeQuit.preparing || quitting)
     throw new Error("正在保存并退出，请稍候。");
 }
 
+// Wait for React to install its save handler, not merely for Chromium's load event.
+// A single Quit during startup/navigation must still save every editor and exit.
+function resumePendingQuit() {
+  if (!quitWhenReady || starting || loadingRenderers) return;
+  const editors = BrowserWindow.getAllWindows().filter(
+    (window) =>
+      window === mainWindow || noteIdByWebContents.has(window.webContents.id),
+  );
+  if (editors.some((window) => !readyEditors.has(window.webContents.id)))
+    return;
+  quitWhenReady = false;
+  if (quitReadyTimer) clearTimeout(quitReadyTimer);
+  quitReadyTimer = null;
+  void saveBeforeQuit.request();
+}
+
+function requestSafeQuit() {
+  if (saveBeforeQuit.preparing || quitWhenReady) return;
+  quitWhenReady = true;
+  quitReadyTimer = setTimeout(() => {
+    quitWhenReady = false;
+    quitReadyTimer = null;
+    for (const window of BrowserWindow.getAllWindows())
+      window.webContents.send(
+        "app:cancel-quit",
+        0,
+        "窗口准备超时，退出已取消，草稿仍保留，请重试。",
+      );
+  }, 30_000);
+  resumePendingQuit();
+}
+
 function registerIpc() {
+  ipcMain.handle("app:editor-ready", (event, ready: unknown) => {
+    trustedWindow(event);
+    if (ready === true) readyEditors.add(event.sender.id);
+    else readyEditors.delete(event.sender.id);
+    setTimeout(resumePendingQuit, 0);
+  });
   ipcMain.handle("app:preview-mode", (event) => {
     trustedWindow(event);
     return previewMode;
@@ -572,15 +624,25 @@ if (registerSingleInstance(app, activateMainWindow)) {
       }),
     );
     registerIpc();
-    await createMainWindow(!previewMode && shouldShowMainWindow(process.argv));
-    if (!previewMode) createTray();
-    await noteWindowManager.restoreOpen();
+    try {
+      await createMainWindow(
+        !previewMode && shouldShowMainWindow(process.argv),
+      );
+      if (!previewMode) createTray();
+      await noteWindowManager.restoreOpen();
+    } catch (error) {
+      console.error("Could not initialize application windows", error);
+    } finally {
+      // Failed restoration must not leave surviving editors unable to quit.
+      starting = false;
+      resumePendingQuit();
+    }
   });
 
   app.on("before-quit", (event) => {
     if (quitting) return;
     event.preventDefault();
-    void saveBeforeQuit.request();
+    requestSafeQuit();
   });
   app.on("activate", activateMainWindow);
   app.on("window-all-closed", () => {

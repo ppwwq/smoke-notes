@@ -72,6 +72,10 @@ export function NoteWindowApp({
   const [formatOpen, setFormatOpen] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [controlError, setControlError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState("已自动保存");
+  const saveError = ["已自动保存", "待保存", "保存中…"].includes(saveStatus)
+    ? null
+    : saveStatus;
   const [pinBusy, setPinBusy] = useState(false);
   const opacityRevision = useRef(0);
   const [switching, setSwitching] = useState(false);
@@ -439,7 +443,7 @@ export function NoteWindowApp({
         <button
           type="button"
           className="note-pin-control"
-          disabled={pinBusy}
+          disabled={pinBusy || !windowState}
           aria-pressed={windowState?.alwaysOnTop ?? false}
           aria-label={windowState?.alwaysOnTop ? "取消置顶" : "窗口置顶"}
           onClick={async () => {
@@ -503,6 +507,9 @@ export function NoteWindowApp({
       </header>
       {quitError && <p role="alert">{quitError}</p>}
       {controlError && <p role="alert">{controlError}</p>}
+      {saveError && !quitError && !switchError && (
+        <p role="alert">{saveError}，草稿仍保留，请重试。</p>
+      )}
       {switchError && (
         <div role="alert">
           <p>{switchError}</p>
@@ -541,6 +548,7 @@ export function NoteWindowApp({
           window.dispatchEvent(new CustomEvent("smoke-notes:data-changed"));
           return updated;
         }}
+        onSaveStatusChange={setSaveStatus}
         className="standalone-note-editor"
         progressive
         compact
