@@ -82,6 +82,15 @@ describe("note mouse regions", () => {
     expect(isNoteInteractive(root, { x: 110, y: 100 })).toBe(false);
   });
 
+  it("keeps the left edge of a note with no gutter interactive", () => {
+    root.style.paddingLeft = "0px";
+    expect(isNoteInteractive(root, { x: 1, y: 120 })).toBe(true);
+    expect(isNoteInteractive(root, { x: -1, y: 120 })).toBe(false);
+    attach();
+    move(1, 120);
+    expect(setIgnore).not.toHaveBeenCalledWith(true);
+  });
+
   it("initializes with the real cursor without overwriting a newer mouse movement", async () => {
     attach();
     move(20, 120);

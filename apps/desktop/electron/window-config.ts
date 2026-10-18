@@ -14,8 +14,6 @@ export const DEFAULT_WINDOW_STATE: WindowState = {
   lastView: "notes",
 };
 
-export const NOTE_WINDOW_TAB_GUTTER = 70;
-
 export function createContentSecurityPolicy(isPackaged: boolean): string {
   const scripts = isPackaged ? "'self'" : "'self' 'unsafe-inline'";
   const developmentSocket = isPackaged ? "" : " ws://127.0.0.1:5173";
@@ -33,9 +31,9 @@ export function toPersistedNoteWindowBounds(
   bounds: WindowBounds,
 ): WindowBounds {
   return {
-    x: bounds.x + NOTE_WINDOW_TAB_GUTTER,
+    x: bounds.x,
     y: bounds.y,
-    width: bounds.width - NOTE_WINDOW_TAB_GUTTER,
+    width: bounds.width,
     height: bounds.height,
   };
 }
@@ -104,11 +102,11 @@ export function createNoteWindowOptions(
 ): BrowserWindowConstructorOptions {
   const state = normalizeNoteWindowState(input.noteId, input);
   return {
-    width: state.width + NOTE_WINDOW_TAB_GUTTER,
+    width: state.width,
     height: state.height,
-    x: state.x === undefined ? undefined : state.x - NOTE_WINDOW_TAB_GUTTER,
+    x: state.x,
     y: state.y,
-    minWidth: 250 + NOTE_WINDOW_TAB_GUTTER,
+    minWidth: 250,
     minHeight: 180,
     frame: false,
     transparent: true,

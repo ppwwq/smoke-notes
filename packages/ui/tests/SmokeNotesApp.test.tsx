@@ -120,6 +120,19 @@ describe("SmokeNotesApp", () => {
     await database.delete();
   });
 
+  it("reports a cloud failure on desktop even when the device network is online", async () => {
+    render(
+      <SmokeNotesApp
+        repository={repository}
+        platform="desktop"
+        desktopBridge={desktopBridge()}
+        syncStatus={{ phase: "error", pending: 2, initial: false }}
+      />,
+    );
+    expect(await screen.findByText("同步失败")).toBeInTheDocument();
+    expect(screen.queryByText("已连接")).not.toBeInTheDocument();
+  });
+
   it("saves the main editor before acknowledging desktop quit", async () => {
     const bridge = desktopBridge();
     let prepare!: () => Promise<void>;
@@ -823,13 +836,18 @@ describe("SmokeNotesApp", () => {
     ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "新建便签" }));
     await user.click(screen.getByRole("menuitem", { name: "普通便签" }));
+    await waitFor(() => expect(bridge.openNote).toHaveBeenCalledOnce());
     expect(
       await screen.findByRole("textbox", { name: "便签正文" }),
     ).toBeInTheDocument();
-    expect(bridge.openNote).not.toHaveBeenCalled();
     expect(
       screen.getByRole("complementary", { name: "便签导航" }),
     ).toBeInTheDocument();
+    const book = (await repository.listNotebooks()).find(
+      (item) => item.name === "灵感",
+    )!;
+    const [created] = await repository.listNotes(book.id);
+    expect(bridge.openNote).toHaveBeenCalledWith(created.id);
     await user.type(
       screen.getByRole("textbox", { name: "便签标题" }),
       "主窗口编辑",
@@ -853,15 +871,16 @@ describe("SmokeNotesApp", () => {
     await user.click(screen.getByRole("button", { name: "新建便签" }));
     await user.click(screen.getByRole("menuitem", { name: "待办便签" }));
 
+    await waitFor(() => expect(bridge.openNote).toHaveBeenCalledOnce());
     expect(
       await screen.findByRole("textbox", { name: "便签正文" }),
     ).toBeInTheDocument();
-    expect(bridge.openNote).not.toHaveBeenCalled();
     const notes = await repository.listNotes(
       (await repository.listNotebooks()).find((book) => book.name === "工作")!
         .id,
     );
     expect(notes.at(-1)?.kind).toBe("todo");
+    expect(bridge.openNote).toHaveBeenCalledWith(notes.at(-1)?.id);
     await user.click(screen.getByRole("button", { name: "返回便签列表" }));
     expect(
       await screen.findByLabelText("待办便签：无标题便签"),

@@ -1,0 +1,30 @@
+{
+  "extends": null,
+  "appId": "com.smokenotes.clearpreview",
+  "productName": "SmokeNotes Clear Preview",
+  "extraMetadata": {
+    "name": "smoke-notes-clear-preview",
+    "productName": "SmokeNotes Clear Preview",
+    "version": "0.1.10-clear-preview.1"
+  },
+  "directories": { "output": "release-preview" },
+  "files": ["dist/**/*", "dist-electron/**/*", "package.json"],
+  "win": {
+    "target": [{ "target": "nsis", "arch": ["x64"] }],
+    "icon": "build/icon.png",
+    "artifactName": "SmokeNotes-Clear-Preview-Setup-${version}.${ext}",
+    "signAndEditExecutable": false
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowElevation": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": false,
+    "createStartMenuShortcut": true,
+    "shortcutName": "SmokeNotes Clear Preview",
+    "uninstallDisplayName": "SmokeNotes Clear Preview",
+    "runAfterFinish": false,
+    "deleteAppDataOnUninstall": false
+  }
+}
