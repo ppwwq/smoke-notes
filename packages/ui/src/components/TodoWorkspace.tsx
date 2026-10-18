@@ -7,10 +7,12 @@ import {
 import { Plus, Trash2 } from "lucide-react";
 import { SortableStack } from "./SortableStack";
 
-type Filter = "all" | "open" | "done";
+export type TodoFilter = "all" | "open" | "done";
 
 interface TodoWorkspaceProps {
   web?: boolean;
+  filter?: TodoFilter;
+  onFilterChange?(filter: TodoFilter): void;
   todos: Todo[];
   onCreate: (text: string) => Promise<void>;
   onToggle: (id: string) => Promise<void>;
@@ -121,7 +123,8 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
       setBusyIds((current) => current.filter((id) => id !== todo.id));
     }
   }
-  const [filter, setFilter] = useState<Filter>("all");
+  const [localFilter, setLocalFilter] = useState<TodoFilter>("all");
+  const filter = props.filter ?? localFilter;
   const visible = useMemo(
     () =>
       props.todos.filter(
@@ -247,7 +250,10 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
             key={value}
             className={filter === value ? "active" : ""}
             aria-pressed={filter === value}
-            onClick={() => setFilter(value)}
+            onClick={() => {
+              setLocalFilter(value);
+              props.onFilterChange?.(value);
+            }}
           >
             {value === "all" ? "全部" : value === "open" ? "未完成" : "已完成"}
           </button>

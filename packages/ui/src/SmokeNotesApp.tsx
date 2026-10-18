@@ -33,7 +33,7 @@ import {
 import { Sidebar } from "./components/Sidebar";
 import { WebNotebookCollection } from "./components/WebNotebookCollection";
 import { NotesWorkspace } from "./components/NotesWorkspace";
-import { TodoWorkspace } from "./components/TodoWorkspace";
+import { TodoWorkspace, type TodoFilter } from "./components/TodoWorkspace";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { PairingDialog } from "./components/PairingDialog";
 import type { RichNoteEditorHandle } from "./components/RichNoteEditor";
@@ -93,6 +93,10 @@ export function SmokeNotesApp({
   const selectedNotebookIdRef = useRef<string | null>(null);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [notebookCollectionOpen, setNotebookCollectionOpen] = useState(false);
+  const [notebookCardsExpanded, setNotebookCardsExpanded] = useState(false);
+  const [todoFilter, setTodoFilter] = useState<TodoFilter>("all");
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const browsePositions = useRef(new Map<string, Map<string, number>>());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
@@ -268,6 +272,22 @@ export function SmokeNotesApp({
   }, [platform, saveStatus]);
 
   const webEditing = platform === "web" && view === "notes" && !!selectedNote;
+  const browseKey = notebookCollectionOpen
+    ? "notebooks"
+    : view === "todos"
+      ? `todos:${todoFilter}`
+      : `notes:${selectedNotebookId}`;
+  useLayoutEffect(() => {
+    if (platform !== "web" || webEditing) return;
+    const positions = browsePositions.current.get(browseKey);
+    workspaceRef.current
+      ?.querySelectorAll<HTMLElement>(
+        ".notes-board, .notes-board-scroll, .todo-workspace, .web-notebook-collection",
+      )
+      .forEach((element) => {
+        element.scrollTop = positions?.get(element.className) ?? 0;
+      });
+  }, [platform, browseKey, webEditing]);
   const { style: viewportStyle, compactEditing } = useWebViewport(webEditing);
   useEffect(() => {
     setEditorMenu(null);
@@ -430,8 +450,24 @@ export function SmokeNotesApp({
         </div>
 
         <div
+          ref={workspaceRef}
           className={`workspace-shell${platform === "web" && syncStatus ? " has-sync-status" : ""}`}
           inert={mobile && mobileNavOpen}
+          onScrollCapture={(event) => {
+            if (platform !== "web" || webEditing) return;
+            const element = event.target;
+            if (
+              !(element instanceof HTMLElement) ||
+              !element.matches(
+                ".notes-board, .notes-board-scroll, .todo-workspace, .web-notebook-collection",
+              )
+            )
+              return;
+            const positions =
+              browsePositions.current.get(browseKey) ?? new Map();
+            positions.set(element.className, element.scrollTop);
+            browsePositions.current.set(browseKey, positions);
+          }}
         >
           {platform === "web" ? (
             <SyncIndicator status={syncStatus} />
@@ -447,6 +483,8 @@ export function SmokeNotesApp({
           {platform === "web" && notebookCollectionOpen ? (
             <WebNotebookCollection
               notebooks={notebooks}
+              expanded={notebookCardsExpanded}
+              onExpandedChange={setNotebookCardsExpanded}
               onSelect={(id) => {
                 setNotebookCollectionOpen(false);
                 void selectNotebook(id);
@@ -456,6 +494,8 @@ export function SmokeNotesApp({
           ) : view === "todos" ? (
             <TodoWorkspace
               web={platform === "web"}
+              filter={platform === "web" ? todoFilter : undefined}
+              onFilterChange={platform === "web" ? setTodoFilter : undefined}
               todos={todos}
               onCreate={async (text) => {
                 await repository.createTodo(text);

@@ -8,6 +8,8 @@ import {
 
 interface Props {
   notebooks: Notebook[];
+  expanded?: boolean;
+  onExpandedChange?(expanded: boolean): void;
   onSelect(id: string): void;
   onCreate(name: string): Promise<void>;
 }
@@ -15,10 +17,13 @@ interface Props {
 /** A web presentation of the same notebooks, with no separate data or ordering. */
 export function WebNotebookCollection({
   notebooks,
+  expanded: controlledExpanded,
+  onExpandedChange,
   onSelect,
   onCreate,
 }: Props) {
-  const [expanded, setExpanded] = useState(false);
+  const [localExpanded, setLocalExpanded] = useState(false);
+  const expanded = controlledExpanded ?? localExpanded;
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
@@ -106,7 +111,10 @@ export function WebNotebookCollection({
           className="collection-expand"
           aria-expanded={expanded}
           aria-controls="notebook-collection-cards"
-          onClick={() => setExpanded((value) => !value)}
+          onClick={() => {
+            setLocalExpanded(!expanded);
+            onExpandedChange?.(!expanded);
+          }}
         >
           <Layers size={15} />
           {expanded ? "收起卡片" : "展开卡片"}

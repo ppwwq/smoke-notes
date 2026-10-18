@@ -608,6 +608,42 @@ describe("SmokeNotesApp", () => {
     ).toBeInTheDocument();
   });
 
+  it("retains web browsing positions, todo filters and notebook expansion across navigation", async () => {
+    const { container } = render(
+      <SmokeNotesApp repository={repository} platform="web" />,
+    );
+    await screen.findByRole("button", { name: "打开便签：周会记录" });
+    const nav = () =>
+      within(screen.getByRole("navigation", { name: "手机主导航" }));
+    const list = container.querySelector<HTMLElement>(".notes-board-scroll")!;
+    list.scrollTop = 180;
+    fireEvent.scroll(list);
+    fireEvent.click(screen.getByRole("button", { name: "打开便签：周会记录" }));
+    await screen.findByRole("textbox", { name: "便签标题" });
+    fireEvent.click(screen.getByRole("button", { name: "返回便签列表" }));
+    await screen.findByRole("button", { name: "打开便签：周会记录" });
+    expect(container.querySelector(".notes-board-scroll")!.scrollTop).toBe(180);
+    fireEvent.click(nav().getByRole("button", { name: "待办" }));
+    fireEvent.click(await screen.findByRole("button", { name: "未完成" }));
+    fireEvent.click(nav().getByRole("button", { name: "浏览便签本" }));
+    fireEvent.click(screen.getByRole("button", { name: "展开卡片" }));
+    fireEvent.click(screen.getByRole("button", { name: "进入便签本：生活" }));
+    await screen.findByRole("heading", { name: "生活" });
+    expect(container.querySelector(".notes-board-scroll")!.scrollTop).toBe(0);
+    fireEvent.click(nav().getByRole("button", { name: "浏览便签本" }));
+    expect(screen.getByRole("button", { name: "收起卡片" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "进入便签本：工作" }));
+    await screen.findByRole("button", { name: "打开便签：周会记录" });
+    expect(container.querySelector(".notes-board-scroll")!.scrollTop).toBe(180);
+    fireEvent.click(nav().getByRole("button", { name: "待办" }));
+    expect(
+      await screen.findByRole("button", { name: "未完成" }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("shows a manual save failure and retries without losing the draft", async () => {
     const update = repository.updateNote.bind(repository);
     const save = vi

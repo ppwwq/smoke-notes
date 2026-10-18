@@ -61,7 +61,11 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
         </span>
         <p className="eyebrow">NO NOTEBOOK YET</p>
         <h1>先建立一个便签本</h1>
-        <p>左侧的「＋」是入口。工作、生活、灵感，都可以各有一处安静空间。</p>
+        <p>
+          {props.web
+            ? "打开便签本导航，点「＋」建立一个空间。工作、生活、灵感，都可以各有一处。"
+            : "左侧的「＋」是入口。工作、生活、灵感，都可以各有一处安静空间。"}
+        </p>
       </main>
     );
 
