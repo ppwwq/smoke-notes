@@ -1,17 +1,20 @@
 {
   "name": "@smoke-notes/desktop",
-  "version": "0.1.10",
+  "version": "0.1.11-rc.4",
   "description": "Windows 便笺式烟雾玻璃便签与待办",
   "author": "Smoke Notes",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.cjs",
   "scripts": {
+    "preview:build": "vite build --mode preview && pnpm build:electron",
+    "preview:desktop": "pnpm preview:build && node ../../tools/start-desktop-preview.mjs",
     "dev": "pnpm build:electron && concurrently -k \"vite --host 127.0.0.1 --port 5173 --strictPort\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "build:renderer": "vite build",
     "build:electron": "tsup --config tsup.config.ts",
     "build": "pnpm build:renderer && pnpm build:electron",
-    "package": "pnpm build && electron-builder --win nsis"
+    "build:release": "vite build --mode release && pnpm build:electron",
+    "package": "pnpm build:release && electron-builder --win nsis --publish never"
   },
   "devDependencies": {
     "@smoke-notes/core": "workspace:*",
@@ -47,7 +50,9 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true
+      "createDesktopShortcut": true,
+      "runAfterFinish": false,
+      "deleteAppDataOnUninstall": false
     }
   }
 }

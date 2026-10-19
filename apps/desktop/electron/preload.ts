@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { NoteWindowState, WindowState } from "@smoke-notes/core";
 
 contextBridge.exposeInMainWorld("smokeDesktop", {
+  getPreviewMode: (): Promise<boolean> =>
+    ipcRenderer.invoke("app:preview-mode"),
   getWindowState: (): Promise<WindowState> =>
     ipcRenderer.invoke("window:get-state"),
   setBackgroundOpacity: (value: number): Promise<number> =>
@@ -50,7 +52,11 @@ contextBridge.exposeInMainWorld("smokeDesktop", {
         .catch(() => {});
     };
     ipcRenderer.on("app:prepare-quit", handler);
-    return () => ipcRenderer.removeListener("app:prepare-quit", handler);
+    void ipcRenderer.invoke("app:editor-ready", true).catch(() => {});
+    return () => {
+      ipcRenderer.removeListener("app:prepare-quit", handler);
+      void ipcRenderer.invoke("app:editor-ready", false).catch(() => {});
+    };
   },
   onQuitCancelled: (listener: (message: string) => void): (() => void) => {
     const handler = (

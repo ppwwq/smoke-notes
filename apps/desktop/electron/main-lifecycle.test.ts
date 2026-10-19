@@ -1,19 +1,34 @@
 import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { runInNewContext } from "node:vm";
 import { describe, expect, it, vi } from "vitest";
 
 // Exercise the real main-process IPC and window callbacks. Electron invalidates
 // native window properties before emitting `closed`.
-async function startMain() {
+async function startMain(
+  previewMode: boolean | "packaged" | "release-test" = false,
+  editorReady = true,
+  restoreFailure?: Error,
+  quitDuringRestore = false,
+) {
+  const paths = new Map<string, string>();
+  const startup: string[] = [];
+  const trayCreated = vi.fn();
+  const beforeRequest = vi.fn();
+  const startupError = vi.fn();
   type Handler = (
     event: { sender: { id: number } },
     ...args: unknown[]
   ) => unknown;
   const handlers = new Map<string, Handler>();
   const files = new Map<string, string>();
+  if (restoreFailure)
+    files.set(
+      join("test-user-data", "note-window-states.json"),
+      JSON.stringify([{ noteId: "restore-failure", isOpen: true }]),
+    );
   const windows: TestWindow[] = [];
   const appEvents = new Map<
     string,
@@ -44,11 +59,20 @@ async function startMain() {
       return windows.filter((window) => !window.destroyed);
     }
     show = vi.fn();
+    showInactive = vi.fn();
     focus = vi.fn();
     hide = vi.fn();
     setMenuBarVisibility = vi.fn();
     setIgnoreMouseEvents = vi.fn();
-    loadURL = vi.fn(async () => {});
+    private async loadRenderer() {
+      if (restoreFailure && this.contents.id > 1) {
+        if (quitDuringRestore)
+          appEvents.get("before-quit")?.({ preventDefault: vi.fn() });
+        throw restoreFailure;
+      }
+    }
+    loadURL = vi.fn(() => this.loadRenderer());
+    loadFile = vi.fn(() => this.loadRenderer());
     getBounds = () => ({ x: 0, y: 0, width: 490, height: 500 });
     isAlwaysOnTop = () => false;
     isDestroyed = () => this.destroyed;
@@ -60,9 +84,24 @@ async function startMain() {
   let ready: Promise<unknown> | undefined;
   const electron = {
     app: {
-      isPackaged: false,
-      requestSingleInstanceLock: () => true,
-      getPath: () => "test-user-data",
+      isPackaged: previewMode === "packaged" || previewMode === "release-test",
+      getName: () =>
+        previewMode === "packaged" ? "SmokeNotes Clear Preview" : "烟笺",
+      commandLine: {
+        getSwitchValue: (name: string) =>
+          name === "user-data-dir" && previewMode === "release-test"
+            ? resolve("work/release-acceptance")
+            : "",
+      },
+      setPath: (name: string, path: string) => {
+        paths.set(name, path);
+        startup.push(name);
+      },
+      requestSingleInstanceLock: () => {
+        startup.push("lock");
+        return true;
+      },
+      getPath: (name: string) => paths.get(name) ?? "test-user-data",
       on: (
         event: string,
         listener: (event: { preventDefault(): void }) => void,
@@ -80,12 +119,19 @@ async function startMain() {
     session: {
       defaultSession: {
         setPermissionRequestHandler: vi.fn(),
-        webRequest: { onHeadersReceived: vi.fn() },
+        webRequest: {
+          onHeadersReceived: vi.fn(),
+          onBeforeRequest: beforeRequest,
+        },
       },
     },
     nativeImage: { createEmpty: vi.fn() },
     Menu: { buildFromTemplate: vi.fn() },
     Tray: class extends EventEmitter {
+      constructor() {
+        super();
+        trayCreated();
+      }
       setToolTip = vi.fn();
       setContextMenu = vi.fn();
     },
@@ -97,6 +143,7 @@ async function startMain() {
       if (id === "electron") return electron;
       if (id === "node:fs" || id === "fs")
         return {
+          mkdirSync: vi.fn(),
           existsSync: (path: string) => files.has(path),
           readFileSync: (path: string) => files.get(path),
           writeFileSync: (path: string, value: string) =>
@@ -105,8 +152,11 @@ async function startMain() {
       return require(id);
     },
     __dirname: dirname(bundlePath),
-    process: { argv: ["smoke-notes"] },
-    console,
+    process: {
+      argv:
+        previewMode === true ? ["smoke-notes", "--preview"] : ["smoke-notes"],
+    },
+    console: { ...console, error: startupError },
     setTimeout,
     clearTimeout,
   });
@@ -118,17 +168,193 @@ async function startMain() {
   };
   const open = async (noteId: string) => {
     await invoke("note-window:open", windows[0].webContents.id, noteId);
+    if (editorReady && handlers.has("app:editor-ready"))
+      invoke("app:editor-ready", windows.at(-1)!.webContents.id, true);
     return windows[windows.length - 1];
   };
+  if (editorReady && handlers.has("app:editor-ready"))
+    invoke("app:editor-ready", 1, true);
   const requestQuit = () => {
     const preventDefault = vi.fn();
     appEvents.get("before-quit")?.({ preventDefault });
     return preventDefault;
   };
-  return { invoke, open, windows, requestQuit, quit };
+  return {
+    invoke,
+    open,
+    windows,
+    requestQuit,
+    quit,
+    paths,
+    startup,
+    trayCreated,
+    beforeRequest,
+    files,
+    startupError,
+  };
 }
 
 describe("main-process note window lifecycle", () => {
+  it.each([false, true])(
+    "allows safe quit after restoring a note fails (quit during restore: %s)",
+    async (quitDuringRestore) => {
+      const failure = new Error("Restored note could not load");
+      const { invoke, windows, requestQuit, quit, startupError, files } =
+        await startMain(false, true, failure, quitDuringRestore);
+      expect(startupError).toHaveBeenCalledWith(
+        "Could not initialize application windows",
+        failure,
+      );
+      expect(windows[1].isDestroyed()).toBe(true);
+      expect(
+        JSON.parse(
+          files.get(join("test-user-data", "note-window-states.json"))!,
+        ),
+      ).toEqual([
+        expect.objectContaining({ noteId: "restore-failure", isOpen: true }),
+      ]);
+      if (!quitDuringRestore) requestQuit();
+      await vi.waitFor(() =>
+        expect(windows[0].webContents.send).toHaveBeenCalledWith(
+          "app:prepare-quit",
+          1,
+        ),
+      );
+      expect(quit).not.toHaveBeenCalled();
+      invoke("app:quit-result", 1, 1, false);
+      expect(quit).not.toHaveBeenCalled();
+      expect(windows[0].webContents.send).toHaveBeenCalledWith(
+        "app:cancel-quit",
+        1,
+        expect.any(String),
+      );
+      requestQuit();
+      invoke("app:quit-result", 1, 2, true);
+      expect(quit).toHaveBeenCalledOnce();
+    },
+  );
+  it("cancels a stuck initialization without discarding drafts or quitting later unexpectedly", async () => {
+    vi.useFakeTimers();
+    try {
+      const { invoke, windows, requestQuit, quit } = await startMain(
+        false,
+        false,
+      );
+      requestQuit();
+      await expect(invoke("note-window:open", 1, "blocked")).rejects.toThrow();
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(quit).not.toHaveBeenCalled();
+      expect(windows[0].webContents.send).toHaveBeenCalledWith(
+        "app:cancel-quit",
+        0,
+        expect.stringContaining("准备超时"),
+      );
+      invoke("app:editor-ready", 1, true);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(quit).not.toHaveBeenCalled();
+      requestQuit();
+      invoke("app:quit-result", 1, 1, true);
+      expect(quit).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("honors one quit requested before editors finish initialization", async () => {
+    const { open, invoke, windows, requestQuit, quit } = await startMain(
+      false,
+      false,
+    );
+    const note = await open("initializing");
+    requestQuit();
+    expect(windows[0].webContents.send).not.toHaveBeenCalledWith(
+      "app:prepare-quit",
+      expect.anything(),
+    );
+    invoke("app:editor-ready", 1, true);
+    expect(quit).not.toHaveBeenCalled();
+    invoke("app:editor-ready", note.webContents.id, true);
+    await vi.waitFor(() =>
+      expect(note.webContents.send).toHaveBeenCalledWith("app:prepare-quit", 1),
+    );
+    invoke("app:quit-result", 1, 1, true);
+    invoke("app:quit-result", note.webContents.id, 1, true);
+    expect(quit).toHaveBeenCalledOnce();
+  });
+  it("keeps the full production app in an explicit isolated data directory without changing login items", async () => {
+    const { invoke, paths, startup, trayCreated, beforeRequest, windows } =
+      await startMain("release-test");
+    expect(invoke("app:preview-mode", 1)).toBe(false);
+    expect(paths.get("userData")).toBe(resolve("work/release-acceptance"));
+    expect(paths.get("sessionData")).toBe(paths.get("userData"));
+    expect(startup.slice(0, 3)).toEqual(["userData", "sessionData", "lock"]);
+    expect(trayCreated).toHaveBeenCalledOnce();
+    expect(beforeRequest).not.toHaveBeenCalled();
+    windows[0].emit("ready-to-show");
+    expect(windows[0].show).toHaveBeenCalled();
+    expect(invoke("app:set-launch-at-login", 1, true)).toBe(false);
+  });
+  it("isolates the packaged preview without command-line flags or startup changes", async () => {
+    const { invoke, paths, startup, trayCreated, beforeRequest, windows } =
+      await startMain("packaged");
+    expect(invoke("app:preview-mode", 1)).toBe(true);
+    expect(paths.get("userData")).toContain("SmokeNotes Clear Preview");
+    expect(paths.get("userData")).toBe(paths.get("sessionData"));
+    expect(startup.slice(0, 3)).toEqual(["userData", "sessionData", "lock"]);
+    expect(invoke("app:set-launch-at-login", 1, true)).toBe(false);
+    expect(trayCreated).not.toHaveBeenCalled();
+    expect(beforeRequest).toHaveBeenCalledOnce();
+    expect(windows[0].show).not.toHaveBeenCalled();
+  });
+  it("isolates preview storage before the instance lock, denies external requests and exits after its final note", async () => {
+    const {
+      invoke,
+      open,
+      windows,
+      paths,
+      startup,
+      trayCreated,
+      beforeRequest,
+      files,
+      quit,
+    } = await startMain(true);
+    expect(startup.slice(0, 3)).toEqual(["userData", "sessionData", "lock"]);
+    expect(paths.get("userData")).toBe(paths.get("sessionData"));
+    expect(paths.get("userData")).toContain("desktop-preview");
+    expect(invoke("app:preview-mode", 1)).toBe(true);
+    expect(invoke("app:set-launch-at-login", 1, true)).toBe(false);
+    expect(trayCreated).not.toHaveBeenCalled();
+    expect(windows[0].loadFile).toHaveBeenCalled();
+    expect(windows[0].show).not.toHaveBeenCalled();
+    const callback = vi.fn();
+    const filter = beforeRequest.mock.calls[0][0];
+    filter({ url: "https://example.com" }, callback);
+    expect(callback).toHaveBeenLastCalledWith({ cancel: true });
+    filter({ url: "file:///preview/index.html" }, callback);
+    expect(callback).toHaveBeenLastCalledWith({ cancel: false });
+    const note = await open("sample");
+    await open("sample");
+    expect(note.showInactive).toHaveBeenCalled();
+    expect(note.focus).not.toHaveBeenCalled();
+    invoke("window:set-background-opacity", note.webContents.id, 0.28);
+    expect(
+      [...files.keys()].every((path) =>
+        path.startsWith(paths.get("userData")!),
+      ),
+    ).toBe(true);
+    await invoke("note-window:close", note.webContents.id, "sample");
+    expect(quit).toHaveBeenCalledOnce();
+  });
+
+  it("persists a clear note background while retaining the main window opacity floor", async () => {
+    const { open, invoke } = await startMain();
+    const note = await open("clear");
+    const sender = note.webContents.id;
+    expect(invoke("window:set-background-opacity", sender, 0.28)).toBe(0.28);
+    expect(invoke("note-window:get-state", sender, "clear")).toMatchObject({
+      backgroundOpacity: 0.28,
+    });
+    expect(invoke("window:set-background-opacity", 1, 0.28)).toBe(0.45);
+  });
   it("cleans up a destroyed note without reading its native properties", async () => {
     const { open, invoke } = await startMain();
     const note = await open("note-1");
@@ -192,7 +418,7 @@ describe("main-process note window lifecycle", () => {
     );
   });
 
-  it("does not quit during an already pending note navigation", async () => {
+  it("waits for pending navigation and then honors the original quit request", async () => {
     const { open, invoke, requestQuit, quit } = await startMain();
     const note = await open("note-1");
     let loaded!: () => void;
@@ -213,9 +439,12 @@ describe("main-process note window lifecycle", () => {
     expect(quit).not.toHaveBeenCalled();
     loaded();
     await switching;
-    requestQuit();
-    await invoke("app:quit-result", note.webContents.id, 2, true);
-    await invoke("app:quit-result", 1, 2, true);
+    invoke("app:editor-ready", note.webContents.id, true);
+    await vi.waitFor(() =>
+      expect(note.webContents.send).toHaveBeenCalledWith("app:prepare-quit", 1),
+    );
+    await invoke("app:quit-result", note.webContents.id, 1, true);
+    await invoke("app:quit-result", 1, 1, true);
     expect(quit).toHaveBeenCalledOnce();
   });
 
@@ -269,9 +498,9 @@ describe("main-process note window lifecycle", () => {
     expect(windows[0].isDestroyed()).toBe(false);
     expect(invoke("note-window:get-state", 1, "note-1")).toMatchObject({
       noteId: "note-1",
-      x: 70,
+      x: 0,
       y: 0,
-      width: 420,
+      width: 490,
       height: 500,
       isOpen: false,
     });

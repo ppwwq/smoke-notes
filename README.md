@@ -30,9 +30,9 @@ The installer is currently unsigned, so Windows may show a publisher or reputati
 
 ## 最近更新 · Recent updates
 
-当前源码版本为 **0.1.10**：新增真实同步状态提示，新建便签复用当前窗口，修复保存与同步时的光标跳位，并释放已关闭的桌面便签窗口以减少内存占用。完整说明及验证范围见 [更新记录](CHANGELOG.md)。
+当前源码候选版本为 **0.1.11-rc.2**（[验收记录与限制](docs/desktop-release-0.1.11.md)，尚未正式发布）：新增真实同步状态提示，新建便签复用当前窗口，修复保存与同步时的光标跳位，并释放已关闭的桌面便签窗口以减少内存占用。完整说明及验证范围见 [更新记录](CHANGELOG.md)。
 
-Source version **0.1.10** adds sync status indicators, creates notes in the current window, stabilizes the cursor during saves and sync, and releases closed desktop note windows to reduce memory use. See the [changelog](CHANGELOG.md) for validation and delivery details.
+Source candidate version **0.1.11-rc.2** is not formally released; see [acceptance results and remaining limits](docs/desktop-release-0.1.11.md). It adds sync status indicators, creates notes in the current window, stabilizes the cursor during saves and sync, and releases closed desktop note windows to reduce memory use. See the [changelog](CHANGELOG.md) for validation and delivery details.
 
 源码版本与上方安装包下载版本分开记录；本次源码推送未发布新的安装包。
 

@@ -7,6 +7,7 @@ import {
   SyncEngine,
   createSyncRuntime,
   type CloudConfig,
+  type SyncStatus,
 } from "@smoke-notes/core";
 import type { PairingController } from "@smoke-notes/ui";
 import "@smoke-notes/ui/styles.css";
@@ -31,12 +32,15 @@ function cloudConfig(): CloudConfig | null {
 
 async function bootstrap() {
   const noteId = new URLSearchParams(window.location.search).get("noteId");
-  const config = cloudConfig();
+  const previewMode = (await window.smokeDesktop.getPreviewMode?.()) === true;
+  const config = previewMode ? null : cloudConfig();
   // Only the main renderer owns cloud authentication and background sync.
   const cloud = config && !noteId ? new SupabaseCloud(config) : null;
   const workspaceId = persistentId("smoke-notes:workspace-id");
   const deviceId = persistentId("smoke-notes:device-id");
-  const database = new SmokeNotesDatabase("smoke-notes-desktop");
+  const database = new SmokeNotesDatabase(
+    previewMode ? "smoke-notes-preview" : "smoke-notes-desktop",
+  );
   const repository = new LocalRepository(database, { workspaceId, deviceId });
   const dataChannel = new BroadcastChannel("smoke-notes:data");
   dataChannel.onmessage = () =>
@@ -57,6 +61,14 @@ async function bootstrap() {
     : undefined;
 
   const root = createRoot(document.getElementById("root")!);
+  let syncStatus: SyncStatus | undefined = cloud
+    ? {
+        phase: navigator.onLine ? "syncing" : "offline",
+        pending: 0,
+        initial: true,
+      }
+    : undefined;
+  let renderMain: (() => void) | undefined;
   if (noteId) {
     const { NoteWindowApp } = await import("@smoke-notes/ui/note-window");
     root.render(
@@ -70,16 +82,19 @@ async function bootstrap() {
     );
   } else {
     const { SmokeNotesApp } = await import("@smoke-notes/ui/app");
-    root.render(
-      <StrictMode>
-        <SmokeNotesApp
-          repository={repository}
-          platform="desktop"
-          desktopBridge={window.smokeDesktop}
-          pairingController={pairingController}
-        />
-      </StrictMode>,
-    );
+    renderMain = () =>
+      root.render(
+        <StrictMode>
+          <SmokeNotesApp
+            repository={repository}
+            platform="desktop"
+            desktopBridge={window.smokeDesktop}
+            pairingController={pairingController}
+            syncStatus={syncStatus}
+          />
+        </StrictMode>,
+      );
+    renderMain();
   }
 
   if (cloud && !noteId) {
@@ -92,12 +107,17 @@ async function bootstrap() {
           return engine.flush();
         },
         pull: (cursor) => engine.pull(cursor),
+        getQueueState: () => engine.getQueueState(),
       },
       cloud,
       storage: localStorage,
       notify: () =>
         window.dispatchEvent(new CustomEvent("smoke-notes:data-changed")),
       onError: (error) => console.warn("Background sync paused", error),
+      onStatusChange: (status) => {
+        syncStatus = status;
+        renderMain?.();
+      },
     });
     await runtime.start();
     window.addEventListener("beforeunload", () => runtime.stop(), {
@@ -107,6 +127,20 @@ async function bootstrap() {
   window.addEventListener("beforeunload", () => dataChannel.close(), {
     once: true,
   });
+  if (previewMode && !noteId) {
+    const notebooks = await repository.listNotebooks();
+    const notebook =
+      notebooks[0] ?? (await repository.createNotebook("隔离预览 · 示例"));
+    const notes = await repository.listNotes(notebook.id);
+    const sample =
+      notes[0] ??
+      (await repository.createNote(notebook.id, {
+        title: "留一点空白",
+        body: "今天，慢慢做好三件事。\n\n整理桌面，给灵感留个位置。\n读几页书，记下一句喜欢的话。\n傍晚出去走走。",
+        color: "sky",
+      }));
+    await window.smokeDesktop.openNote(sample.id);
+  }
 }
 
 void bootstrap();

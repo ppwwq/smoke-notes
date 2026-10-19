@@ -5,6 +5,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import { NOTE_DEFAULT_OPACITY, NOTE_MIN_OPACITY } from "@smoke-notes/core";
 import type {
   LocalRepository,
   Note,
@@ -14,6 +15,9 @@ import type {
 import {
   CheckSquare2,
   Minus,
+  MoreHorizontal,
+  Type,
+  NoteAppearance,
   Pin,
   PinOff,
   Plus,
@@ -58,6 +62,22 @@ export function NoteWindowApp({
     triggerRef: createTriggerRef,
     onKeyDown: onCreateKeyDown,
   } = useActionMenu();
+  const {
+    open: toolsOpen,
+    setOpen: setToolsOpen,
+    controlRef: toolsControlRef,
+    triggerRef: toolsTriggerRef,
+    onKeyDown: onToolsKeyDown,
+  } = useActionMenu();
+  const [formatOpen, setFormatOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [controlError, setControlError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState("已自动保存");
+  const saveError = ["已自动保存", "待保存", "保存中…"].includes(saveStatus)
+    ? null
+    : saveStatus;
+  const [pinBusy, setPinBusy] = useState(false);
+  const opacityRevision = useRef(0);
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const switchingRef = useRef(false);
@@ -244,55 +264,11 @@ export function NoteWindowApp({
       }}
       style={
         {
-          "--background-opacity": windowState?.backgroundOpacity ?? 0.92,
+          "--background-opacity":
+            windowState?.backgroundOpacity ?? NOTE_DEFAULT_OPACITY,
         } as CSSProperties
       }
     >
-      <nav
-        className="recent-note-tabs"
-        aria-label="最近便签"
-        aria-busy={switching}
-      >
-        {recentNotes.map((item) => {
-          const displayTitle = item.title || "无标题便签";
-          return (
-            <button
-              key={item.id}
-              type="button"
-              aria-label={`切换便签：${displayTitle}`}
-              className={`recent-note-tab${item.id === noteId ? " active" : ""}`}
-              title={displayTitle}
-              aria-current={item.id === noteId ? "page" : undefined}
-              disabled={switching}
-              onClick={async () => {
-                if (item.id === noteId || switchingRef.current) return;
-                switchingRef.current = true;
-                setSwitching(true);
-                setSwitchError(null);
-                try {
-                  const target = await repository.getNote(item.id);
-                  if (!target) {
-                    setRecentNotes((current) =>
-                      current.filter((candidate) => candidate.id !== item.id),
-                    );
-                    setSwitchError("这张便签已不存在，请选择另一张。");
-                    return;
-                  }
-                  await editorRef.current?.flushSave();
-                  await bridge.switchNote(item.id);
-                } catch {
-                  setSwitchError("切换失败，当前内容已保留，请重试。");
-                } finally {
-                  switchingRef.current = false;
-                  setSwitching(false);
-                }
-              }}
-            >
-              <span>{displayTitle}</span>
-            </button>
-          );
-        })}
-      </nav>
       <header className="note-window-bar">
         <div
           className="note-window-create-control"
@@ -331,7 +307,132 @@ export function NoteWindowApp({
             </div>
           )}
         </div>
-        <span className="note-window-drag-handle" />
+        <span className="note-window-drag-handle" aria-label="拖动便签" />
+        <div
+          className="note-tools-control"
+          ref={toolsControlRef}
+          onKeyDown={onToolsKeyDown}
+        >
+          <button
+            type="button"
+            aria-label="便签工具"
+            aria-haspopup="menu"
+            aria-expanded={toolsOpen}
+            ref={toolsTriggerRef}
+            onClick={() => {
+              setCreateMenuOpen(false);
+              setToolsOpen(!toolsOpen);
+            }}
+          >
+            <MoreHorizontal size={17} />
+          </button>
+          {toolsOpen && (
+            <div className="note-tools-panel" role="menu" aria-label="便签工具">
+              <button
+                type="button"
+                role="menuitem"
+                data-format-toggle
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  setToolsOpen(false);
+                  setFormatOpen(true);
+                }}
+              >
+                <Type size={15} />
+                文字格式
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setToolsOpen(false);
+                  setAppearanceOpen(true);
+                }}
+              >
+                <NoteAppearance size={15} />
+                便签颜色
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                aria-label="删除便签"
+                disabled={switching}
+                onClick={async () => {
+                  if (switchingRef.current) return;
+                  switchingRef.current = true;
+                  setSwitching(true);
+                  setSwitchError(null);
+                  try {
+                    await editorRef.current?.flushSave();
+                    await repository.trashNote(activeNoteIdRef.current);
+                    window.dispatchEvent(
+                      new CustomEvent("smoke-notes:data-changed"),
+                    );
+                    await bridge.closeNote(noteId);
+                  } catch {
+                    setSwitchError("删除失败，请重试。");
+                  } finally {
+                    switchingRef.current = false;
+                    setSwitching(false);
+                  }
+                }}
+              >
+                <Trash2 size={15} />
+                删除便签
+              </button>
+              <nav
+                className="recent-note-tabs"
+                aria-label="最近便签"
+                aria-busy={switching}
+              >
+                {recentNotes.map((item) => {
+                  const displayTitle = item.title || "无标题便签";
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="menuitem"
+                      aria-label={`切换便签：${displayTitle}`}
+                      className={`recent-note-tab${item.id === noteId ? " active" : ""}`}
+                      title={displayTitle}
+                      aria-current={item.id === noteId ? "page" : undefined}
+                      disabled={switching}
+                      onClick={async () => {
+                        if (item.id === noteId || switchingRef.current) return;
+                        switchingRef.current = true;
+                        setSwitching(true);
+                        setSwitchError(null);
+                        try {
+                          const target = await repository.getNote(item.id);
+                          if (!target) {
+                            setRecentNotes((current) =>
+                              current.filter(
+                                (candidate) => candidate.id !== item.id,
+                              ),
+                            );
+                            setSwitchError("这张便签已不存在，请选择另一张。");
+                            return;
+                          }
+                          await editorRef.current?.flushSave();
+                          await bridge.switchNote(item.id);
+                          setToolsOpen(false);
+                        } catch {
+                          setSwitchError("切换失败，当前内容已保留，请重试。");
+                        } finally {
+                          switchingRef.current = false;
+                          setSwitching(false);
+                        }
+                      }}
+                    >
+                      <span>{displayTitle}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+          )}
+        </div>
+
         <button
           type="button"
           aria-label="最小化便签"
@@ -341,60 +442,60 @@ export function NoteWindowApp({
         </button>
         <button
           type="button"
+          className="note-pin-control"
+          disabled={pinBusy || !windowState}
+          aria-pressed={windowState?.alwaysOnTop ?? false}
           aria-label={windowState?.alwaysOnTop ? "取消置顶" : "窗口置顶"}
           onClick={async () => {
-            const next = !(windowState?.alwaysOnTop ?? false);
-            await bridge.setAlwaysOnTop(next);
-            setWindowState(
-              await bridge.saveNoteWindowState(noteId, { alwaysOnTop: next }),
-            );
-          }}
-        >
-          {windowState?.alwaysOnTop ? <PinOff size={15} /> : <Pin size={15} />}
-        </button>
-        <label className="note-opacity-control" title="透明度">
-          <input
-            type="range"
-            min="45"
-            max="100"
-            aria-label="便签透明度"
-            value={Math.round((windowState?.backgroundOpacity ?? 0.92) * 100)}
-            onChange={async (event) => {
-              const backgroundOpacity = await bridge.setBackgroundOpacity(
-                Number(event.target.value) / 100,
+            setPinBusy(true);
+            setControlError(null);
+            try {
+              const alwaysOnTop = await bridge.setAlwaysOnTop(
+                !(windowState?.alwaysOnTop ?? false),
               );
               setWindowState(
-                await bridge.saveNoteWindowState(noteId, {
-                  backgroundOpacity,
-                }),
+                await bridge.saveNoteWindowState(noteId, { alwaysOnTop }),
               );
-            }}
-          />
-        </label>
-        <button
-          type="button"
-          aria-label="删除便签"
-          disabled={switching}
-          onClick={async () => {
-            if (switchingRef.current) return;
-            switchingRef.current = true;
-            setSwitching(true);
-            setSwitchError(null);
-            try {
-              await editorRef.current?.flushSave();
-              await repository.trashNote(activeNoteIdRef.current);
-              window.dispatchEvent(new CustomEvent("smoke-notes:data-changed"));
-              await bridge.closeNote(noteId);
             } catch {
-              setSwitchError("删除失败，请重试。");
+              setControlError("置顶设置失败，请重试。");
             } finally {
-              switchingRef.current = false;
-              setSwitching(false);
+              setPinBusy(false);
             }
           }}
         >
-          <Trash2 size={15} />
+          {windowState?.alwaysOnTop ? <PinOff size={15} /> : <Pin size={15} />}
+          <span>{windowState?.alwaysOnTop ? "已置顶" : "未置顶"}</span>
         </button>
+        <label
+          className="note-opacity-control"
+          title="背景不透明度：数值越小越清透"
+        >
+          <input
+            type="range"
+            min={NOTE_MIN_OPACITY * 100}
+            max="100"
+            aria-label="便签透明度"
+            value={Math.round(
+              (windowState?.backgroundOpacity ?? NOTE_DEFAULT_OPACITY) * 100,
+            )}
+            onChange={async (event) => {
+              const requested = Number(event.target.value) / 100;
+              const revision = ++opacityRevision.current;
+              setControlError(null);
+              try {
+                const backgroundOpacity =
+                  await bridge.setBackgroundOpacity(requested);
+                if (revision === opacityRevision.current)
+                  setWindowState((current) =>
+                    current ? { ...current, backgroundOpacity } : current,
+                  );
+              } catch {
+                if (revision === opacityRevision.current)
+                  setControlError("透明度保存失败，请重试。");
+              }
+            }}
+          />
+        </label>
         <button
           type="button"
           aria-label="关闭便签"
@@ -405,6 +506,10 @@ export function NoteWindowApp({
         </button>
       </header>
       {quitError && <p role="alert">{quitError}</p>}
+      {controlError && <p role="alert">{controlError}</p>}
+      {saveError && !quitError && !switchError && (
+        <p role="alert">{saveError}，草稿仍保留，请重试。</p>
+      )}
       {switchError && (
         <div role="alert">
           <p>{switchError}</p>
@@ -443,7 +548,14 @@ export function NoteWindowApp({
           window.dispatchEvent(new CustomEvent("smoke-notes:data-changed"));
           return updated;
         }}
+        onSaveStatusChange={setSaveStatus}
         className="standalone-note-editor"
+        progressive
+        compact
+        formatOpen={formatOpen}
+        onFormatClose={() => setFormatOpen(false)}
+        appearanceOpen={appearanceOpen}
+        onAppearanceClose={() => setAppearanceOpen(false)}
       />
     </div>
   );

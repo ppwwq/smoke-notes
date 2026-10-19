@@ -17,6 +17,12 @@ describe("NoteWindowApp", () => {
   let noteId: string;
   let bridge: DesktopBridge;
 
+  async function showTools() {
+    const button = await screen.findByRole("button", { name: "便签工具" });
+    if (button.getAttribute("aria-expanded") !== "true")
+      fireEvent.click(button);
+  }
+
   beforeEach(async () => {
     sessionStorage.clear();
     vi.stubGlobal(
@@ -79,6 +85,80 @@ describe("NoteWindowApp", () => {
     await database.delete();
   });
 
+  it("keeps pin disabled until the persisted window state is known", async () => {
+    const saved = await bridge.getNoteWindowState(noteId);
+    let finishState!: (state: typeof saved) => void;
+    vi.mocked(bridge.getNoteWindowState).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishState = resolve;
+        }),
+    );
+    render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    const pin = await screen.findByRole("button", { name: "窗口置顶" });
+    expect(pin).toBeDisabled();
+    fireEvent.click(pin);
+    expect(bridge.setAlwaysOnTop).not.toHaveBeenCalled();
+    await act(async () => finishState({ ...saved, alwaysOnTop: true }));
+    expect(screen.getByRole("button", { name: "取消置顶" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "取消置顶" }));
+    await waitFor(() =>
+      expect(bridge.setAlwaysOnTop).toHaveBeenCalledWith(false),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "窗口置顶" })).toBeEnabled(),
+    );
+  });
+
+  it("shows an autosave failure with tools closed and clears it after recovery", async () => {
+    vi.spyOn(repository, "updateNote").mockRejectedValueOnce(
+      new Error("disk full"),
+    );
+    render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    const title = await screen.findByRole("textbox", { name: "便签标题" });
+    fireEvent.change(title, { target: { value: "尚未保存的草稿" } });
+    const error = await screen.findByRole("alert");
+    expect(error).toBeVisible();
+    expect(error).toHaveTextContent("保存失败");
+    expect(
+      screen.queryByRole("toolbar", { name: "文字格式" }),
+    ).not.toBeInTheDocument();
+    expect(title).toHaveValue("尚未保存的草稿");
+    expect((await repository.getNote(noteId))?.title).toBe("桌面便签");
+    fireEvent.change(title, { target: { value: "恢复保存的草稿" } });
+    await waitFor(async () =>
+      expect((await repository.getNote(noteId))?.title).toBe("恢复保存的草稿"),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
+    );
+    expect(title).toHaveValue("恢复保存的草稿");
+  });
+
+  it("offers formatting and note colors from the tools menu", async () => {
+    render(
+      <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
+    );
+    await screen.findByDisplayValue("桌面便签");
+    expect(
+      screen.queryByRole("toolbar", { name: "文字格式" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "便签工具" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "文字格式" }));
+    expect(screen.getByRole("toolbar", { name: "文字格式" })).toBeVisible();
+    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.click(screen.getByRole("button", { name: "便签工具" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "便签颜色" }));
+    expect(
+      await screen.findByRole("dialog", { name: "便签外观" }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "便签颜色：sky" })).toBeVisible();
+  });
+
   it("flushes composed drafts before acknowledging quit and unlocks when cancelled", async () => {
     let prepare!: () => Promise<void>;
     let cancel!: (message: string) => void;
@@ -124,6 +204,7 @@ describe("NoteWindowApp", () => {
     render(
       <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
     );
+    await showTools();
     const title = await screen.findByRole("textbox", { name: "便签标题" });
     const original = await repository.getNote(noteId);
     let finishOldRead!: () => void;
@@ -140,7 +221,7 @@ describe("NoteWindowApp", () => {
     await waitFor(async () => {
       expect((await repository.getNote(noteId))?.title).toBe("已保存的新草稿");
     });
-    await screen.findByRole("button", { name: "切换便签：已保存的新草稿" });
+    await screen.findByRole("menuitem", { name: "切换便签：已保存的新草稿" });
 
     await act(async () => finishOldRead());
 
@@ -250,10 +331,11 @@ describe("NoteWindowApp", () => {
     render(
       <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
     );
+    await showTools();
     fireEvent.change(await screen.findByRole("textbox", { name: "便签标题" }), {
       target: { value: "不能丢失的草稿" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "删除便签" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "删除便签" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("删除失败");
     expect(screen.getByRole("textbox", { name: "便签标题" })).toHaveValue(
       "不能丢失的草稿",
@@ -326,10 +408,11 @@ describe("NoteWindowApp", () => {
     render(
       <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
     );
+    await showTools();
     fireEvent.change(await screen.findByRole("textbox", { name: "便签标题" }), {
       target: { value: "删除前的最新草稿" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "删除便签" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "删除便签" }));
     await waitFor(() =>
       expect(screen.queryByRole("textbox", { name: "便签标题" })).toBeNull(),
     );
@@ -355,13 +438,15 @@ describe("NoteWindowApp", () => {
     const firstWindow = render(
       <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
     );
+    await showTools();
     const labels = () =>
       screen
-        .getAllByRole("button", { name: /切换便签：/ })
+        .getAllByRole("menuitem", { name: /切换便签：/ })
         .map((tab) => tab.getAttribute("aria-label"));
-    await screen.findByRole("button", { name: "切换便签：第三张" });
+    await showTools();
+    await screen.findByRole("menuitem", { name: "切换便签：第三张" });
     const original = labels();
-    fireEvent.click(screen.getByRole("button", { name: "切换便签：第二张" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "切换便签：第二张" }));
     await waitFor(() =>
       expect(bridge.switchNote).toHaveBeenCalledWith(second.id),
     );
@@ -378,10 +463,11 @@ describe("NoteWindowApp", () => {
         bridge={bridge}
       />,
     );
-    await screen.findByRole("button", { name: "切换便签：第三张" });
+    await showTools();
+    await screen.findByRole("menuitem", { name: "切换便签：第三张" });
     expect(labels()).toEqual(original);
     expect(
-      screen.getByRole("button", { name: "切换便签：第二张" }),
+      screen.getByRole("menuitem", { name: "切换便签：第二张" }),
     ).toHaveAttribute("aria-current", "page");
     secondWindow.unmount();
     vi.mocked(bridge.getRecentNoteIds).mockResolvedValue([
@@ -396,10 +482,11 @@ describe("NoteWindowApp", () => {
         bridge={bridge}
       />,
     );
-    await screen.findByRole("button", { name: "切换便签：第三张" });
+    await showTools();
+    await screen.findByRole("menuitem", { name: "切换便签：第三张" });
     expect(labels()).toEqual(original);
     expect(
-      screen.getByRole("button", { name: "切换便签：第三张" }),
+      screen.getByRole("menuitem", { name: "切换便签：第三张" }),
     ).toHaveClass("active");
   });
 
@@ -417,7 +504,8 @@ describe("NoteWindowApp", () => {
     render(
       <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
     );
-    await screen.findByRole("button", { name: "切换便签：第四张" });
+    await showTools();
+    await screen.findByRole("menuitem", { name: "切换便签：第四张" });
     await repository.trashNote(others[0]!.id);
     vi.mocked(bridge.getRecentNoteIds).mockResolvedValue([
       others[3]!.id,
@@ -426,10 +514,10 @@ describe("NoteWindowApp", () => {
       noteId,
     ]);
     window.dispatchEvent(new CustomEvent("smoke-notes:data-changed"));
-    await screen.findByRole("button", { name: "切换便签：补位便签" });
+    await screen.findByRole("menuitem", { name: "切换便签：补位便签" });
     expect(
       screen
-        .getAllByRole("button", { name: /切换便签：/ })
+        .getAllByRole("menuitem", { name: /切换便签：/ })
         .map((tab) => tab.textContent),
     ).toEqual(["桌面便签", "第三张", "第四张", "补位便签"]);
   });
@@ -455,14 +543,15 @@ describe("NoteWindowApp", () => {
         bridge={bridge}
       />,
     );
-    await screen.findByRole("button", { name: "切换便签：新打开的便签" });
+    await showTools();
+    await screen.findByRole("menuitem", { name: "切换便签：新打开的便签" });
     expect(
       screen
-        .getAllByRole("button", { name: /切换便签：/ })
+        .getAllByRole("menuitem", { name: /切换便签：/ })
         .map((tab) => tab.textContent),
     ).toEqual(["桌面便签", "第二张", "第三张", "新打开的便签"]);
     expect(
-      screen.getByRole("button", { name: "切换便签：新打开的便签" }),
+      screen.getByRole("menuitem", { name: "切换便签：新打开的便签" }),
     ).toHaveAttribute("aria-current", "page");
   });
 
@@ -477,8 +566,9 @@ describe("NoteWindowApp", () => {
           bridge={bridge}
         />,
       );
+      await showTools();
       expect(
-        await screen.findByRole("button", { name: "切换便签：桌面便签" }),
+        await screen.findByRole("menuitem", { name: "切换便签：桌面便签" }),
       ).toHaveAttribute("aria-current", "page");
     },
   );
@@ -496,33 +586,25 @@ describe("NoteWindowApp", () => {
     expect(await repository.getNote(noteId)).not.toBeNull();
   });
 
-  it("passes transparent gutter clicks through but keeps tabs and the body interactive", async () => {
+  it("keeps the complete gutter-free note clickable, including the left edge", async () => {
     const setPassthrough = vi.fn(async () => undefined);
-    Object.assign(bridge, {
-      setNoteWindowMousePassthrough: setPassthrough,
-      getNoteWindowPointer: vi.fn(async () => ({ x: 200, y: 100 })),
-    });
+    Object.assign(bridge, { setNoteWindowMousePassthrough: setPassthrough });
     const { container } = render(
       <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
     );
     await screen.findByDisplayValue("桌面便签");
-    const root = container.querySelector(".note-window")!;
+    const root = container.querySelector<HTMLElement>(".note-window")!;
+    root.style.paddingLeft = "0px";
     vi.spyOn(root, "getBoundingClientRect").mockReturnValue(
-      new DOMRect(0, 0, 460, 420),
+      new DOMRect(0, 0, 320, 400),
     );
-    const tab = await screen.findByRole("button", {
-      name: "切换便签：桌面便签",
-    });
-    vi.spyOn(tab, "getBoundingClientRect").mockReturnValue(
-      new DOMRect(70, 52, 30, 30),
-    );
-    fireEvent.mouseMove(document, { clientX: 20, clientY: 120 });
-    await waitFor(() => expect(setPassthrough).toHaveBeenLastCalledWith(true));
-    fireEvent.mouseMove(document, { clientX: 80, clientY: 60 });
-    await waitFor(() => expect(setPassthrough).toHaveBeenLastCalledWith(false));
+    setPassthrough.mockClear();
+    fireEvent.mouseMove(document, { clientX: 1, clientY: 120 });
     fireEvent.mouseMove(document, { clientX: 80, clientY: 85 });
+    expect(setPassthrough).not.toHaveBeenCalledWith(true);
+    fireEvent.mouseMove(document, { clientX: -1, clientY: 120 });
     await waitFor(() => expect(setPassthrough).toHaveBeenLastCalledWith(true));
-    fireEvent.mouseMove(document, { clientX: 200, clientY: 120 });
+    fireEvent.mouseMove(document, { clientX: 1, clientY: 120 });
     await waitFor(() => expect(setPassthrough).toHaveBeenLastCalledWith(false));
   });
 
@@ -652,14 +734,19 @@ describe("NoteWindowApp", () => {
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
-  it("renders recent tabs in their dedicated left gutter", async () => {
+  it("opens recent notes inside the tools menu without a side gutter", async () => {
     render(
       <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
     );
     await screen.findByDisplayValue("桌面便签");
+    await showTools();
 
     const tabs = screen.getByRole("navigation", { name: "最近便签" });
-    const activeTab = await screen.findByRole("button", {
+    fireEvent.keyDown(screen.getByRole("menuitem", { name: "文字格式" }), {
+      key: "End",
+    });
+    expect(tabs).toContainElement(document.activeElement as HTMLElement);
+    const activeTab = await screen.findByRole("menuitem", {
       name: "切换便签：桌面便签",
     });
     expect(tabs).toHaveClass("recent-note-tabs");
@@ -731,11 +818,12 @@ describe("NoteWindowApp", () => {
       <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
     );
     await screen.findByDisplayValue("桌面便签");
+    await showTools();
 
     expect(
-      await screen.findByRole("button", { name: "切换便签：桌面便签" }),
+      await screen.findByRole("menuitem", { name: "切换便签：桌面便签" }),
     ).toHaveClass("active");
-    const otherTab = await screen.findByRole("button", {
+    await screen.findByRole("menuitem", {
       name: "切换便签：另一条记录",
     });
     expect(screen.queryByText("missing-note")).not.toBeInTheDocument();
@@ -743,7 +831,10 @@ describe("NoteWindowApp", () => {
     const title = screen.getByRole("textbox", { name: "便签标题" });
     await user.clear(title);
     await user.type(title, "切换前保存");
-    await user.click(otherTab);
+    await showTools();
+    await user.click(
+      screen.getByRole("menuitem", { name: "切换便签：另一条记录" }),
+    );
 
     await waitFor(() =>
       expect(bridge.switchNote).toHaveBeenCalledWith(other.id),
@@ -766,12 +857,13 @@ describe("NoteWindowApp", () => {
     render(
       <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
     );
+    await showTools();
 
     expect(
-      await screen.findAllByRole("button", { name: /切换便签/ }),
+      await screen.findAllByRole("menuitem", { name: /切换便签/ }),
     ).toHaveLength(4);
     expect(
-      screen.getByRole("button", { name: "切换便签：第四条" }),
+      screen.getByRole("menuitem", { name: "切换便签：第四条" }),
     ).toBeInTheDocument();
   });
 
@@ -788,9 +880,10 @@ describe("NoteWindowApp", () => {
       <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
     );
     await screen.findByDisplayValue("桌面便签");
+    await showTools();
 
     await user.click(
-      await screen.findByRole("button", { name: "切换便签：暂时打不开" }),
+      await screen.findByRole("menuitem", { name: "切换便签：暂时打不开" }),
     );
 
     expect(screen.getByDisplayValue("桌面便签")).toBeInTheDocument();
@@ -813,7 +906,10 @@ describe("NoteWindowApp", () => {
     render(
       <NoteWindowApp repository={repository} noteId={noteId} bridge={bridge} />,
     );
-    const tab = await screen.findByRole("button", { name: "切换便签：另一张" });
+    await showTools();
+    const tab = await screen.findByRole("menuitem", {
+      name: "切换便签：另一张",
+    });
     fireEvent.click(tab);
     await waitFor(() => expect(bridge.switchNote).toHaveBeenCalledTimes(1));
     fireEvent.click(tab);

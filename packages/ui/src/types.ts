@@ -2,6 +2,7 @@ import type { NoteWindowState, WindowState } from "@smoke-notes/core";
 import type { PairingDetails } from "@smoke-notes/core";
 
 export interface DesktopBridge {
+  getPreviewMode?(): Promise<boolean>;
   getWindowState(): Promise<WindowState>;
   setBackgroundOpacity(value: number): Promise<number>;
   setAlwaysOnTop(value: boolean): Promise<boolean>;

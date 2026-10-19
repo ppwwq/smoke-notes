@@ -8,10 +8,11 @@ import {
   session,
   Tray,
 } from "electron";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { isAbsolute, join } from "node:path";
 import {
   clampOpacity,
+  clampNoteOpacity,
   normalizeNoteWindowState,
   type NoteWindowState,
   type WindowState,
@@ -39,10 +40,38 @@ import {
   toPersistedNoteWindowBounds,
 } from "./window-config";
 
+// Set isolation before the instance lock, any state reads, or browser session creation.
+const packagedPreview =
+  app.isPackaged && app.getName() === "SmokeNotes Clear Preview";
+const previewMode =
+  packagedPreview || (!app.isPackaged && process.argv.includes("--preview"));
+const customDataDirectory = previewMode
+  ? ""
+  : app.commandLine.getSwitchValue("user-data-dir");
+if (customDataDirectory && !isAbsolute(customDataDirectory))
+  throw new Error("--user-data-dir must be an absolute path");
+if (previewMode) {
+  const profile = packagedPreview
+    ? join(app.getPath("appData"), "SmokeNotes Clear Preview")
+    : join(__dirname, "../../../work/desktop-preview");
+  mkdirSync(profile, { recursive: true });
+  app.setPath("userData", profile);
+  app.setPath("sessionData", profile);
+} else if (customDataDirectory) {
+  mkdirSync(customDataDirectory, { recursive: true });
+  app.setPath("userData", customDataDirectory);
+  app.setPath("sessionData", customDataDirectory);
+}
+const isolatedProfile = previewMode || Boolean(customDataDirectory);
+
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let quitting = false;
 let loadingRenderers = 0;
+let starting = true;
+let quitWhenReady = false;
+let quitReadyTimer: NodeJS.Timeout | null = null;
+const readyEditors = new Set<number>();
 let persistTimer: NodeJS.Timeout | null = null;
 const notePersistTimers = new Map<string, NodeJS.Timeout>();
 const noteIdByWebContents = new Map<number, string>();
@@ -109,9 +138,17 @@ function configureRenderer(window: BrowserWindow) {
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   const cancelQuit = () =>
     saveBeforeQuit.cancel("窗口正在重新载入，退出已取消，请稍后重试。");
-  window.webContents.on("did-start-loading", cancelQuit);
+  const senderId = window.webContents.id;
+  window.webContents.on("did-start-loading", () => {
+    readyEditors.delete(senderId);
+    cancelQuit();
+  });
   window.webContents.on("did-finish-load", cancelQuit);
   window.webContents.on("render-process-gone", cancelQuit);
+  window.on("closed", () => {
+    readyEditors.delete(senderId);
+    setTimeout(resumePendingQuit, 0);
+  });
   window.webContents.on("will-navigate", (event, url) => {
     const allowedDevUrl =
       !app.isPackaged && url.startsWith("http://127.0.0.1:5173");
@@ -121,10 +158,11 @@ function configureRenderer(window: BrowserWindow) {
 
 async function loadRenderer(window: BrowserWindow, noteId?: string) {
   ++loadingRenderers;
+  readyEditors.delete(window.webContents.id);
   saveBeforeQuit.cancel("窗口正在打开或切换，退出已取消，请稍后重试。");
   try {
     const query = noteId ? `?noteId=${encodeURIComponent(noteId)}` : "";
-    if (app.isPackaged)
+    if (app.isPackaged || previewMode)
       await window.loadFile(
         join(__dirname, "../dist/index.html"),
         noteId ? { query: { noteId } } : undefined,
@@ -134,6 +172,7 @@ async function loadRenderer(window: BrowserWindow, noteId?: string) {
     --loadingRenderers;
     // An acknowledgement from the old document cannot cover its replacement.
     saveBeforeQuit.cancel("窗口已切换，退出已取消，请稍后重试。");
+    setTimeout(resumePendingQuit, 0);
   }
 }
 
@@ -171,7 +210,9 @@ const noteWindowManager = new NoteWindowManager(
       if (currentNoteId) clearNoteStateSave(currentNoteId);
       noteIdByWebContents.delete(webContentsId);
     });
-    window.once("ready-to-show", () => window.show());
+    window.once("ready-to-show", () =>
+      previewMode ? window.showInactive() : window.show(),
+    );
     try {
       await loadRenderer(window, state.noteId);
     } catch (error) {
@@ -179,8 +220,10 @@ const noteWindowManager = new NoteWindowManager(
       throw error;
     }
     return {
-      show: () => window.show(),
-      focus: () => window.focus(),
+      show: () => (previewMode ? window.showInactive() : window.show()),
+      focus: () => {
+        if (!previewMode) window.focus();
+      },
       hide: () => window.hide(),
       destroy: () => window.destroy(),
       isDestroyed: () => window.isDestroyed(),
@@ -242,6 +285,7 @@ function closeSavedNote(noteId: string) {
   }
   clearNoteStateSave(noteId);
   noteWindowManager.close(noteId);
+  if (previewMode && noteIdByWebContents.size === 0) app.quit();
 }
 
 function trustedWindow(event: Electron.IpcMainInvokeEvent): BrowserWindow {
@@ -302,11 +346,53 @@ const saveBeforeQuit = new SaveBeforeQuit(
 );
 
 function requireNotQuitting() {
-  if (saveBeforeQuit.preparing || quitting)
+  if (quitWhenReady || saveBeforeQuit.preparing || quitting)
     throw new Error("正在保存并退出，请稍候。");
 }
 
+// Wait for React to install its save handler, not merely for Chromium's load event.
+// A single Quit during startup/navigation must still save every editor and exit.
+function resumePendingQuit() {
+  if (!quitWhenReady || starting || loadingRenderers) return;
+  const editors = BrowserWindow.getAllWindows().filter(
+    (window) =>
+      window === mainWindow || noteIdByWebContents.has(window.webContents.id),
+  );
+  if (editors.some((window) => !readyEditors.has(window.webContents.id)))
+    return;
+  quitWhenReady = false;
+  if (quitReadyTimer) clearTimeout(quitReadyTimer);
+  quitReadyTimer = null;
+  void saveBeforeQuit.request();
+}
+
+function requestSafeQuit() {
+  if (saveBeforeQuit.preparing || quitWhenReady) return;
+  quitWhenReady = true;
+  quitReadyTimer = setTimeout(() => {
+    quitWhenReady = false;
+    quitReadyTimer = null;
+    for (const window of BrowserWindow.getAllWindows())
+      window.webContents.send(
+        "app:cancel-quit",
+        0,
+        "窗口准备超时，退出已取消，草稿仍保留，请重试。",
+      );
+  }, 30_000);
+  resumePendingQuit();
+}
+
 function registerIpc() {
+  ipcMain.handle("app:editor-ready", (event, ready: unknown) => {
+    trustedWindow(event);
+    if (ready === true) readyEditors.add(event.sender.id);
+    else readyEditors.delete(event.sender.id);
+    setTimeout(resumePendingQuit, 0);
+  });
+  ipcMain.handle("app:preview-mode", (event) => {
+    trustedWindow(event);
+    return previewMode;
+  });
   ipcMain.handle(
     "app:quit-result",
     (event, requestId: unknown, saved: unknown) => {
@@ -332,10 +418,14 @@ function registerIpc() {
     "window:set-background-opacity",
     (event, rawValue: unknown) => {
       trustedWindow(event);
-      const value = clampOpacity(
-        typeof rawValue === "number" ? rawValue : 0.82,
-      );
       const noteId = noteIdByWebContents.get(event.sender.id);
+      const value = noteId
+        ? clampNoteOpacity(rawValue)
+        : clampOpacity(
+            typeof rawValue === "number" && Number.isFinite(rawValue)
+              ? rawValue
+              : 0.82,
+          );
       if (noteId)
         noteWindowManager.update(noteId, { backgroundOpacity: value });
       else saveMainState({ backgroundOpacity: value });
@@ -376,12 +466,12 @@ function registerIpc() {
   ipcMain.handle("app:get-launch-at-login", (event) => {
     if (trustedWindow(event) !== mainWindow)
       throw new Error("Only the main window may change launch settings");
-    return readLaunchAtLogin(app);
+    return isolatedProfile ? false : readLaunchAtLogin(app);
   });
   ipcMain.handle("app:set-launch-at-login", (event, rawValue: unknown) => {
     if (trustedWindow(event) !== mainWindow)
       throw new Error("Only the main window may change launch settings");
-    return writeLaunchAtLogin(app, rawValue === true);
+    return isolatedProfile ? false : writeLaunchAtLogin(app, rawValue === true);
   });
   ipcMain.handle("note-window:open", async (event, rawNoteId: unknown) => {
     trustedWindow(event);
@@ -505,33 +595,54 @@ function activateMainWindow() {
 if (registerSingleInstance(app, activateMainWindow)) {
   app.whenReady().then(async () => {
     try {
-      ensureBackgroundLaunchAtLogin(app);
+      if (!isolatedProfile) ensureBackgroundLaunchAtLogin(app);
     } catch (error) {
       console.warn("Could not update the login launch mode", error);
     }
     session.defaultSession.setPermissionRequestHandler(
       (_webContents, _permission, callback) => callback(false),
     );
+    if (previewMode) {
+      session.defaultSession.webRequest.onBeforeRequest((details, callback) =>
+        callback({
+          cancel:
+            !details.url.startsWith("file:") &&
+            !details.url.startsWith("data:"),
+        }),
+      );
+    }
     session.defaultSession.webRequest.onHeadersReceived((details, callback) =>
       callback({
         responseHeaders: {
           ...details.responseHeaders,
           "Content-Security-Policy": [
-            createContentSecurityPolicy(app.isPackaged),
+            previewMode
+              ? "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'none'"
+              : createContentSecurityPolicy(app.isPackaged),
           ],
         },
       }),
     );
     registerIpc();
-    await createMainWindow(shouldShowMainWindow(process.argv));
-    createTray();
-    await noteWindowManager.restoreOpen();
+    try {
+      await createMainWindow(
+        !previewMode && shouldShowMainWindow(process.argv),
+      );
+      if (!previewMode) createTray();
+      await noteWindowManager.restoreOpen();
+    } catch (error) {
+      console.error("Could not initialize application windows", error);
+    } finally {
+      // Failed restoration must not leave surviving editors unable to quit.
+      starting = false;
+      resumePendingQuit();
+    }
   });
 
   app.on("before-quit", (event) => {
     if (quitting) return;
     event.preventDefault();
-    void saveBeforeQuit.request();
+    requestSafeQuit();
   });
   app.on("activate", activateMainWindow);
   app.on("window-all-closed", () => {
