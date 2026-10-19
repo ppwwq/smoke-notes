@@ -26,7 +26,7 @@ interface RankedItem {
 interface SortableStackProps<T extends RankedItem> {
   items: T[];
   label: (item: T) => string;
-  renderItem: (item: T) => ReactNode;
+  renderItem: (item: T, index: number) => ReactNode;
   onMove: (
     id: string,
     previousRank: number | null,
@@ -126,9 +126,9 @@ export function SortableStack<T extends RankedItem>({
         strategy={verticalListSortingStrategy}
       >
         <div className={className}>
-          {items.map((item) => (
+          {items.map((item, index) => (
             <SortableRow key={item.id} item={item} label={label(item)}>
-              {renderItem(item)}
+              {renderItem(item, index)}
             </SortableRow>
           ))}
         </div>

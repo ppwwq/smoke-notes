@@ -176,6 +176,7 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
         {collapsed ? (
           <NoteStacks
             groups={props.groups!}
+            activeNotebookId={props.notebook.id}
             onExpand={(id) => props.onExpandNotebook?.(id)}
           />
         ) : (
@@ -197,14 +198,17 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
                 label={(note) => note.title || "无标题便签"}
                 onMove={props.onMoveNote}
                 className="sticky-card-grid"
-                renderItem={(note) => {
+                renderItem={(note, index) => {
                   const displayTitle = note.title || "无标题便签";
                   return (
                     <div className="note-card-shell">
                       <article
                         className={`sticky-card note-color-${note.color}`}
                         data-note-id={note.id}
-                        style={{ viewTransitionName: `note-${note.id}` }}
+                        style={{
+                          viewTransitionName: `note-${note.id}`,
+                          viewTransitionClass: `paper paper-depth-${Math.min(index, 3)}`,
+                        }}
                       >
                         <button
                           type="button"

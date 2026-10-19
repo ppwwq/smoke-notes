@@ -13,6 +13,7 @@ import {
   createTaskListContent,
   migrateLegacyNoteContent,
   normalizeNoteColor,
+  nextNoteColor,
   normalizeNoteKind,
   normalizeRichTextDocument,
   richTextToPlainText,
@@ -131,7 +132,10 @@ export class LocalRepository {
           title: content.title.trim(),
           contentJson,
           body: richTextToPlainText(contentJson),
-          color: normalizeNoteColor(content.color),
+          color:
+            content.color === undefined
+              ? nextNoteColor(current)
+              : normalizeNoteColor(content.color),
           rank: (current.at(-1)?.rank ?? 0) + RANK_GAP,
           version: 1,
           conflictOf: null,

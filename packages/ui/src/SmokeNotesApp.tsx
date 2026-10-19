@@ -19,18 +19,16 @@ import type {
 import {
   ArrowLeft,
   ExternalLink,
-  CheckCircle2,
   Minus,
   MoreHorizontal,
   Settings2,
-  Library,
-  NotebookPen,
   Trash2,
   Wifi,
   WifiOff,
   X,
   NoteAppearance as Palette,
 } from "./icons";
+import { WorkspaceDock } from "./components/WorkspaceDock";
 import { Sidebar } from "./components/Sidebar";
 import { WebNotebookCollection } from "./components/WebNotebookCollection";
 import { NotesWorkspace } from "./components/NotesWorkspace";
@@ -257,7 +255,7 @@ export function SmokeNotesApp({
     setSelectedNoteId(null);
     setMobileNavOpen(false);
     await refresh(id);
-    transitionWorkspace(() => setNotesExpanded(true));
+    transitionWorkspace(() => setNotesExpanded(true), true);
   }
 
   const selectedNotebook =
@@ -828,7 +826,7 @@ export function SmokeNotesApp({
                 void selectNotebook(id);
               }}
               onCollapse={() =>
-                transitionWorkspace(() => setNotesExpanded(false))
+                transitionWorkspace(() => setNotesExpanded(false), true)
               }
               notes={notes}
               openOnSingleClick
@@ -873,75 +871,26 @@ export function SmokeNotesApp({
 
         <div style={{ display: "contents" }} inert={mobile && mobileNavOpen}>
           {!webEditing && (
-            <nav
-              className="web-dock"
-              aria-label="主导航"
-              style={
-                {
-                  "--dock-index": settingsOpen
-                    ? 3
-                    : notebookCollectionOpen
-                      ? 2
-                      : view === "todos"
-                        ? 1
-                        : 0,
-                } as CSSProperties
+            <WorkspaceDock
+              selected={
+                settingsOpen
+                  ? 3
+                  : notebookCollectionOpen
+                    ? 2
+                    : view === "todos"
+                      ? 1
+                      : 0
               }
-            >
-              <span className="dock-selection" aria-hidden="true" />
-              <button
-                type="button"
-                aria-label="便签"
-                aria-current={
-                  !settingsOpen && !notebookCollectionOpen && view === "notes"
-                    ? "page"
-                    : undefined
+              onSelect={(index) => {
+                if (index === 3) {
+                  setSettingsOpen(true);
+                  return;
                 }
-                onClick={() => {
-                  setNotebookCollectionOpen(false);
-                  setView("notes");
-                }}
-              >
-                <NotebookPen size={20} />
-                <span>便签</span>
-              </button>
-              <button
-                type="button"
-                aria-label="待办"
-                aria-current={
-                  !settingsOpen && !notebookCollectionOpen && view === "todos"
-                    ? "page"
-                    : undefined
-                }
-                onClick={() => {
-                  setNotebookCollectionOpen(false);
-                  void showTodos();
-                }}
-              >
-                <CheckCircle2 size={20} />
-                <span>待办</span>
-              </button>
-              <button
-                type="button"
-                aria-label="浏览便签本"
-                aria-current={
-                  !settingsOpen && notebookCollectionOpen ? "page" : undefined
-                }
-                onClick={() => setNotebookCollectionOpen(true)}
-              >
-                <Library size={20} />
-                <span>便签本</span>
-              </button>
-              <button
-                type="button"
-                aria-label="打开设置"
-                aria-current={settingsOpen ? "page" : undefined}
-                onClick={() => setSettingsOpen(true)}
-              >
-                <Settings2 size={20} />
-                <span>设置</span>
-              </button>
-            </nav>
+                setNotebookCollectionOpen(index === 2);
+                if (index === 0) setView("notes");
+                if (index === 1) void showTodos();
+              }}
+            />
           )}
         </div>
         {settingsOpen && (

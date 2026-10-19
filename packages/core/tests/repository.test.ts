@@ -59,6 +59,51 @@ describe("LocalRepository", () => {
     }
   });
 
+  it("allocates unused then least-used colours atomically with stable ties", async () => {
+    const book = await repository.createNotebook("配色");
+    const palette = ["amber", "rose", "sage", "sky", "violet", "graphite"];
+    const first = await Promise.all(
+      palette.map((title) => repository.createNote(book.id, { title })),
+    );
+    expect(first.map((note) => note.color)).toEqual(palette);
+    const repeat = await repository.createNote(book.id, { title: "重复" });
+    expect(repeat.color).toBe("amber");
+    expect(
+      (await repository.createNote(book.id, { title: "最少", kind: "todo" }))
+        .color,
+    ).toBe("rose");
+    expect(await repository.getNote(first[0].id)).toEqual(first[0]);
+    expect(
+      (await repository.listPendingOperations()).find(
+        (op) => op.entityId === repeat.id,
+      )?.payload,
+    ).toMatchObject({ color: "amber" });
+  });
+
+  it("scopes colour counts to live notes in this notebook and preserves explicit choices", async () => {
+    const book = await repository.createNotebook("当前");
+    const other = await repository.createNotebook("其他");
+    await repository.createNote(other.id, { title: "不计入", color: "rose" });
+    const amber = await repository.createNote(book.id, { title: "已有" });
+    const rose = await repository.createNote(book.id, { title: "删除" });
+    await repository.trashNote(rose.id);
+    expect(
+      (await repository.createNote(book.id, { title: "补空缺" })).color,
+    ).toBe("rose");
+    const explicit = await repository.createNote(book.id, {
+      title: "指定",
+      color: "graphite",
+    });
+    expect(explicit.color).toBe("graphite");
+    await repository.updateNote(explicit.id, {
+      title: explicit.title,
+      color: "sky",
+    });
+    await repository.createNote(book.id, { title: "下一张" });
+    expect((await repository.getNote(explicit.id))?.color).toBe("sky");
+    expect(await repository.getNote(amber.id)).toEqual(amber);
+  });
+
   it("rejects creating a note in a deleted or missing notebook", async () => {
     const notebook = await repository.createNotebook("即将删除");
     await repository.trashNotebook(notebook.id);

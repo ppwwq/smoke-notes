@@ -15,6 +15,20 @@ export const NOTE_COLORS = [
 ] as const;
 export const DEFAULT_NOTE_COLOR: NoteColor = "amber";
 export const DEFAULT_NOTE_KIND: NoteKind = "note";
+
+/** Palette order breaks ties, including the first unused colour. */
+export function nextNoteColor(
+  notes: readonly { color: NoteColor }[],
+): NoteColor {
+  const counts = new Map<NoteColor, number>(
+    NOTE_COLORS.map((color) => [color, 0]),
+  );
+  for (const note of notes)
+    counts.set(note.color, (counts.get(note.color) ?? 0) + 1);
+  return NOTE_COLORS.reduce((best, color) =>
+    counts.get(color)! < counts.get(best)! ? color : best,
+  );
+}
 export const TEXT_COLORS = [
   "#d9dde1",
   "#e98286",
