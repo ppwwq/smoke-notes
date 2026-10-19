@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 
-export function useMobileSidebar(open: boolean, close: () => void) {
+export function useMobileSidebar(
+  open: boolean,
+  close: () => void,
+  alwaysOverlay = false,
+) {
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const [mobile, setMobile] = useState(
+  const [narrowViewport, setMobile] = useState(
     () =>
       window.matchMedia?.("(max-width: 760px)").matches ??
       window.innerWidth <= 760,
   );
+  const mobile = alwaysOverlay || narrowViewport;
   useEffect(() => {
     if (!window.matchMedia) return;
     const media = window.matchMedia("(max-width: 760px)");

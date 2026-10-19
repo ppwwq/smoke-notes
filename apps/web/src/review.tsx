@@ -6,10 +6,8 @@ import {
   type NoteColor,
 } from "@smoke-notes/core";
 import { SmokeNotesApp } from "@smoke-notes/ui/app";
-import "./web.css";
+import "@smoke-notes/ui/workspace.css";
 import "./brand.css";
-import "./glass.css";
-import "./redesign.css";
 import "./review.css";
 
 // A separate origin AND database. This entry never constructs a cloud client.
@@ -30,8 +28,24 @@ async function seedExamples() {
       // Count tombstones too, so deleting every notebook never resets the demo.
       if (await database.notebooks.count()) return;
       const notebook = await repository.createNotebook("日常灵感");
-      await repository.createNotebook("工作与计划");
-      await repository.createNotebook("生活碎片");
+      const work = await repository.createNotebook("工作与计划");
+      await repository.createNote(work.id, {
+        title: "会前准备",
+        body: "确认议题，整理资料。",
+        color: "sky",
+      });
+      await repository.createNote(work.id, {
+        title: "本周待办",
+        body: "整理反馈\n检查交付",
+        kind: "todo",
+        color: "sage",
+      });
+      const life = await repository.createNotebook("生活碎片");
+      await repository.createNote(life.id, {
+        title: "周末去哪里",
+        body: "沿着河边走走，找一家安静的小店。",
+        color: "rose",
+      });
       await repository.createNotebook("阅读摘记");
       const notes: Array<[string, string, NoteColor]> = [
         [

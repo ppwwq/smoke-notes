@@ -2,21 +2,25 @@ import { useRef, useState } from "react";
 import { useActionMenu } from "../useActionMenu";
 import type { Note, NoteKind, Notebook } from "@smoke-notes/core";
 import {
-  ArrowUpRight,
+  ArrowLeft,
   CheckSquare2,
   ExternalLink,
   FilePlus2,
-  Notebook as NotebookPen,
   StickyNote,
   Trash2,
 } from "../icons";
 import { SortableStack } from "./SortableStack";
 import { RecordActions } from "./RecordActions";
+import { NoteStacks, type NotebookNotes } from "./NoteStacks";
 
 interface NotesWorkspaceProps {
   web?: boolean;
   notebook: Notebook | null;
   notes: Note[];
+  groups?: NotebookNotes[];
+  expanded?: boolean;
+  onExpandNotebook?(id: string): void;
+  onCollapse?(): void;
   openOnSingleClick: boolean;
   onOpenNote(id: string): void;
   onCreateNote(kind: NoteKind): Promise<void>;
@@ -40,6 +44,7 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
   const [arranging, setArranging] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const pending = useRef(false);
+  const collapsed = props.groups !== undefined && !props.expanded;
   async function create(kind: NoteKind) {
     if (pending.current) return;
     pending.current = true;
@@ -77,12 +82,21 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
     >
       <header className="notes-board-header">
         <div>
-          <p className="eyebrow">
-            {props.web ? "YOUR EVERYDAY SPACE" : "STICKY NOTES"}
-          </p>
-          <h1>{props.notebook.name}</h1>
+          {props.expanded && props.onCollapse && (
+            <button
+              type="button"
+              className="collapse-notes"
+              onClick={props.onCollapse}
+            >
+              <ArrowLeft size={16} />
+              收起便签
+            </button>
+          )}
+          <h1>{collapsed ? "我的便签" : props.notebook.name}</h1>
           <span>
-            {props.notes.length} 张{props.web ? "" : "桌面"}便签
+            {collapsed
+              ? `${props.groups!.length} 个便签本 · ${props.groups!.reduce((total, group) => total + group.notes.length, 0)} 张便签`
+              : `${props.notes.length} 张便签`}
           </span>
         </div>
         <div
@@ -131,12 +145,17 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
           )}
         </div>
       </header>
+      {collapsed && (
+        <p className="stack-context">
+          按便签本收好，点开一叠继续记录。新建到「{props.notebook.name}」。
+        </p>
+      )}
       {createError && (
         <p role="alert" className="create-note-error">
           {createError}
         </p>
       )}
-      {props.web && (
+      {props.web && !collapsed && (
         <div className="list-context-bar">
           <span>
             {arranging ? "拖动手柄，调整便签顺序" : "你的记录，都在这里"}
@@ -154,139 +173,98 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
         className="notes-board-scroll"
         aria-label={`${props.notebook.name}便签列表`}
       >
-        {props.web && (
-          <div className="web-note-overview">
-            <section className="web-collection-card" aria-label="便签本概览">
-              <div className="overview-label">
-                <span>一点一滴，都在这里</span>
-                <NotebookPen size={22} />
-              </div>
-              <div className="collection-total">
-                <strong>{String(props.notes.length).padStart(2, "0")}</strong>
-                <span>张便签</span>
-              </div>
-              <div className="collection-breakdown">
-                <span>
-                  随手记{" "}
-                  <b>
-                    {props.notes.filter((note) => note.kind === "note").length}
-                  </b>
-                </span>
-                <span>
-                  待办清单{" "}
-                  <b>
-                    {props.notes.filter((note) => note.kind === "todo").length}
-                  </b>
-                </span>
-              </div>
-            </section>
-            <section className="web-capture-card" aria-label="快速记录">
-              <div>
-                <p>MAKE ROOM FOR IDEAS</p>
-                <h2>
-                  想到了，
-                  <br />
-                  就记下来。
-                </h2>
-              </div>
-              <div className="paper-stack" aria-hidden="true">
-                <i />
-                <i />
-                <i>
-                  <span />
-                  <span />
-                  <span />
-                </i>
-              </div>
+        {collapsed ? (
+          <NoteStacks
+            groups={props.groups!}
+            onExpand={(id) => props.onExpandNotebook?.(id)}
+          />
+        ) : (
+          <>
+            {props.notes.length === 0 ? (
               <button
                 type="button"
+                className="blank-note-card"
                 disabled={creating}
                 onClick={() => void create("note")}
               >
-                <span>写一张便签</span>
-                <ArrowUpRight size={19} />
+                <FilePlus2 size={25} />
+                <strong>写下第一张便签</strong>
+                <span>自动保存，离线也能继续。</span>
               </button>
-            </section>
-          </div>
-        )}
-        {props.web && (
-          <div className="web-section-heading">
-            <h2>全部便签</h2>
-            <span>点「整理」，调整顺序</span>
-          </div>
-        )}
-        {props.notes.length === 0 ? (
-          <button
-            type="button"
-            className="blank-note-card"
-            disabled={creating}
-            onClick={() => void create("note")}
-          >
-            <FilePlus2 size={25} />
-            <strong>写下第一张便签</strong>
-            <span>自动保存，离线也能继续。</span>
-          </button>
-        ) : (
-          <SortableStack
-            items={props.notes}
-            label={(note) => note.title || "无标题便签"}
-            onMove={props.onMoveNote}
-            className="sticky-card-grid"
-            renderItem={(note) => {
-              const displayTitle = note.title || "无标题便签";
-              return (
-                <div className="note-card-shell">
-                  <article className={`sticky-card note-color-${note.color}`}>
-                    <button
-                      type="button"
-                      className="sticky-card-open"
-                      aria-label={`打开便签：${displayTitle}`}
-                      onClick={() => {
-                        if (props.openOnSingleClick) props.onOpenNote(note.id);
-                      }}
-                      onDoubleClick={() => props.onOpenNote(note.id)}
-                    >
-                      <span className="sticky-card-accent" />
-                      {note.kind === "todo" && (
-                        <span
-                          className="note-kind-marker"
-                          aria-label={`待办便签：${displayTitle}`}
-                        >
-                          <CheckSquare2 size={13} />
-                        </span>
-                      )}
-                      <strong>{displayTitle}</strong>
-                      <p>{note.body || "空白便签"}</p>
-                      <time>
-                        {new Date(note.updatedAt).toLocaleDateString("zh-HK", {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </time>
-                      <ExternalLink size={14} className="sticky-open-icon" />
-                    </button>
-                    {!props.web && (
-                      <button
-                        type="button"
-                        className="sticky-card-delete"
-                        aria-label={`删除便签：${displayTitle}`}
-                        onClick={() => void props.onTrashNote(note.id)}
+            ) : (
+              <SortableStack
+                items={props.notes}
+                label={(note) => note.title || "无标题便签"}
+                onMove={props.onMoveNote}
+                className="sticky-card-grid"
+                renderItem={(note) => {
+                  const displayTitle = note.title || "无标题便签";
+                  return (
+                    <div className="note-card-shell">
+                      <article
+                        className={`sticky-card note-color-${note.color}`}
+                        data-note-id={note.id}
+                        style={{ viewTransitionName: `note-${note.id}` }}
                       >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </article>
-                  {props.web && (
-                    <RecordActions
-                      name={displayTitle}
-                      kind="便签"
-                      onTrash={() => props.onTrashNote(note.id)}
-                    />
-                  )}
-                </div>
-              );
-            }}
-          />
+                        <button
+                          type="button"
+                          className="sticky-card-open"
+                          aria-label={`打开便签：${displayTitle}`}
+                          onClick={() => {
+                            if (props.openOnSingleClick)
+                              props.onOpenNote(note.id);
+                          }}
+                          onDoubleClick={() => props.onOpenNote(note.id)}
+                        >
+                          <span className="sticky-card-accent" />
+                          {note.kind === "todo" && (
+                            <span
+                              className="note-kind-marker"
+                              aria-label={`待办便签：${displayTitle}`}
+                            >
+                              <CheckSquare2 size={13} />
+                            </span>
+                          )}
+                          <strong>{displayTitle}</strong>
+                          <p>{note.body || "空白便签"}</p>
+                          <time>
+                            {new Date(note.updatedAt).toLocaleDateString(
+                              "zh-HK",
+                              {
+                                month: "short",
+                                day: "numeric",
+                              },
+                            )}
+                          </time>
+                          <ExternalLink
+                            size={14}
+                            className="sticky-open-icon"
+                          />
+                        </button>
+                        {!props.web && (
+                          <button
+                            type="button"
+                            className="sticky-card-delete"
+                            aria-label={`删除便签：${displayTitle}`}
+                            onClick={() => void props.onTrashNote(note.id)}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </article>
+                      {props.web && (
+                        <RecordActions
+                          name={displayTitle}
+                          kind="便签"
+                          onTrash={() => props.onTrashNote(note.id)}
+                        />
+                      )}
+                    </div>
+                  );
+                }}
+              />
+            )}
+          </>
         )}
       </section>
     </main>

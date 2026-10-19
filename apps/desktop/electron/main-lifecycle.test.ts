@@ -498,9 +498,9 @@ describe("main-process note window lifecycle", () => {
     expect(windows[0].isDestroyed()).toBe(false);
     expect(invoke("note-window:get-state", 1, "note-1")).toMatchObject({
       noteId: "note-1",
-      x: 0,
+      x: 100,
       y: 0,
-      width: 490,
+      width: 390,
       height: 500,
       isOpen: false,
     });

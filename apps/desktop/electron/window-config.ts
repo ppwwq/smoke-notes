@@ -20,6 +20,8 @@ export function createContentSecurityPolicy(isPackaged: boolean): string {
   return `default-src 'self'; script-src ${scripts}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co${developmentSocket}`;
 }
 
+export const NOTE_WINDOW_TAB_GUTTER = 100;
+
 interface WindowBounds {
   x: number;
   y: number;
@@ -31,9 +33,9 @@ export function toPersistedNoteWindowBounds(
   bounds: WindowBounds,
 ): WindowBounds {
   return {
-    x: bounds.x,
+    x: bounds.x + NOTE_WINDOW_TAB_GUTTER,
     y: bounds.y,
-    width: bounds.width,
+    width: bounds.width - NOTE_WINDOW_TAB_GUTTER,
     height: bounds.height,
   };
 }
@@ -102,11 +104,11 @@ export function createNoteWindowOptions(
 ): BrowserWindowConstructorOptions {
   const state = normalizeNoteWindowState(input.noteId, input);
   return {
-    width: state.width,
+    width: state.width + NOTE_WINDOW_TAB_GUTTER,
     height: state.height,
-    x: state.x,
+    x: state.x === undefined ? undefined : state.x - NOTE_WINDOW_TAB_GUTTER,
     y: state.y,
-    minWidth: 250,
+    minWidth: 250 + NOTE_WINDOW_TAB_GUTTER,
     minHeight: 180,
     frame: false,
     transparent: true,

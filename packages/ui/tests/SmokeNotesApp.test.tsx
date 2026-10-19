@@ -68,6 +68,21 @@ describe("SmokeNotesApp", () => {
   let database: SmokeNotesDatabase;
   let repository: LocalRepository;
   const pendingReads = new Set<Promise<unknown>>();
+  async function findNote(title: string) {
+    await waitFor(() =>
+      expect(document.querySelector(".notes-board")).not.toBeNull(),
+    );
+    if (document.querySelector(".note-stacks")) {
+      fireEvent.click(
+        await screen.findByRole("button", { name: /^展开便签本：工作/ }),
+      );
+    }
+    return screen.findByRole("button", { name: `打开便签：${title}` });
+  }
+  async function openManagement() {
+    fireEvent.click(await screen.findByRole("button", { name: "浏览便签本" }));
+    fireEvent.click(await screen.findByRole("button", { name: "管理便签本" }));
+  }
 
   function trackRead<Args extends unknown[], Result>(
     read: (...args: Args) => Promise<Result>,
@@ -119,6 +134,57 @@ describe("SmokeNotesApp", () => {
     Reflect.deleteProperty(navigator, "maxTouchPoints");
     await database.delete();
   });
+
+  it.each(["web", "desktop"] as const)(
+    "expands real note stacks and restores the %s browsing state after editing",
+    async (platform) => {
+      const { container } = render(
+        <SmokeNotesApp
+          repository={repository}
+          platform={platform}
+          desktopBridge={platform === "desktop" ? desktopBridge() : undefined}
+        />,
+      );
+      const stack = await screen.findByRole("button", {
+        name: "展开便签本：工作，1 张便签",
+      });
+      expect(
+        screen.queryByRole("button", { name: "打开便签：周会记录" }),
+      ).not.toBeInTheDocument();
+      expect(container.querySelector(".stack-paper")).toHaveTextContent(
+        "周会记录",
+      );
+      expect(
+        screen.getAllByRole("button", { name: /^展开便签本：/ }),
+      ).toHaveLength(2);
+      fireEvent.click(stack);
+      const card = await screen.findByRole("button", {
+        name: "打开便签：周会记录",
+      });
+      const list = container.querySelector<HTMLElement>(".notes-board-scroll")!;
+      list.scrollTop = 180;
+      fireEvent.scroll(list);
+      fireEvent.click(card);
+      fireEvent.change(
+        await screen.findByRole("textbox", { name: "便签标题" }),
+        { target: { value: "保存后的标题" } },
+      );
+      fireEvent.click(screen.getByRole("button", { name: "返回便签列表" }));
+      await screen.findByRole("button", { name: "打开便签：保存后的标题" });
+      expect(container.querySelector(".notes-board-scroll")!.scrollTop).toBe(
+        180,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "收起便签" }));
+      expect(container.querySelector(".stack-paper")).toHaveTextContent(
+        "保存后的标题",
+      );
+      expect(
+        screen
+          .getByRole("navigation", { name: "主导航" })
+          .querySelectorAll("button"),
+      ).toHaveLength(4);
+    },
+  );
 
   it("reports a cloud failure on desktop even when the device network is online", async () => {
     render(
@@ -176,9 +242,7 @@ describe("SmokeNotesApp", () => {
     async (check) => {
       const update = vi.spyOn(repository, "updateNote");
       render(<SmokeNotesApp repository={repository} platform="web" />);
-      fireEvent.click(
-        await screen.findByRole("button", { name: "打开便签：周会记录" }),
-      );
+      fireEvent.click(await findNote("周会记录"));
       const body = (await screen.findByRole("textbox", {
         name: "便签正文",
       })) as HTMLElement & { editor: Editor };
@@ -241,9 +305,7 @@ describe("SmokeNotesApp", () => {
       )!;
       const original = (await repository.listNotes(work.id))[0];
       render(<SmokeNotesApp repository={repository} platform="web" />);
-      fireEvent.click(
-        await screen.findByRole("button", { name: "打开便签：周会记录" }),
-      );
+      fireEvent.click(await findNote("周会记录"));
       const body = (await screen.findByRole("textbox", {
         name: "便签正文",
       })) as HTMLElement & { editor: Editor };
@@ -284,9 +346,7 @@ describe("SmokeNotesApp", () => {
   it("saves a web draft immediately when the page moves to the background", async () => {
     const update = vi.spyOn(repository, "updateNote");
     render(<SmokeNotesApp repository={repository} platform="web" />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "打开便签：周会记录" }),
-    );
+    fireEvent.click(await findNote("周会记录"));
     fireEvent.change(await screen.findByRole("textbox", { name: "便签标题" }), {
       target: { value: "切到后台前的草稿" },
     });
@@ -303,9 +363,7 @@ describe("SmokeNotesApp", () => {
 
   it("warns before closing a web page with an unsaved draft and stops warning after saving", async () => {
     render(<SmokeNotesApp repository={repository} platform="web" />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "打开便签：周会记录" }),
-    );
+    fireEvent.click(await findNote("周会记录"));
     fireEvent.change(await screen.findByRole("textbox", { name: "便签标题" }), {
       target: { value: "尚未落盘" },
     });
@@ -327,8 +385,8 @@ describe("SmokeNotesApp", () => {
     const first = render(
       <SmokeNotesApp repository={repository} platform="web" />,
     );
-    await screen.findByRole("button", { name: "打开便签：周会记录" });
-    fireEvent.click(screen.getByRole("button", { name: "窗口设置" }));
+    await findNote("周会记录");
+    fireEvent.click(screen.getByRole("button", { name: "打开设置" }));
     fireEvent.click(screen.getByRole("button", { name: /外观与阅读/ }));
     fireEvent.click(screen.getByRole("radio", { name: /纸面模式/ }));
     expect(screen.getByRole("radio", { name: /纸面模式/ })).toBeChecked();
@@ -342,8 +400,8 @@ describe("SmokeNotesApp", () => {
     expect(editor).toHaveTextContent("确认下周计划");
     first.unmount();
     render(<SmokeNotesApp repository={repository} platform="web" />);
-    await screen.findByRole("button", { name: "打开便签：周会记录" });
-    fireEvent.click(screen.getByRole("button", { name: "窗口设置" }));
+    await findNote("周会记录");
+    fireEvent.click(screen.getByRole("button", { name: "打开设置" }));
     fireEvent.click(screen.getByRole("button", { name: /外观与阅读/ }));
     expect(screen.getByRole("radio", { name: /纸面模式/ })).toBeChecked();
     fireEvent.click(screen.getByRole("radio", { name: /默认模式/ }));
@@ -356,9 +414,7 @@ describe("SmokeNotesApp", () => {
   it("switches glass and paper without replacing the editor or losing a draft", async () => {
     localStorage.setItem("smoke-notes:web-reduced-transparency", "true");
     render(<SmokeNotesApp repository={repository} platform="web" />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "打开便签：周会记录" }),
-    );
+    fireEvent.click(await findNote("周会记录"));
     const editor = await screen.findByRole("textbox", { name: "便签正文" });
     const title = screen.getByPlaceholderText("输入标题");
     fireEvent.change(title, { target: { value: "仍在编辑的标题" } });
@@ -387,9 +443,7 @@ describe("SmokeNotesApp", () => {
     async (fail) => {
       const user = userEvent.setup();
       render(<SmokeNotesApp repository={repository} platform="web" />);
-      await user.click(
-        await screen.findByRole("button", { name: "打开便签：周会记录" }),
-      );
+      await user.click(await findNote("周会记录"));
       const body = (await screen.findByRole("textbox", {
         name: "便签正文",
       })) as HTMLElement & { editor: Editor };
@@ -444,7 +498,7 @@ describe("SmokeNotesApp", () => {
     },
   );
 
-  it("keeps web background preferences out of the desktop settings", async () => {
+  it("shares workspace appearance on desktop while retaining native window controls", async () => {
     localStorage.setItem("smoke-notes:web-background", "glass");
     localStorage.setItem("smoke-notes:web-reduced-transparency", "true");
     render(
@@ -454,13 +508,19 @@ describe("SmokeNotesApp", () => {
         desktopBridge={desktopBridge()}
       />,
     );
-    await screen.findByRole("button", { name: "打开便签：周会记录" });
-    fireEvent.click(screen.getByRole("button", { name: "窗口设置" }));
+    await findNote("周会记录");
+    fireEvent.click(screen.getByRole("button", { name: "打开设置" }));
     expect(
       screen.queryByRole("radio", { name: /纸面模式/ }),
     ).not.toBeInTheDocument();
-    expect(document.querySelector(".platform-desktop")).not.toHaveAttribute(
+    fireEvent.click(screen.getByRole("button", { name: /外观与阅读/ }));
+    expect(screen.getByRole("radio", { name: /玻璃模式/ })).toBeChecked();
+    expect(
+      screen.getByRole("slider", { name: "窗口透明度" }),
+    ).toBeInTheDocument();
+    expect(document.querySelector(".platform-desktop")).toHaveAttribute(
       "data-web-background",
+      "glass",
     );
   });
 
@@ -469,8 +529,8 @@ describe("SmokeNotesApp", () => {
       throw new Error("storage blocked");
     });
     render(<SmokeNotesApp repository={repository} platform="web" />);
-    await screen.findByRole("button", { name: "打开便签：周会记录" });
-    fireEvent.click(screen.getByRole("button", { name: "窗口设置" }));
+    await findNote("周会记录");
+    fireEvent.click(screen.getByRole("button", { name: "打开设置" }));
     fireEvent.click(screen.getByRole("button", { name: /外观与阅读/ }));
     fireEvent.click(screen.getByRole("radio", { name: /纸面模式/ }));
     expect(document.querySelector(".platform-web")).toHaveAttribute(
@@ -498,9 +558,7 @@ describe("SmokeNotesApp", () => {
     });
     vi.stubGlobal("visualViewport", viewport);
     render(<SmokeNotesApp repository={repository} platform="web" />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "打开便签：周会记录" }),
-    );
+    fireEvent.click(await findNote("周会记录"));
     const body = await screen.findByRole("textbox", { name: "便签正文" });
     act(() => body.focus());
     act(() => {
@@ -538,42 +596,13 @@ describe("SmokeNotesApp", () => {
     expect(screen.getByRole("button", { name: "粗体" })).toBeVisible();
   });
 
-  const mobileNavigations = [
-    "back",
-    "sidebar-todos",
-    "notebook",
-    "create-notebook",
-    "trash-notebook",
-    "trash-note",
-  ] as const;
-
+  const mobileNavigations = ["back", "trash-note"] as const;
   async function leaveMobileEditor(
     destination: (typeof mobileNavigations)[number],
   ) {
-    if (destination === "back") {
+    if (destination === "back")
       fireEvent.click(screen.getByRole("button", { name: "返回便签列表" }));
-    } else if (destination === "sidebar-todos") {
-      fireEvent.click(
-        within(
-          screen.getByRole("complementary", { name: "便签导航" }),
-        ).getByRole("button", { name: "待办固定" }),
-      );
-    } else if (destination === "notebook") {
-      fireEvent.click(screen.getByRole("button", { name: "生活" }));
-    } else if (destination === "create-notebook") {
-      fireEvent.click(screen.getByRole("button", { name: "新建便签本" }));
-      fireEvent.change(screen.getByRole("textbox", { name: "便签本名称" }), {
-        target: { value: "新本" },
-      });
-      fireEvent.keyDown(screen.getByRole("textbox", { name: "便签本名称" }), {
-        key: "Enter",
-      });
-    } else if (destination === "trash-notebook") {
-      fireEvent.click(
-        screen.getByRole("button", { name: "更多便签本操作：工作" }),
-      );
-      fireEvent.click(screen.getByRole("button", { name: "删除便签本：工作" }));
-    } else {
+    else {
       fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
       fireEvent.click(screen.getByRole("menuitem", { name: "删除便签" }));
     }
@@ -595,9 +624,7 @@ describe("SmokeNotesApp", () => {
           return update(id, changes);
         });
       render(<SmokeNotesApp repository={repository} platform="web" />);
-      fireEvent.click(
-        await screen.findByRole("button", { name: "打开便签：周会记录" }),
-      );
+      fireEvent.click(await findNote("周会记录"));
       fireEvent.change(
         await screen.findByRole("textbox", { name: "便签标题" }),
         {
@@ -632,9 +659,7 @@ describe("SmokeNotesApp", () => {
         .spyOn(repository, "updateNote")
         .mockRejectedValue(new Error("disk full"));
       render(<SmokeNotesApp repository={repository} platform="web" />);
-      fireEvent.click(
-        await screen.findByRole("button", { name: "打开便签：周会记录" }),
-      );
+      fireEvent.click(await findNote("周会记录"));
       fireEvent.change(
         await screen.findByRole("textbox", { name: "便签标题" }),
         {
@@ -662,12 +687,10 @@ describe("SmokeNotesApp", () => {
         return update(id, changes);
       });
     render(<SmokeNotesApp repository={repository} platform="web" />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "打开便签：周会记录" }),
-    );
+    fireEvent.click(await findNote("周会记录"));
     const title = await screen.findByRole("textbox", { name: "便签标题" });
     expect(
-      screen.queryByRole("navigation", { name: "手机主导航" }),
+      screen.queryByRole("navigation", { name: "主导航" }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "打开便签本" }),
@@ -686,7 +709,7 @@ describe("SmokeNotesApp", () => {
     expect(title).toHaveValue("手动保存的标题");
     fireEvent.click(screen.getByRole("button", { name: "返回便签列表" }));
     expect(
-      await screen.findByRole("navigation", { name: "手机主导航" }),
+      await screen.findByRole("navigation", { name: "主导航" }),
     ).toBeInTheDocument();
     expect(
       await screen.findByRole("button", { name: "打开便签：手动保存的标题" }),
@@ -697,16 +720,16 @@ describe("SmokeNotesApp", () => {
     const { container } = render(
       <SmokeNotesApp repository={repository} platform="web" />,
     );
-    await screen.findByRole("button", { name: "打开便签：周会记录" });
+    await findNote("周会记录");
     const nav = () =>
-      within(screen.getByRole("navigation", { name: "手机主导航" }));
+      within(screen.getByRole("navigation", { name: "主导航" }));
     const list = container.querySelector<HTMLElement>(".notes-board-scroll")!;
     list.scrollTop = 180;
     fireEvent.scroll(list);
     fireEvent.click(screen.getByRole("button", { name: "打开便签：周会记录" }));
     await screen.findByRole("textbox", { name: "便签标题" });
     fireEvent.click(screen.getByRole("button", { name: "返回便签列表" }));
-    await screen.findByRole("button", { name: "打开便签：周会记录" });
+    await findNote("周会记录");
     expect(container.querySelector(".notes-board-scroll")!.scrollTop).toBe(180);
     fireEvent.click(nav().getByRole("button", { name: "待办" }));
     fireEvent.click(await screen.findByRole("button", { name: "未完成" }));
@@ -721,7 +744,7 @@ describe("SmokeNotesApp", () => {
       "true",
     );
     fireEvent.click(screen.getByRole("button", { name: "进入便签本：工作" }));
-    await screen.findByRole("button", { name: "打开便签：周会记录" });
+    await findNote("周会记录");
     expect(container.querySelector(".notes-board-scroll")!.scrollTop).toBe(180);
     fireEvent.click(nav().getByRole("button", { name: "待办" }));
     expect(
@@ -736,9 +759,7 @@ describe("SmokeNotesApp", () => {
       .mockRejectedValueOnce(new Error("disk full"))
       .mockImplementation(update);
     render(<SmokeNotesApp repository={repository} platform="web" />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "打开便签：周会记录" }),
-    );
+    fireEvent.click(await findNote("周会记录"));
     const title = await screen.findByRole("textbox", { name: "便签标题" });
     fireEvent.change(title, { target: { value: "重试草稿" } });
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
@@ -784,6 +805,7 @@ describe("SmokeNotesApp", () => {
 
   it("does not submit a notebook name while confirming an IME candidate", async () => {
     render(<SmokeNotesApp repository={repository} platform="desktop" />);
+    await openManagement();
     await screen.findByRole("button", { name: "工作" });
     fireEvent.click(screen.getByRole("button", { name: "新建便签本" }));
     const input = screen.getByRole("textbox", { name: "便签本名称" });
@@ -792,9 +814,13 @@ describe("SmokeNotesApp", () => {
     expect(input).toBeInTheDocument();
     expect(await repository.listNotebooks()).toHaveLength(2);
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(
-      await screen.findByRole("button", { name: "选字中" }),
-    ).toBeInTheDocument();
+    await waitFor(async () =>
+      expect(
+        (await repository.listNotebooks()).some(
+          (book) => book.name === "选字中",
+        ),
+      ).toBe(true),
+    );
   });
 
   it("supports menu arrows and Escape with focus restored to the trigger", async () => {
@@ -823,6 +849,7 @@ describe("SmokeNotesApp", () => {
       />,
     );
 
+    await openManagement();
     await screen.findByRole("button", { name: "工作" });
     await user.click(screen.getByRole("button", { name: "新建便签本" }));
     await user.type(
@@ -831,18 +858,19 @@ describe("SmokeNotesApp", () => {
     );
     await user.keyboard("{Enter}");
 
-    expect(
-      await screen.findByRole("button", { name: "灵感" }),
-    ).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "灵感" });
     await user.click(screen.getByRole("button", { name: "新建便签" }));
     await user.click(screen.getByRole("menuitem", { name: "普通便签" }));
+    await user.click(
+      await screen.findByRole("button", { name: "在桌面打开便签" }),
+    );
     await waitFor(() => expect(bridge.openNote).toHaveBeenCalledOnce());
     expect(
       await screen.findByRole("textbox", { name: "便签正文" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("complementary", { name: "便签导航" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("complementary", { name: "便签导航" }),
+    ).not.toBeInTheDocument();
     const book = (await repository.listNotebooks()).find(
       (item) => item.name === "灵感",
     )!;
@@ -871,6 +899,9 @@ describe("SmokeNotesApp", () => {
     await user.click(screen.getByRole("button", { name: "新建便签" }));
     await user.click(screen.getByRole("menuitem", { name: "待办便签" }));
 
+    await user.click(
+      await screen.findByRole("button", { name: "在桌面打开便签" }),
+    );
     await waitFor(() => expect(bridge.openNote).toHaveBeenCalledOnce());
     expect(
       await screen.findByRole("textbox", { name: "便签正文" }),
@@ -887,7 +918,7 @@ describe("SmokeNotesApp", () => {
     ).toBeInTheDocument();
   });
 
-  it("opens a desktop note on double click and does not show search or an inline editor", async () => {
+  it("opens the shared desktop detail and keeps the native note action available", async () => {
     const user = userEvent.setup();
     const bridge = desktopBridge();
     render(
@@ -898,18 +929,19 @@ describe("SmokeNotesApp", () => {
       />,
     );
 
-    const card = await screen.findByRole("button", {
-      name: "打开便签：周会记录",
-    });
-    await user.dblClick(card);
+    const card = await findNote("周会记录");
+    await user.click(card);
+    await user.click(
+      await screen.findByRole("button", { name: "在桌面打开便签" }),
+    );
 
     expect(bridge.openNote).toHaveBeenCalledOnce();
     expect(
       screen.queryByRole("textbox", { name: "搜索便签" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("textbox", { name: "便签标题" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("textbox", { name: "便签标题" }),
+    ).toBeInTheDocument();
   });
 
   it("forwards desktop transparency and pin controls through the safe bridge", async () => {
@@ -924,7 +956,7 @@ describe("SmokeNotesApp", () => {
     );
 
     await screen.findByText("周会记录");
-    await user.click(screen.getByRole("button", { name: "窗口设置" }));
+    await user.click(screen.getByRole("button", { name: "打开设置" }));
     fireEvent.change(screen.getByRole("slider", { name: "窗口透明度" }), {
       target: { value: "65" },
     });
@@ -953,7 +985,7 @@ describe("SmokeNotesApp", () => {
     );
 
     await screen.findByText("周会记录");
-    await user.click(screen.getByRole("button", { name: "窗口设置" }));
+    await user.click(screen.getByRole("button", { name: "打开设置" }));
     const launchAtLogin = screen.getByRole("switch", {
       name: "开机时启动",
     });
@@ -993,7 +1025,7 @@ describe("SmokeNotesApp", () => {
     );
 
     await screen.findByText("周会记录");
-    await user.click(screen.getByRole("button", { name: "窗口设置" }));
+    await user.click(screen.getByRole("button", { name: "打开设置" }));
     const launchAtLogin = screen.getByRole("switch", {
       name: "开机时启动",
     });
@@ -1032,7 +1064,7 @@ describe("SmokeNotesApp", () => {
     );
 
     await screen.findByText("周会记录");
-    await user.click(screen.getByRole("button", { name: "窗口设置" }));
+    await user.click(screen.getByRole("button", { name: "打开设置" }));
     const launchAtLogin = screen.getByRole("switch", {
       name: "开机时启动",
     });
@@ -1060,6 +1092,10 @@ describe("SmokeNotesApp", () => {
     render(<SmokeNotesApp repository={repository} platform="desktop" />);
 
     await screen.findByText("周会记录");
+    await findNote("周会记录");
+    await user.click(
+      screen.getByRole("button", { name: "更多便签操作：周会记录" }),
+    );
     await user.click(
       screen.getByRole("button", { name: "删除便签：周会记录" }),
     );

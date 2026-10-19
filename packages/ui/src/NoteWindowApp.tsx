@@ -269,6 +269,52 @@ export function NoteWindowApp({
         } as CSSProperties
       }
     >
+      <nav
+        className="recent-note-tabs"
+        aria-label="最近便签"
+        aria-busy={switching}
+      >
+        {recentNotes.map((item) => {
+          const displayTitle = item.title || "无标题便签";
+          return (
+            <button
+              key={item.id}
+              type="button"
+              aria-label={`切换便签：${displayTitle}`}
+              className={`recent-note-tab${item.id === noteId ? " active" : ""}`}
+              title={displayTitle}
+              aria-current={item.id === noteId ? "page" : undefined}
+              disabled={switching}
+              onClick={async () => {
+                if (item.id === noteId || switchingRef.current) return;
+                switchingRef.current = true;
+                setSwitching(true);
+                setSwitchError(null);
+                try {
+                  const target = await repository.getNote(item.id);
+                  if (!target) {
+                    setRecentNotes((current) =>
+                      current.filter((candidate) => candidate.id !== item.id),
+                    );
+                    setSwitchError("这张便签已不存在，请选择另一张。");
+                    return;
+                  }
+                  await editorRef.current?.flushSave();
+                  await bridge.switchNote(item.id);
+                  setToolsOpen(false);
+                } catch {
+                  setSwitchError("切换失败，当前内容已保留，请重试。");
+                } finally {
+                  switchingRef.current = false;
+                  setSwitching(false);
+                }
+              }}
+            >
+              <span>{displayTitle}</span>
+            </button>
+          );
+        })}
+      </nav>
       <header className="note-window-bar">
         <div
           className="note-window-create-control"
@@ -380,55 +426,6 @@ export function NoteWindowApp({
                 <Trash2 size={15} />
                 删除便签
               </button>
-              <nav
-                className="recent-note-tabs"
-                aria-label="最近便签"
-                aria-busy={switching}
-              >
-                {recentNotes.map((item) => {
-                  const displayTitle = item.title || "无标题便签";
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      role="menuitem"
-                      aria-label={`切换便签：${displayTitle}`}
-                      className={`recent-note-tab${item.id === noteId ? " active" : ""}`}
-                      title={displayTitle}
-                      aria-current={item.id === noteId ? "page" : undefined}
-                      disabled={switching}
-                      onClick={async () => {
-                        if (item.id === noteId || switchingRef.current) return;
-                        switchingRef.current = true;
-                        setSwitching(true);
-                        setSwitchError(null);
-                        try {
-                          const target = await repository.getNote(item.id);
-                          if (!target) {
-                            setRecentNotes((current) =>
-                              current.filter(
-                                (candidate) => candidate.id !== item.id,
-                              ),
-                            );
-                            setSwitchError("这张便签已不存在，请选择另一张。");
-                            return;
-                          }
-                          await editorRef.current?.flushSave();
-                          await bridge.switchNote(item.id);
-                          setToolsOpen(false);
-                        } catch {
-                          setSwitchError("切换失败，当前内容已保留，请重试。");
-                        } finally {
-                          switchingRef.current = false;
-                          setSwitching(false);
-                        }
-                      }}
-                    >
-                      <span>{displayTitle}</span>
-                    </button>
-                  );
-                })}
-              </nav>
             </div>
           )}
         </div>

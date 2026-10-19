@@ -8,7 +8,8 @@
     "./app": "./src/SmokeNotesApp.tsx",
     "./note-window": "./src/NoteWindowApp.tsx",
     "./styles.css": "./src/styles.css",
-    "./pairing": "./src/components/PairingDialog.tsx"
+    "./pairing": "./src/components/PairingDialog.tsx",
+    "./workspace.css": "./src/workspace.css"
   },
   "dependencies": {
     "@base-ui/react": "1.8.0",

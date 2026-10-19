@@ -18,8 +18,8 @@ import type {
 } from "@smoke-notes/core";
 import {
   ArrowLeft,
+  ExternalLink,
   CheckCircle2,
-  Menu,
   Minus,
   MoreHorizontal,
   Settings2,
@@ -52,6 +52,7 @@ import { useDesktopQuit } from "./useDesktopQuit";
 import { GlassContext } from "./components/glass/GlassContext";
 import { GlassSurface } from "./components/glass/GlassSurface";
 import "./styles.css";
+import { transitionWorkspace } from "./workspace-motion";
 
 interface SmokeNotesAppProps {
   repository: LocalRepository;
@@ -82,9 +83,13 @@ export function SmokeNotesApp({
     systemReduced,
     changeReduceTransparency,
     notice: backgroundNotice,
-  } = useWebBackground(platform === "web");
+  } = useWebBackground(true);
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
+  const [notebookNotes, setNotebookNotes] = useState<Record<string, Note[]>>(
+    {},
+  );
+  const [notesExpanded, setNotesExpanded] = useState(false);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [trash, setTrash] = useState<TrashRecord[]>([]);
   const [view, setView] = useState<"notes" | "todos">("notes");
@@ -97,6 +102,7 @@ export function SmokeNotesApp({
   const [notebookCardsExpanded, setNotebookCardsExpanded] = useState(false);
   const [todoFilter, setTodoFilter] = useState<TodoFilter>("all");
   const workspaceRef = useRef<HTMLDivElement>(null);
+  const lastOpenedNote = useRef<string | null>(null);
   const browsePositions = useRef(new Map<string, Map<string, number>>());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -104,6 +110,7 @@ export function SmokeNotesApp({
   const { mobile, panelRef, triggerRef } = useMobileSidebar(
     mobileNavOpen,
     closeMobileNav,
+    true,
   );
   const [pairingOpen, setPairingOpen] = useState(false);
   const [lastTrashed, setLastTrashed] = useState<LastTrashed | null>(null);
@@ -147,7 +154,14 @@ export function SmokeNotesApp({
       const targetId = nextNotebooks.some((item) => item.id === requestedId)
         ? requestedId
         : (nextNotebooks[0]?.id ?? null);
-      const nextNotes = targetId ? await repository.listNotes(targetId) : [];
+      const entries = await Promise.all(
+        nextNotebooks.map(
+          async (book) =>
+            [book.id, await repository.listNotes(book.id)] as const,
+        ),
+      );
+      const nextNotebookNotes = Object.fromEntries(entries);
+      const nextNotes = targetId ? (nextNotebookNotes[targetId] ?? []) : [];
       // A save or a later refresh invalidates this snapshot, even when local
       // queue compaction has lowered the note's version in the meantime.
       if (revision !== refreshRevision.current) return;
@@ -168,6 +182,7 @@ export function SmokeNotesApp({
       selectedNotebookIdRef.current = targetId;
       setSelectedNotebookId(targetId);
       setNotes(nextNotes);
+      setNotebookNotes(nextNotebookNotes);
       setSelectedNoteId((current) => {
         if (nextNotes.some((note) => note.id === current)) return current;
         return null;
@@ -242,6 +257,7 @@ export function SmokeNotesApp({
     setSelectedNoteId(null);
     setMobileNavOpen(false);
     await refresh(id);
+    transitionWorkspace(() => setNotesExpanded(true));
   }
 
   const selectedNotebook =
@@ -277,14 +293,16 @@ export function SmokeNotesApp({
     };
   }, [platform, saveStatus]);
 
-  const webEditing = platform === "web" && view === "notes" && !!selectedNote;
+  const webEditing = view === "notes" && !!selectedNote;
   const browseKey = notebookCollectionOpen
     ? "notebooks"
     : view === "todos"
       ? `todos:${todoFilter}`
-      : `notes:${selectedNotebookId}`;
+      : notesExpanded
+        ? `notes:${selectedNotebookId}`
+        : "note-stacks";
   useLayoutEffect(() => {
-    if (platform !== "web" || webEditing) return;
+    if (webEditing) return;
     const positions = browsePositions.current.get(browseKey);
     workspaceRef.current
       ?.querySelectorAll<HTMLElement>(
@@ -293,7 +311,16 @@ export function SmokeNotesApp({
       .forEach((element) => {
         element.scrollTop = positions?.get(element.classList[0]) ?? 0;
       });
-  }, [platform, browseKey, webEditing]);
+    if (notesExpanded && lastOpenedNote.current) {
+      const card = Array.from(
+        workspaceRef.current?.querySelectorAll<HTMLElement>("[data-note-id]") ??
+          [],
+      ).find((el) => el.dataset.noteId === lastOpenedNote.current);
+      card
+        ?.querySelector<HTMLButtonElement>(".sticky-card-open")
+        ?.focus({ preventScroll: true });
+    }
+  }, [browseKey, webEditing, notesExpanded]);
   const { style: viewportStyle, compactEditing } = useWebViewport(webEditing);
   useEffect(() => {
     setEditorMenu(null);
@@ -331,6 +358,8 @@ export function SmokeNotesApp({
     setNotebookCollectionOpen(false);
     setView("notes");
     await refreshAfterMutation(created.id);
+    setMobileNavOpen(false);
+    setNotesExpanded(true);
   }
 
   async function saveManually() {
@@ -351,17 +380,15 @@ export function SmokeNotesApp({
   return (
     <GlassContext.Provider
       value={{
-        enabled: platform === "web" && background === "glass",
+        enabled: background === "glass",
         reduced: reducedTransparency,
       }}
     >
       <div
         inert={preparingQuit}
-        className={`smoke-app platform-${platform}${webEditing ? " web-editing" : ""}`}
-        data-web-background={platform === "web" ? background : undefined}
-        data-reduced-transparency={
-          platform === "web" ? String(reducedTransparency) : undefined
-        }
+        className={`smoke-app workspace-app platform-${platform}${webEditing ? " web-editing" : ""}`}
+        data-web-background={background}
+        data-reduced-transparency={String(reducedTransparency)}
         style={
           {
             "--background-opacity": backgroundOpacity,
@@ -390,20 +417,6 @@ export function SmokeNotesApp({
             </button>
           </header>
         )}
-        {!webEditing && platform !== "web" && (
-          <button
-            type="button"
-            className="mobile-menu"
-            ref={triggerRef}
-            aria-label="打开便签本"
-            aria-expanded={mobileNavOpen}
-            aria-controls="notebook-sidebar"
-            inert={mobile && mobileNavOpen}
-            onClick={() => setMobileNavOpen(true)}
-          >
-            <Menu size={19} />
-          </button>
-        )}
         <div
           id="notebook-sidebar"
           ref={panelRef}
@@ -421,8 +434,8 @@ export function SmokeNotesApp({
             onClick={() => setMobileNavOpen(false)}
           />
           <Sidebar
-            web={platform === "web"}
-            onClose={platform === "web" && mobile ? closeMobileNav : undefined}
+            web
+            onClose={closeMobileNav}
             notebooks={notebooks}
             selectedNotebookId={selectedNotebookId}
             view={view}
@@ -463,10 +476,10 @@ export function SmokeNotesApp({
 
         <div
           ref={workspaceRef}
-          className={`workspace-shell${platform === "web" && syncStatus ? " has-sync-status" : ""}`}
+          className={`workspace-shell${syncStatus ? " has-sync-status" : ""}`}
           inert={mobile && mobileNavOpen}
           onScrollCapture={(event) => {
-            if (platform !== "web" || webEditing) return;
+            if (webEditing) return;
             const element = event.target;
             if (
               !(element instanceof HTMLElement) ||
@@ -512,7 +525,7 @@ export function SmokeNotesApp({
               </span>
             </div>
           )}
-          {platform === "web" && notebookCollectionOpen ? (
+          {notebookCollectionOpen ? (
             <WebNotebookCollection
               notebooks={notebooks}
               expanded={notebookCardsExpanded}
@@ -527,9 +540,9 @@ export function SmokeNotesApp({
             />
           ) : view === "todos" ? (
             <TodoWorkspace
-              web={platform === "web"}
-              filter={platform === "web" ? todoFilter : undefined}
-              onFilterChange={platform === "web" ? setTodoFilter : undefined}
+              web
+              filter={todoFilter}
+              onFilterChange={setTodoFilter}
               todos={todos}
               onCreate={async (text) => {
                 await repository.createTodo(text);
@@ -560,7 +573,8 @@ export function SmokeNotesApp({
             />
           ) : selectedNote ? (
             <main
-              className={`mobile-note-screen${platform === "desktop" ? " desktop-inline-note" : ""}${compactEditing ? " compact-editing" : ""}`}
+              style={{ viewTransitionName: `note-${selectedNote.id}` }}
+              className={`mobile-note-screen${compactEditing ? " compact-editing" : ""}`}
             >
               <header className="mobile-note-header">
                 <GlassSurface />
@@ -568,12 +582,31 @@ export function SmokeNotesApp({
                   type="button"
                   aria-label="返回便签列表"
                   onClick={async () => {
-                    if (await saveBeforeLeaving()) setSelectedNoteId(null);
+                    if (await saveBeforeLeaving())
+                      transitionWorkspace(() => setSelectedNoteId(null));
                   }}
                 >
                   <ArrowLeft size={18} />
                   返回
                 </button>
+                {desktopBridge && (
+                  <button
+                    type="button"
+                    className="open-desktop-note"
+                    aria-label="在桌面打开便签"
+                    onClick={async () => {
+                      if (!(await saveBeforeLeaving())) return;
+                      try {
+                        await desktopBridge.openNote(selectedNote.id);
+                      } catch {
+                        setEditorActionError("打开失败，内容已保留，请重试。");
+                      }
+                    }}
+                  >
+                    <ExternalLink size={17} />
+                    <span>桌面便签</span>
+                  </button>
+                )}
                 <span
                   className="mobile-save-status"
                   role="status"
@@ -606,7 +639,7 @@ export function SmokeNotesApp({
                   {manualSaving ? "保存中…" : "保存"}
                 </button>
                 <div className="editor-more-control">
-                  {(compactEditing || platform === "web") && (
+                  {
                     <button
                       type="button"
                       ref={moreButtonRef}
@@ -620,20 +653,11 @@ export function SmokeNotesApp({
                     >
                       <MoreHorizontal size={18} />
                     </button>
-                  )}
-                  {((platform !== "web" && !compactEditing) ||
-                    editorMenu === "more") && (
+                  }
+                  {editorMenu === "more" && (
                     <div
-                      role={
-                        compactEditing || platform === "web"
-                          ? "menu"
-                          : undefined
-                      }
-                      className={
-                        compactEditing || platform === "web"
-                          ? "editor-more-menu"
-                          : undefined
-                      }
+                      role="menu"
+                      className="editor-more-menu"
                       onKeyDown={(event) => {
                         if (
                           !["ArrowDown", "ArrowUp", "Home", "End"].includes(
@@ -662,7 +686,7 @@ export function SmokeNotesApp({
                         ]?.focus();
                       }}
                     >
-                      {platform === "web" && (
+                      {
                         <button
                           type="button"
                           role="menuitem"
@@ -671,8 +695,8 @@ export function SmokeNotesApp({
                           <Palette size={18} />
                           便签外观
                         </button>
-                      )}
-                      {platform === "web" && (
+                      }
+                      {
                         <button
                           type="button"
                           role="menuitem"
@@ -684,15 +708,11 @@ export function SmokeNotesApp({
                           <Settings2 size={18} />
                           应用设置
                         </button>
-                      )}
+                      }
                       <button
                         type="button"
                         aria-label="删除便签"
-                        role={
-                          compactEditing || platform === "web"
-                            ? "menuitem"
-                            : undefined
-                        }
+                        role="menuitem"
                         className="destructive-action"
                         disabled={editorDeleting}
                         onClick={async () => {
@@ -722,7 +742,7 @@ export function SmokeNotesApp({
                         }}
                       >
                         <Trash2 size={17} />
-                        {(compactEditing || platform === "web") && "删除便签"}
+                        删除便签
                       </button>
                     </div>
                   )}
@@ -743,7 +763,7 @@ export function SmokeNotesApp({
                 <RichNoteEditor
                   ref={editorRef}
                   compact={compactEditing}
-                  progressive={platform === "web"}
+                  progressive
                   formatOpen={editorMenu === "format"}
                   onFormatClose={closeEditorMenu}
                   onFormatToggle={() =>
@@ -759,6 +779,17 @@ export function SmokeNotesApp({
                       changes,
                     );
                     invalidateRefresh();
+                    setNotebookNotes((current) => ({
+                      ...current,
+                      [updated.notebookId]: [
+                        ...(current[updated.notebookId] ?? []).filter(
+                          (item) =>
+                            item.id !== updated.id &&
+                            item.id !== selectedNote.id,
+                        ),
+                        updated,
+                      ].sort((a, b) => a.rank - b.rank),
+                    }));
                     setNotes((current) => {
                       const retained = current.filter(
                         (item) =>
@@ -786,13 +817,24 @@ export function SmokeNotesApp({
             </main>
           ) : (
             <NotesWorkspace
-              web={platform === "web"}
+              web
               notebook={selectedNotebook}
+              groups={notebooks.map((notebook) => ({
+                notebook,
+                notes: notebookNotes[notebook.id] ?? [],
+              }))}
+              expanded={notesExpanded}
+              onExpandNotebook={(id) => {
+                void selectNotebook(id);
+              }}
+              onCollapse={() =>
+                transitionWorkspace(() => setNotesExpanded(false))
+              }
               notes={notes}
-              openOnSingleClick={platform === "web"}
+              openOnSingleClick
               onOpenNote={(id) => {
-                if (platform === "desktop") void desktopBridge?.openNote(id);
-                else setSelectedNoteId(id);
+                lastOpenedNote.current = id;
+                transitionWorkspace(() => setSelectedNoteId(id));
               }}
               onCreateNote={async (kind) => {
                 if (!selectedNotebookId || creatingRef.current) return;
@@ -805,9 +847,8 @@ export function SmokeNotesApp({
                     kind,
                   });
                   await refreshAfterMutation(selectedNotebookId);
-                  setSelectedNoteId(note.id);
-                  if (platform === "desktop")
-                    await desktopBridge?.openNote(note.id);
+                  setNotesExpanded(true);
+                  transitionWorkspace(() => setSelectedNoteId(note.id));
                 } finally {
                   creatingRef.current = false;
                 }
@@ -831,13 +872,28 @@ export function SmokeNotesApp({
         </div>
 
         <div style={{ display: "contents" }} inert={mobile && mobileNavOpen}>
-          {!webEditing && platform === "web" && (
-            <nav className="web-dock" aria-label="手机主导航">
+          {!webEditing && (
+            <nav
+              className="web-dock"
+              aria-label="主导航"
+              style={
+                {
+                  "--dock-index": settingsOpen
+                    ? 3
+                    : notebookCollectionOpen
+                      ? 2
+                      : view === "todos"
+                        ? 1
+                        : 0,
+                } as CSSProperties
+              }
+            >
+              <span className="dock-selection" aria-hidden="true" />
               <button
                 type="button"
                 aria-label="便签"
                 aria-current={
-                  !notebookCollectionOpen && view === "notes"
+                  !settingsOpen && !notebookCollectionOpen && view === "notes"
                     ? "page"
                     : undefined
                 }
@@ -853,7 +909,7 @@ export function SmokeNotesApp({
                 type="button"
                 aria-label="待办"
                 aria-current={
-                  !notebookCollectionOpen && view === "todos"
+                  !settingsOpen && !notebookCollectionOpen && view === "todos"
                     ? "page"
                     : undefined
                 }
@@ -868,7 +924,9 @@ export function SmokeNotesApp({
               <button
                 type="button"
                 aria-label="浏览便签本"
-                aria-current={notebookCollectionOpen ? "page" : undefined}
+                aria-current={
+                  !settingsOpen && notebookCollectionOpen ? "page" : undefined
+                }
                 onClick={() => setNotebookCollectionOpen(true)}
               >
                 <Library size={20} />
@@ -877,6 +935,7 @@ export function SmokeNotesApp({
               <button
                 type="button"
                 aria-label="打开设置"
+                aria-current={settingsOpen ? "page" : undefined}
                 onClick={() => setSettingsOpen(true)}
               >
                 <Settings2 size={20} />
@@ -884,41 +943,11 @@ export function SmokeNotesApp({
               </button>
             </nav>
           )}
-          {!webEditing && platform === "desktop" && (
-            <nav
-              className="mobile-bottom-nav"
-              aria-label="手机主导航"
-              inert={mobile && mobileNavOpen}
-            >
-              <button
-                type="button"
-                className={view === "notes" ? "active" : ""}
-                onClick={() => {
-                  setNotebookCollectionOpen(false);
-                  setView("notes");
-                }}
-              >
-                <NotebookPen size={19} />
-                <span>便签</span>
-              </button>
-              <button
-                type="button"
-                className={view === "todos" ? "active" : ""}
-                onClick={() => {
-                  setNotebookCollectionOpen(false);
-                  void showTodos();
-                }}
-              >
-                <CheckCircle2 size={19} />
-                <span>待办</span>
-              </button>
-            </nav>
-          )}
         </div>
         {settingsOpen && (
           <SettingsPanel
             bridge={desktopBridge}
-            webBackground={platform === "web" ? background : undefined}
+            webBackground={background}
             onWebBackgroundChange={changeBackground}
             backgroundNotice={backgroundNotice}
             reduceTransparency={reduceTransparency}
@@ -943,7 +972,7 @@ export function SmokeNotesApp({
         )}
         {pairingOpen && (
           <PairingDialog
-            web={platform === "web"}
+            web
             controller={pairingController}
             onClose={() => setPairingOpen(false)}
           />

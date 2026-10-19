@@ -60,9 +60,9 @@ describe("desktop window configuration", () => {
         isOpen: true,
       }),
     ).toMatchObject({
-      width: 410,
+      width: 510,
       height: 480,
-      minWidth: 250,
+      minWidth: 350,
       minHeight: 180,
       frame: false,
       transparent: true,
@@ -88,7 +88,7 @@ describe("desktop window configuration", () => {
       isOpen: true,
     });
 
-    expect(options).toMatchObject({ x: 300, y: 120, width: 410, height: 480 });
+    expect(options).toMatchObject({ x: 200, y: 120, width: 510, height: 480 });
     expect(
       toPersistedNoteWindowBounds({
         x: options.x!,

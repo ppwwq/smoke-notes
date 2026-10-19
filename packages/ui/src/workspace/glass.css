@@ -1,0 +1,49 @@
+/* Optional light glass. Layout and palette live in redesign.css; reduced
+   transparency keeps those same colors and replaces only the material. */
+html[data-web-background="glass"],
+body[data-web-background="glass"],
+body[data-web-background="glass"] #root {
+  background: #f1f0f7;
+  color-scheme: light;
+}
+.workspace-app[data-web-background="glass"]
+  :is(.mobile-note-header, .format-toolbar, .settings-panel, .pairing-dialog) {
+  position: relative;
+  isolation: isolate;
+}
+.workspace-app .web-glass-optics {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.workspace-app[data-web-background="glass"]
+  :is(.mobile-note-header, .format-toolbar, .settings-panel, .pairing-dialog)
+  > :not(.web-glass-optics) {
+  position: relative;
+  z-index: 1;
+}
+.workspace-app[data-reduced-transparency="true"] {
+  --surface: #fff;
+}
+.workspace-app[data-reduced-transparency="true"] .web-glass-optics {
+  display: none;
+}
+.workspace-app[data-web-background="glass"] .pairing-dialog {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .workspace-app .web-glass-optics {
+    display: none;
+  }
+}
+@media (forced-colors: active) {
+  .workspace-app .web-glass-optics {
+    display: none;
+  }
+}
+.workspace-app[data-web-background="glass"] .pairing-dialog > .pairing-close {
+  position: absolute;
+}

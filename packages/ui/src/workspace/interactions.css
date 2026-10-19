@@ -1,0 +1,341 @@
+html:has(.workspace-app),
+body:has(.workspace-app),
+#root:has(.workspace-app) {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+/* Main-workspace presentation only. Independent native notes never receive this class. */
+.workspace-app .stack-context {
+  margin: -12px 0 26px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.workspace-app .note-stacks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 36px 32px;
+  padding: 12px 8px 28px;
+}
+.workspace-app .note-stack {
+  display: block;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  text-align: left;
+  color: var(--ink);
+  background: transparent;
+  border-radius: 14px;
+}
+.workspace-app .note-stack-papers {
+  position: relative;
+  display: block;
+  height: 245px;
+  margin: 0 12px 18px 0;
+}
+.workspace-app .stack-paper {
+  position: absolute;
+  inset: 0 0 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px;
+  border: 1px solid #1111110a;
+  border-radius: 16px;
+  background: var(--card-color);
+  color: #222;
+  box-shadow: 0 5px 14px #1111110b;
+  transform: translate(
+      calc(var(--paper-index) * 6px),
+      calc(var(--paper-index) * 16px)
+    )
+    rotate(calc(var(--paper-index) * 2deg));
+  z-index: calc(3 - var(--paper-index));
+}
+.workspace-app .stack-paper strong {
+  font-size: 18px;
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-app .stack-paper > span {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+  line-height: 1.8;
+  font-size: 13px;
+}
+.workspace-app .stack-paper small {
+  margin-top: auto;
+  color: #49463f;
+  font-size: 11px;
+}
+.workspace-app .stack-paper:not(:first-child) {
+  justify-content: flex-end;
+  padding: 0 24px 2px;
+  overflow: hidden;
+}
+.workspace-app .stack-paper:not(:first-child) > span,
+.workspace-app .stack-paper:not(:first-child) > small {
+  display: none;
+}
+.workspace-app .stack-paper:not(:first-child) strong {
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.workspace-app .stack-empty {
+  display: flex;
+  height: 213px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 16px;
+  color: var(--muted);
+}
+.workspace-app .note-stack-caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.workspace-app .note-stack-caption strong {
+  display: block;
+  font-size: 17px;
+  line-height: 1.5;
+}
+.workspace-app .note-stack-caption small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.workspace-app .collapse-notes {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 8px 0 0;
+  margin-bottom: 6px;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  font-size: 12px;
+}
+.workspace-app .collapse-notes:hover {
+  color: var(--ink);
+}
+.workspace-app[data-web-background] .web-dock {
+  --dock-padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  width: 368px;
+  gap: 0;
+  padding: var(--dock-padding);
+  isolation: isolate;
+}
+.workspace-app[data-web-background] .web-dock button,
+.workspace-app[data-web-background] .web-dock button[aria-current="page"] {
+  position: relative;
+  z-index: 1;
+  width: auto;
+  height: 48px;
+  background: transparent;
+}
+.workspace-app[data-web-background] .web-dock button > span {
+  display: inline;
+}
+.workspace-app .dock-selection {
+  position: absolute;
+  left: var(--dock-padding);
+  top: var(--dock-padding);
+  bottom: var(--dock-padding);
+  width: calc((100% - var(--dock-padding) * 2) / 4);
+  border-radius: 999px;
+  background: #fbfaf8;
+  transform: translateX(calc(var(--dock-index) * 100%));
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+.workspace-app[data-web-background] .web-dock button:hover:not([aria-current]) {
+  background: transparent;
+  color: #fff;
+}
+.workspace-app[data-web-background] .sidebar-shell.mobile-open {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  justify-content: flex-end;
+  align-items: stretch;
+  pointer-events: auto;
+  background: transparent;
+  border: 0;
+}
+.workspace-app .sidebar-shell.mobile-open .mobile-scrim {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: #11111145;
+  border: 0;
+}
+.workspace-app[data-web-background] .sidebar-shell.mobile-open .sidebar {
+  position: relative;
+  z-index: 2;
+  width: min(420px, calc(100% - 48px));
+  height: 100%;
+  padding: 32px 24px 24px;
+  border: 1px solid var(--line);
+  border-radius: 24px 0 0 24px;
+  background: var(--surface);
+  box-shadow: -12px 0 32px #11111112;
+  transform: none;
+  animation: manage-in 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.workspace-app .sidebar-close {
+  flex-shrink: 0;
+}
+.workspace-app .sidebar-shell .notebook-scroll {
+  min-height: 0;
+}
+.workspace-app .sidebar .notebook-link {
+  color: var(--ink);
+}
+.workspace-app .sidebar .notebook-link.active {
+  background: var(--surface-soft);
+  box-shadow: none;
+}
+.workspace-app .sidebar .notebook-link.active::before {
+  display: none;
+}
+.workspace-app.platform-desktop {
+  padding-top: 30px;
+  border-radius: 12px;
+  background: transparent;
+}
+.workspace-app.platform-desktop::before {
+  display: block;
+  border: 0;
+  background: var(--canvas);
+}
+.workspace-app.platform-desktop .main-window-titlebar {
+  background: transparent;
+  color: var(--muted);
+}
+.workspace-app.platform-desktop .mobile-note-screen {
+  top: 44px;
+}
+.workspace-app.platform-desktop .connection-chip {
+  top: 36px;
+  right: 18px;
+  color: var(--muted);
+  background: transparent;
+}
+.workspace-app.platform-desktop .brand-mark {
+  font-size: 0;
+  background: url("/icon-32.png") center / contain no-repeat;
+}
+.workspace-app .open-desktop-note {
+  white-space: nowrap;
+}
+.workspace-app .create-note-menu,
+.workspace-app .editor-more-menu {
+  transform-origin: top right;
+  animation: menu-in 130ms ease-out;
+}
+::view-transition-group(*) {
+  animation-duration: 240ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 140ms;
+}
+@keyframes manage-in {
+  from {
+    transform: translateX(32px);
+    opacity: 0.4;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes sheet-in {
+  from {
+    transform: translateY(32px);
+    opacity: 0.4;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes menu-in {
+  from {
+    transform: scale(0.97);
+    opacity: 0.4;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@media (max-width: 760px) {
+  .workspace-app .note-stacks {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 30px;
+    padding: 12px 6px 24px;
+  }
+  .workspace-app .stack-context {
+    margin: -6px 0 18px;
+    font-size: 12px;
+  }
+  .workspace-app[data-web-background] .sidebar-shell.mobile-open {
+    align-items: flex-end;
+  }
+  .workspace-app[data-web-background] .sidebar-shell.mobile-open .sidebar {
+    width: 100%;
+    height: min(640px, 85dvh);
+    padding: 16px 20px max(20px, env(safe-area-inset-bottom));
+    border-radius: 24px 24px 0 0;
+    animation-name: sheet-in;
+  }
+  .workspace-app[data-web-background] .web-dock {
+    --dock-padding: 6px;
+    width: calc(100% - 32px);
+  }
+  .workspace-app[data-web-background] .web-dock button {
+    height: 54px;
+  }
+  .workspace-app .open-desktop-note span {
+    display: none;
+  }
+  .workspace-app.platform-desktop .notes-board {
+    padding-top: 36px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-app .dock-selection {
+    transition: none;
+  }
+  .workspace-app[data-web-background] .sidebar-shell.mobile-open .sidebar,
+  .workspace-app .create-note-menu,
+  .workspace-app .editor-more-menu {
+    animation: none;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none;
+  }
+}
