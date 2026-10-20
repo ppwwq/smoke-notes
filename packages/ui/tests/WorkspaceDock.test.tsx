@@ -122,7 +122,7 @@ describe("WorkspaceDock", () => {
       Number(nav.style.getPropertyValue(`--dock-${name}`));
     pointer("pointerdown", 40);
     pointer("pointermove", 80);
-    expect(value("stretch")).toBeCloseTo(1.35);
+    expect(value("stretch")).toBeCloseTo(1.3);
     expect(value("offset")).toBeLessThan(0);
     expect(value("offset") + (value("stretch") - 1) / 2).toBeCloseTo(0);
     // A hold or coalesced release must not lose the direction/tension.
@@ -132,7 +132,7 @@ describe("WorkspaceDock", () => {
     pointer("pointermove", 160);
     pointer("pointermove", 120);
     expect(value("offset")).toBeGreaterThan(0);
-    expect(value("stretch")).toBeCloseTo(1.35);
+    expect(value("stretch")).toBeCloseTo(1.3);
     expect(value("offset") - (value("stretch") - 1) / 2).toBeCloseTo(0);
     expect(selected).not.toHaveBeenCalled();
     pointer("pointerup", 120);
@@ -152,7 +152,7 @@ describe("WorkspaceDock", () => {
       const extra = Number(nav.style.getPropertyValue("--dock-stretch")) - 1;
       const offset = Number(nav.style.getPropertyValue("--dock-offset"));
       expect(extra).toBeGreaterThanOrEqual(0);
-      expect(extra).toBeLessThanOrEqual(0.35 + Number.EPSILON);
+      expect(extra).toBeLessThanOrEqual(0.3 + Number.EPSILON);
       expect(index + offset - extra / 2).toBeGreaterThanOrEqual(-1e-10);
       expect(index + offset + extra / 2).toBeLessThanOrEqual(3 + 1e-10);
     }
@@ -170,6 +170,18 @@ describe("WorkspaceDock", () => {
     pointer("pointerdown", 40);
     pointer("pointermove", 80);
     expect(nav.getAttribute("style")).toBe(slow);
+  });
+
+  it("suppresses a pointer focus ring, then restores visible keyboard focus", () => {
+    const { nav, pointer, buttons } = setup();
+    pointer("pointerdown", 40);
+    pointer("pointermove", 120);
+    pointer("pointerup", 120);
+    expect(buttons[1]).toHaveFocus();
+    expect(nav).toHaveAttribute("data-pointer-focus", "true");
+    fireEvent.keyDown(window, { key: "Tab" });
+    expect(nav).not.toHaveAttribute("data-pointer-focus");
+    expect(buttons[1]).toHaveFocus();
   });
 
   it("ignores vertical gestures and secondary touches; retains taps and keyboard", async () => {

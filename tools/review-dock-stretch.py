@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
 
-OUT = Path(os.environ.get('SMOKE_REVIEW_OUTPUT', '/workspace/shared/dock-trailing-35'))
+OUT = Path(os.environ.get('SMOKE_REVIEW_OUTPUT', '/workspace/shared/dock-trailing-30'))
 OUT.mkdir(parents=True, exist_ok=True)
 URL = os.environ.get('SMOKE_REVIEW_URL', 'http://127.0.0.1:4174/review.html')
 RESULTS = []
@@ -83,7 +83,7 @@ def acceptance(browser, width, height, reduced=False):
     assert page.locator('.workspace-shell').inner_html() == content, 'page changed while held'
     held = geometry(page)
     assert held['buttons'] == initial['buttons'], 'icons/labels moved or changed geometry'
-    assert abs(held['width'] / held['base'] - 1.35) < 0.001 if not reduced else abs(held['width'] - held['base']) < 0.1
+    assert abs(held['width'] / held['base'] - 1.30) < 0.001 if not reduced else abs(held['width'] - held['base']) < 0.1
     assert held['offset'] < 0
     target = buttons.nth(1).bounding_box()
     assert abs(held['right'] - target['x'] - target['width']) < 0.2, 'rightward leading edge must follow the finger'
@@ -114,6 +114,7 @@ def acceptance(browser, width, height, reduced=False):
     touch(cdp, 'touchEnd')
     expect(buttons.nth(1)).to_have_attribute('aria-current', 'page')
     expect(buttons.nth(1)).to_be_focused()
+    assert buttons.nth(1).evaluate('e=>getComputedStyle(e).outlineStyle')=='none', 'touch release left a keyboard focus box'
     page.wait_for_timeout(430)
     released = geometry(page)
     assert abs(released['width'] - released['base']) < 0.1
@@ -139,20 +140,22 @@ def acceptance(browser, width, height, reduced=False):
     page.wait_for_timeout(400)
     touch(cdp, 'touchStart', points[0]);drag(page, cdp, points[0], points[2], 8, 10);touch(cdp, 'touchEnd')
     expect(buttons.nth(2)).to_have_attribute('aria-current', 'page')
-    page.keyboard.press('Tab');expect(buttons.nth(3)).to_be_focused();page.keyboard.press('Space')
+    page.keyboard.press('Tab');expect(buttons.nth(3)).to_be_focused()
+    assert buttons.nth(3).evaluate('e=>getComputedStyle(e).outlineStyle')=='solid', 'keyboard focus indication must remain visible'
+    page.keyboard.press('Space')
     expect(page.get_by_role('dialog')).to_be_visible();page.keyboard.press('Escape')
     buttons.nth(0).click();expect(buttons.nth(0)).to_have_attribute('aria-current', 'page')
     page.wait_for_timeout(430)
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     frames=page.evaluate('window.sampleDock=false;window.dockFrames')
     assert all(f['left'] >= -0.3 and f['right'] >= -0.3 for f in frames), min(f['left'] for f in frames)
-    assert all(f['width'] <= initial['base'] * 1.35 + 0.1 for f in frames), 'stretch exceeded 35%'
+    assert all(f['width'] <= initial['base'] * 1.30 + 0.1 for f in frames), 'stretch exceeded 30%'
     if reduced:
         assert released['transition'] == '0s'
         assert all(abs(f['width']-initial['base'])<0.1 for f in frames)
     assert not errors, errors
     page.screenshot(path=str(OUT / f'{name}-settled.png'))
-    RESULTS.append({'viewport':name,'checks':'slow/hold/fast/reverse interpolation/leading-edge alignment/bounds/35% cap/touchCancel/Escape/release-only/four destinations/Tab/Space/focus/labels fixed',
+    RESULTS.append({'viewport':name,'checks':'slow/hold/fast/reverse interpolation/leading-edge alignment/bounds/30% cap/touchCancel/Escape/release-only/four destinations/Tab/Space/focus/labels fixed',
                     'heldScale':round(held['width']/held['base'],3),'sampledFrames':len(frames),
                     'minimumBoundaryClearance':round(min(min(f['left'],f['right']) for f in frames),3)})
     context.close()
@@ -160,30 +163,21 @@ def acceptance(browser, width, height, reduced=False):
 
 def record_demo(browser):
     context,page,nav,buttons,points,cdp=open_page(browser,390,844,record=True)
-    # Recording-only captions and contact marker; no application code changes.
-    page.evaluate('''() => {
-      const label=document.createElement('div');label.id='demo-label';
-      label.style.cssText='position:fixed;top:50px;left:16px;right:16px;z-index:9999;padding:12px;border-radius:12px;background:#111e;color:white;font:14px sans-serif;text-align:center;pointer-events:none';document.body.append(label);
-      const dot=document.createElement('div');dot.id='demo-touch';dot.style.cssText='display:none;position:fixed;width:28px;height:28px;border:2px solid #ec926a;border-radius:50%;transform:translate(-50%,-50%);z-index:9999;pointer-events:none;background:#ec926a33';document.body.append(dot);
-      for(const type of ['pointerdown','pointermove'])document.addEventListener(type,e=>{dot.style.display='block';dot.style.left=e.clientX+'px';dot.style.top=e.clientY+'px'},true);
-      for(const type of ['pointerup','pointercancel'])document.addEventListener(type,()=>dot.style.display='none',true);
-    }''')
-    def label(text): page.locator('#demo-label').evaluate('(e,t)=>e.textContent=t',text)
-    label('向右慢拖：左侧拖尾，最多延伸 35%')
+    # Clean product recording: no caption boxes or contact-marker overlays.
     page.wait_for_timeout(650)
     touch(cdp,'touchStart',points[0]);drag(page,cdp,points[0],points[1],45,25)
-    page.wait_for_timeout(650);label('放手：柔和缩回，吸附并切换页面');touch(cdp,'touchEnd');page.wait_for_timeout(1000)
-    label('反向向左：换到右侧拖尾，前端跟手')
+    page.wait_for_timeout(650);touch(cdp,'touchEnd');page.wait_for_timeout(1000)
+
     touch(cdp,'touchStart',points[1]);drag(page,cdp,points[1],points[2],30,25);page.wait_for_timeout(250)
     drag(page,cdp,points[2],points[0],48,20);page.wait_for_timeout(350);touch(cdp,'touchEnd');page.wait_for_timeout(700)
-    label('快拖：放手后才切页')
+
     touch(cdp,'touchStart',points[0]);drag(page,cdp,points[0],points[1],4,16);page.wait_for_timeout(400);touch(cdp,'touchEnd');page.wait_for_timeout(900)
-    label('边界：拉伸有上限，胶囊不越界')
+
     touch(cdp,'touchStart',points[1]);drag(page,cdp,points[1],(385,points[1][1]),40,20);page.wait_for_timeout(500)
     drag(page,cdp,(385,points[1][1]),points[2],18,20);page.wait_for_timeout(300)
-    label('取消手势：回到原来的页面');touch(cdp,'touchCancel');page.wait_for_timeout(1000)
-    label('向后拖尾 35% · 图标文字固定 · 放手切页');page.wait_for_timeout(900)
-    video=Path(page.video.path());context.close();video.rename(OUT/'dock-trailing-35-mobile.webm')
+    touch(cdp,'touchCancel');page.wait_for_timeout(1000)
+    page.wait_for_timeout(900)
+    video=Path(page.video.path());context.close();video.rename(OUT/'dock-trailing-30-mobile.webm')
 
 
 with sync_playwright() as p:

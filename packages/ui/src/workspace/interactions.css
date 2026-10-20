@@ -272,6 +272,13 @@ body:has(.workspace-app),
 .workspace-app .web-dock[data-dragging] .dock-selection {
   transition: transform 90ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+.workspace-app[data-web-background]
+  .web-dock[data-pointer-focus]
+  button:focus-visible {
+  /* Programmatic focus after touch must not leave a keyboard ring behind.
+     Any keyboard input restores the normal focus-visible treatment. */
+  outline: none;
+}
 .workspace-app .notes-board-header {
   view-transition-name: board-header;
 }

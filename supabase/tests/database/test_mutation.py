@@ -58,7 +58,13 @@ class AtomicMutationTests(unittest.TestCase):
                 ["docker", "exec", cls.container, "pg_isready", "-U", "postgres"],
                 capture_output=True,
             )
-            if ready.returncode == 0:
+            logs = subprocess.run(
+                ["docker", "logs", cls.container], capture_output=True, text=True,
+            )
+            # The image starts a temporary server during initialization, then
+            # stops it. pg_isready alone can mistake that server for the final one.
+            initialized = "PostgreSQL init process complete" in logs.stdout + logs.stderr
+            if initialized and ready.returncode == 0:
                 break
             time.sleep(0.25)
         else:
@@ -398,6 +404,137 @@ class AtomicMutationTests(unittest.TestCase):
         missing_id = str(uuid.uuid4())
         self.assert_error("missing_remote_record", entity_id=missing_id, row=self.row(id=missing_id))
         self.assertEqual(self.sql("select count(*) from public.applied_operations").stdout.strip(), "0")
+
+    def planned_row(self, entity_id=None, **planning):
+        return {
+            "id": entity_id or str(uuid.uuid4()), "workspace_id": WORKSPACE,
+            "text": "Daily reading", "completed": False, "rank": 1,
+            "deleted_at": None,
+            "planning": {"version": 1, "kind": "task", "date": "2026-10-20",
+                         "status": "open", "notes": "Keep this note", **planning},
+        }
+
+    def planned_call(self, row, version=0, **kwargs):
+        return self.call(entity="todo", entity_id=row["id"], version=version, row=row, **kwargs)
+
+    def test_planning_capability_requires_authentication(self):
+        query = "select public.workspace_sync_capabilities();"
+        result = self.sql(self.authenticated_sql(query))
+        self.assertEqual(json.loads(result.stdout), {"todoPlanning": 1})
+        for role, user, error in [("anon", USER, "permission denied"), ("authenticated", "", "authentication_required")]:
+            result = self.sql(f"set role {role}; set request.jwt.claim.sub = {literal(user)}; {query}", check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(error, result.stderr)
+
+    def test_planning_roundtrip_conflict_and_retry_keep_metadata(self):
+        row = self.planned_row(clocks={"notes": {"at": "2026-10-20T00:00:00Z", "id": "edit-1"}})
+        operation = str(uuid.uuid4())
+        created = self.planned_call(row, operation=operation)
+        self.assertEqual(created["record"]["planning"], row["planning"])
+        self.assertEqual(created["todoPlanningVersion"], 1)
+        self.assertEqual(self.planned_call(row, operation=operation), created)
+        changed = {**row, "completed": True, "planning": {**row["planning"], "status": "completed", "completedAt": "2026-10-20T01:00:00Z"}}
+        updated = self.planned_call(changed, version=1)
+        stale = self.planned_call(row, version=1)
+        self.assertEqual(stale["status"], "conflict")
+        self.assertEqual(stale["record"], updated["record"])
+        self.assertEqual(stale["todoPlanningVersion"], 1)
+
+    def test_legacy_client_cannot_erase_existing_planning(self):
+        row = self.planned_row()
+        self.planned_call(row)
+        legacy = {key: value for key, value in row.items() if key != "planning"}
+        legacy.update(completed=True, text="old client edit")
+        self.assert_error("todo_planning_client_required", entity="todo", entity_id=row["id"], version=1, row=legacy)
+        saved = json.loads(self.sql(f"select to_jsonb(todos) from public.todos where id={literal(row['id'])}").stdout)
+        self.assertEqual(saved["planning"], row["planning"])
+        self.assertFalse(saved["completed"])
+        self.assertEqual(saved["version"], 1)
+        self.assertEqual(self.sql("select count(*) from public.applied_operations").stdout.strip(), "1")
+
+    def test_two_devices_generate_one_instance_and_do_not_erase_completion(self):
+        row = self.planned_row(kind="occurrence", seriesId=str(uuid.uuid4()), generated=True)
+        queries = [self.call_sql(entity="todo", entity_id=row["id"], version=0, row=row, user=user) for user in [USER, MEMBER]]
+        results = [json.loads(result) for result in self.concurrent_sql("todo:" + row["id"], queries)]
+        self.assertEqual(sorted(result["status"] for result in results), ["applied", "conflict"])
+        self.assertEqual(results[0]["record"], results[1]["record"])
+        completed = {**row, "completed": True, "planning": {**row["planning"], "status": "completed", "generated": False}}
+        self.planned_call(completed, version=1)
+        replay = self.planned_call(row, user=MEMBER)
+        self.assertEqual(replay["status"], "conflict")
+        self.assertTrue(replay["record"]["completed"])
+        self.assertEqual(replay["record"]["planning"]["status"], "completed")
+        self.assertEqual(self.sql("select count(*) from public.todos").stdout.strip(), "1")
+
+    def test_instance_date_unique_even_after_soft_delete(self):
+        row = self.planned_row(kind="occurrence", seriesId=str(uuid.uuid4()))
+        self.planned_call(row)
+        self.planned_call({**row, "deleted_at": "2026-10-20T01:00:00Z"}, version=1)
+        duplicate = {**row, "id": str(uuid.uuid4())}
+        self.assert_error("todos_series_date_unique", entity="todo", entity_id=duplicate["id"], version=0, row=duplicate)
+        self.assertEqual(self.sql("select count(*) from public.todos").stdout.strip(), "1")
+
+    def test_occurrence_identity_cannot_be_reassigned(self):
+        row = self.planned_row(kind="occurrence", seriesId=str(uuid.uuid4()))
+        self.planned_call(row)
+        for changes in [{"date": "2026-10-21"}, {"seriesId": str(uuid.uuid4())}, {"kind": "task"}]:
+            changed = {**row, "planning": {**row["planning"], **changes}}
+            self.assert_error("invalid_todo_planning", entity="todo", entity_id=row["id"], version=1, row=changed)
+        self.assertEqual(self.sql("select count(*) from public.applied_operations").stdout.strip(), "1")
+
+    def test_series_revisions_settings_and_audit_roundtrip(self):
+        revision = {"id": "original", "effectiveFrom": "2026-10-19", "changedAt": "2026-10-19T00:00:00Z",
+                    "text": "Read", "notes": "A book", "repeat": {"kind": "weekly", "weekdays": [1, 3, 5]},
+                    "paused": False, "stopped": False}
+        series = self.planned_row(kind="series", revisions=[revision])
+        self.planned_call(series)
+        revised = {**series, "planning": {**series["planning"], "revisions": [revision, {**revision, "id": "paused", "effectiveFrom": "2026-10-21", "paused": True}]}}
+        updated = self.planned_call(revised, version=1)
+        self.assertEqual(updated["record"]["planning"]["revisions"], revised["planning"]["revisions"])
+        occurrence = self.planned_row(kind="occurrence", seriesId=series["id"], events=[
+            {"id": "done", "at": "2026-10-20T00:00:00Z", "status": "completed", "completedAt": "2026-10-20T00:00:00Z"},
+            {"id": "undo", "at": "2026-10-20T00:01:00Z", "status": "open", "completedAt": None},
+        ])
+        stored = self.planned_call(occurrence)
+        self.assertEqual(stored["record"]["planning"], occurrence["planning"])
+        settings = self.planned_row(kind="settings", settings={"timeZone": "Asia/Hong_Kong", "dayBoundaryHour": 0})
+        self.planned_call(settings)
+        later = {**settings, "planning": {**settings["planning"], "settings": {"timeZone": "Asia/Hong_Kong", "dayBoundaryHour": 4}}}
+        self.assertEqual(self.planned_call(later, version=1)["record"]["planning"]["settings"]["dayBoundaryHour"], 4)
+        duplicate = {**settings, "id": str(uuid.uuid4())}
+        self.assert_error("todos_planning_settings_unique", entity="todo", entity_id=duplicate["id"], version=0, row=duplicate)
+
+    def test_planning_migration_keeps_legacy_data_and_receipts(self):
+        # Recreate the pre-migration column shape only inside this disposable DB.
+        self.sql("alter table public.todos drop column planning;")
+        entity_id = str(uuid.uuid4())
+        self.sql(f"insert into public.todos(id,workspace_id,text,completed,rank,version) values ('{entity_id}','{WORKSPACE}','Existing task',true,42,7);")
+        receipt = self.call()
+        old_row = json.loads(self.sql(f"select to_jsonb(todos) from public.todos where id='{entity_id}'").stdout)
+        self.sql((ROOT / "supabase/migrations/202610200001_todo_planning.sql").read_text())
+        new_row = json.loads(self.sql(f"select to_jsonb(todos) from public.todos where id='{entity_id}'").stdout)
+        self.assertIsNone(new_row.pop("planning"))
+        self.assertEqual(new_row, old_row)
+        self.assertEqual(json.loads(self.sql("select result from public.applied_operations").stdout), receipt)
+
+    def test_invalid_planning_does_not_write_or_issue_receipt(self):
+        valid = self.planned_row()
+        for planning in [None, {}, {"kind": "task"}, {"version": 2, "kind": "task"},
+                         {"version": 1, "kind": "task", "date": "2026-02-30"},
+                         {"version": 1, "kind": "settings", "settings": {"timeZone": "Asia/Hong_Kong"}},
+                         {"version": 1, "kind": "occurrence", "date": "2026-10-20", "status": "open", "seriesId": None}]:
+            with self.subTest(planning=planning):
+                row = {**valid, "planning": planning}
+                self.assert_error("invalid_todo_planning", entity="todo", entity_id=row["id"], version=0, row=row)
+        self.assertEqual(self.sql("select count(*) from public.todos").stdout.strip(), "0")
+        self.assertEqual(self.sql("select count(*) from public.applied_operations").stdout.strip(), "0")
+
+    def test_planned_rows_remain_workspace_scoped(self):
+        row = self.planned_row()
+        self.planned_call(row)
+        self.assert_error("workspace_forbidden", entity="todo", entity_id=row["id"], version=1, row=row, user=OTHER_USER)
+        other = {**row, "workspace_id": OTHER_WORKSPACE}
+        self.assert_error("workspace_forbidden", entity="todo", entity_id=row["id"], version=1, row=other)
 
 
 if __name__ == "__main__":

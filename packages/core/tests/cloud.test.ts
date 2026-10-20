@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   SupabaseCloud,
+  type SyncOperation,
   mapRemoteRecord,
   normalizePairingCode,
   pairingCodeFromUrl,
@@ -442,5 +443,122 @@ describe("remote record mapping", () => {
         deleted_at: null,
       }),
     ).toMatchObject({ title: "" });
+  });
+});
+
+describe("todo planning capability safety", () => {
+  const operation: SyncOperation = {
+    id: "planned-op",
+    deviceId: "phone",
+    entity: "todo",
+    entityId: "planned-todo",
+    action: "upsert",
+    baseVersion: 0,
+    payload: {
+      id: "planned-todo",
+      workspaceId: "workspace",
+      text: "每日",
+      completed: false,
+      rank: 1024,
+      version: 1,
+      updatedAt: "2026-10-19T00:00:00Z",
+      deletedAt: null,
+      planning: {
+        version: 1,
+        kind: "task",
+        date: "2026-10-19",
+        notes: "备注",
+        status: "open",
+      },
+    },
+    attempts: 0,
+    nextAttemptAt: "2026-10-19T00:00:00Z",
+    createdAt: "2026-10-19T00:00:00Z",
+  };
+  it("does not send a mutation to an old endpoint that cannot store planning", async () => {
+    const requests: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: unknown, init?: RequestInit) => {
+        requests.push(JSON.parse(String(init?.body)));
+        return new Response(JSON.stringify({ error: "invalid_operation" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }),
+    );
+    await expect(cloud.syncAdapter.push(operation)).rejects.toThrow(
+      /服务端升级/,
+    );
+    expect(requests).toEqual([{ capabilities: true }]);
+  });
+  it("checks capability before mutation and requires an explicit planning acknowledgement", async () => {
+    const requests: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: unknown, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body));
+        requests.push(body);
+        return new Response(
+          JSON.stringify(
+            body.capabilities
+              ? { capabilities: { todoPlanning: 1 } }
+              : { status: "applied", todoPlanningVersion: 1 },
+          ),
+          { headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+    await expect(cloud.syncAdapter.push(operation)).resolves.toEqual({
+      status: "applied",
+    });
+    expect(requests).toEqual([{ capabilities: true }, { operation }]);
+  });
+  it("keeps a planned operation retryable when the mutation marker is missing", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: unknown, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body));
+        return new Response(
+          JSON.stringify(
+            body.capabilities
+              ? { capabilities: { todoPlanning: 1 } }
+              : { status: "applied" },
+          ),
+          { headers: { "Content-Type": "application/json" } },
+        );
+      }),
+    );
+    await expect(cloud.syncAdapter.push(operation)).rejects.toThrow(/未确认/);
+  });
+  it("maps planning revisions and status events without stripping metadata", () => {
+    const planning = {
+      version: 1,
+      kind: "occurrence",
+      date: "2026-10-19",
+      seriesId: "series",
+      status: "completed",
+      completedAt: "2026-10-19T01:00:00Z",
+      events: [
+        {
+          id: "event",
+          at: "2026-10-19T01:00:00Z",
+          status: "completed",
+          completedAt: "2026-10-19T01:00:00Z",
+        },
+      ],
+    };
+    expect(
+      mapRemoteRecord("todo", {
+        id: "id",
+        workspace_id: "workspace",
+        text: "保留历史",
+        completed: true,
+        rank: 1,
+        version: 2,
+        updated_at: "2026-10-19T01:00:00Z",
+        planning,
+      }).planning,
+    ).toEqual(planning);
   });
 });

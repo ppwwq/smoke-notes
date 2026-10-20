@@ -2,6 +2,7 @@ import type { Table } from "dexie";
 import { createConflictCopy } from "./domain";
 import { mergeNoteChanges, sameNoteContent } from "./note-merge";
 import { SmokeNotesDatabase } from "./database";
+import { mergeTodoChanges, sameTodoContent } from "./todo-merge";
 import type { Note, Notebook, SyncEntity, SyncOperation, Todo } from "./types";
 
 export type RemoteRecord = Notebook | Note | Todo;
@@ -270,6 +271,54 @@ export class SyncEngine {
     serverRecord: RemoteRecord,
   ): Promise<boolean> {
     const table = this.tableFor(operation.entity);
+    if (
+      operation.entity === "todo" &&
+      (operation.payload.planning || (serverRecord as Todo).planning)
+    ) {
+      return this.database.transaction(
+        "rw",
+        this.database.todos,
+        this.database.operations,
+        async () => {
+          if (!(await this.database.operations.get(operation.id))) return false;
+          const local = await this.database.todos.get(operation.entityId);
+          const remote = serverRecord as Todo;
+          await this.database.operations
+            .where("entityId")
+            .equals(operation.entityId)
+            .delete();
+          if (!local) {
+            await this.database.todos.put(remote);
+            return false;
+          }
+          const merged = mergeTodoChanges(local, remote);
+          if (sameTodoContent(merged, remote)) {
+            await this.database.todos.put(remote);
+            return false;
+          }
+          const timestamp = this.now().toISOString();
+          const updated = {
+            ...merged,
+            version: remote.version + 1,
+            updatedAt: timestamp,
+          };
+          await this.database.todos.put(updated);
+          await this.database.operations.add({
+            id: this.createId(),
+            deviceId: this.context.deviceId,
+            entity: "todo",
+            entityId: updated.id,
+            action: updated.deletedAt ? "delete" : "upsert",
+            baseVersion: remote.version,
+            payload: { ...updated },
+            attempts: 0,
+            nextAttemptAt: timestamp,
+            createdAt: timestamp,
+          });
+          return false;
+        },
+      );
+    }
     if (operation.entity !== "note") {
       return this.database.transaction(
         "rw",

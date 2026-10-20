@@ -1,0 +1,66 @@
+/* Keep creation controls above the named card/context stacking layers. */
+.workspace-app[data-web-background] .notes-board-header {
+  position: relative;
+  z-index: 5;
+}
+.workspace-app[data-web-background] .create-note-menu {
+  max-width: calc(100vw - 32px);
+  max-height: min(320px, calc(100dvh - 160px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Space separate cards and notebook groups; preserve each real paper stack. */
+.workspace-app[data-web-background] .sticky-card-grid {
+  gap: 24px;
+}
+.workspace-app .note-stacks {
+  gap: 44px 36px;
+}
+.workspace-app[data-web-background] .sticky-card p,
+.workspace-app .stack-paper > span {
+  color: #34342f;
+}
+.workspace-app[data-web-background] .sticky-card time,
+.workspace-app .stack-paper small,
+.workspace-app .note-stack-caption small {
+  color: #56554e;
+}
+
+/* The header remains outside the scrolling document, including above a keyboard. */
+.workspace-app[data-web-background] .mobile-note-header {
+  position: relative;
+  z-index: 2;
+}
+.workspace-app[data-web-background] .mobile-note-header .mobile-save-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-app[data-web-background] .compact-editor .rich-note-scroll {
+  scroll-padding-block: 16px 32px;
+}
+.workspace-app[data-web-background] .compact-editor .rich-note-title {
+  flex-shrink: 0;
+  padding-block: 6px 14px;
+  font-size: 24px;
+}
+.workspace-app[data-web-background] .compact-editor .rich-note-content {
+  padding-top: 12px;
+}
+@media (max-width: 760px) {
+  .workspace-app .note-stacks {
+    gap: 40px;
+  }
+  .workspace-app[data-web-background] .compact-editing .mobile-note-header {
+    gap: 2px;
+    padding-inline: 8px;
+  }
+  .workspace-app[data-web-background]
+    .compact-editing
+    .mobile-note-header
+    .mobile-save-button {
+    padding-inline: 14px;
+  }
+}

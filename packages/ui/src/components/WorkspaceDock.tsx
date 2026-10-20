@@ -51,11 +51,16 @@ export function WorkspaceDock({
   }, [selected]);
 
   useEffect(() => {
+    const keyboardFocus = () => {
+      if (nav.current) delete nav.current.dataset.pointerFocus;
+    };
     window.addEventListener("blur", reset);
     window.addEventListener("resize", reset);
+    window.addEventListener("keydown", keyboardFocus);
     return () => {
       window.removeEventListener("blur", reset);
       window.removeEventListener("resize", reset);
+      window.removeEventListener("keydown", keyboardFocus);
     };
   }, []);
 
@@ -103,7 +108,7 @@ export function WorkspaceDock({
     );
     const direction = Math.sign(current.pull);
     const room = direction > 0 ? position : 3 - position;
-    const stretch = Math.min(0.35, Math.abs(current.pull) * 0.7, room);
+    const stretch = Math.min(0.3, Math.abs(current.pull) * 0.6, room);
     event.currentTarget.style.setProperty(
       "--dock-stretch",
       String(1 + stretch),
@@ -128,6 +133,7 @@ export function WorkspaceDock({
             ? event.target.closest("button")
             : null;
         if (!button) return;
+        event.currentTarget.dataset.pointerFocus = "true";
         suppressClick.current = false;
         const width = button.getBoundingClientRect().width;
         if (!width) return;

@@ -1,3 +1,5 @@
+import type { TodoPlanning } from "./todo-planning";
+
 export type EntityId = string;
 
 export interface SyncFields {
@@ -46,6 +48,7 @@ export interface Todo extends SyncFields {
   text: string;
   completed: boolean;
   rank: number;
+  planning?: TodoPlanning;
 }
 
 export type SyncEntity = "notebook" | "note" | "todo";

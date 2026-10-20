@@ -26,11 +26,8 @@ export function useWebViewport(enabled: boolean): WebViewport {
       const insideEditorScreen = !!active?.closest(".mobile-note-screen");
       const layoutHeight =
         document.documentElement.clientHeight || window.innerHeight;
-      const layoutWidth =
-        document.documentElement.clientWidth || window.innerWidth;
       const cramped =
         navigator.maxTouchPoints > 0 &&
-        layoutWidth > layoutHeight &&
         viewport.height <= 500 &&
         layoutHeight - viewport.height >= 150;
       setViewportState((previous) => ({

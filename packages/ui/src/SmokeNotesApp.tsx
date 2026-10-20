@@ -15,7 +15,9 @@ import type {
   Todo,
   TrashRecord,
   SyncStatus,
+  TodoSettings,
 } from "@smoke-notes/core";
+import { getTodoDay } from "@smoke-notes/core";
 import {
   ArrowLeft,
   ExternalLink,
@@ -89,6 +91,13 @@ export function SmokeNotesApp({
   );
   const [notesExpanded, setNotesExpanded] = useState(false);
   const [todos, setTodos] = useState<Todo[]>([]);
+  const [todoSeries, setTodoSeries] = useState<Todo[]>([]);
+  const [todoSettings, setTodoSettings] = useState<TodoSettings>({
+    timeZone: "Asia/Hong_Kong",
+    dayBoundaryHour: 0,
+  });
+  const [todoToday, setTodoToday] = useState(() => getTodoDay(new Date(), 0));
+  const [planningError, setPlanningError] = useState("");
   const [trash, setTrash] = useState<TrashRecord[]>([]);
   const [view, setView] = useState<"notes" | "todos">("notes");
   const [selectedNotebookId, setSelectedNotebookId] = useState<string | null>(
@@ -115,6 +124,16 @@ export function SmokeNotesApp({
   const [online, setOnline] = useState(
     () => typeof navigator === "undefined" || navigator.onLine,
   );
+  const syncMessage = syncStatus
+    ? {
+        synced: "已同步",
+        syncing: "正在同步 · 内容已保存在本机",
+        retrying: "待同步 · 内容已保存在本机，稍后重试",
+        offline: "离线 · 内容已保存在本机，联网后同步",
+        error: "同步失败 · 内容已保存在本机，请检查连接后重试",
+      }[syncStatus.phase] +
+      (syncStatus.pending ? ` · ${syncStatus.pending} 项待同步` : "")
+    : "已保存在本机 · 未启用云端同步";
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.82);
   const [saveStatus, setSaveStatus] = useState("已自动保存");
   const [manualSaving, setManualSaving] = useState(false);
@@ -139,11 +158,17 @@ export function SmokeNotesApp({
   const refresh = useCallback(
     async (preferredNotebookId?: string | null) => {
       const revision = ++refreshRevision.current;
-      const [nextNotebooks, nextTodos, nextTrash] = await Promise.all([
-        repository.listNotebooks(),
-        repository.listTodos(),
-        repository.listTrash(),
-      ]);
+      // Materialize missed dates locally before displaying today. This also
+      // runs after remote changes; deterministic occurrence IDs make it safe.
+      await repository.reconcileTodos();
+      const [nextNotebooks, nextTodos, nextTrash, nextSeries, nextSettings] =
+        await Promise.all([
+          repository.listNotebooks(),
+          repository.listTodos(),
+          repository.listTrash(),
+          repository.listTodoSeries(),
+          repository.getTodoSettings(),
+        ]);
       if (revision !== refreshRevision.current) return;
       const requestedId =
         preferredNotebookId === undefined
@@ -176,6 +201,10 @@ export function SmokeNotesApp({
       }
       setNotebooks(nextNotebooks);
       setTodos(nextTodos);
+      setTodoSeries(nextSeries);
+      setTodoSettings(nextSettings);
+      setTodoToday(getTodoDay(new Date(), nextSettings.dayBoundaryHour));
+      setPlanningError("");
       setTrash(nextTrash);
       selectedNotebookIdRef.current = targetId;
       setSelectedNotebookId(targetId);
@@ -198,7 +227,9 @@ export function SmokeNotesApp({
   );
 
   useEffect(() => {
-    void refresh();
+    void refresh().catch(() =>
+      setPlanningError("读取记录失败，请重试。已有内容仍保存在本机。"),
+    );
     return invalidateRefresh;
   }, [refresh, invalidateRefresh]);
 
@@ -211,11 +242,35 @@ export function SmokeNotesApp({
 
   useEffect(() => {
     const reload = () => {
-      void refresh();
+      void refresh().catch(() =>
+        setPlanningError("刷新失败，已有内容已保留，请重试。"),
+      );
     };
     window.addEventListener("smoke-notes:data-changed", reload);
     return () => window.removeEventListener("smoke-notes:data-changed", reload);
   }, [refresh]);
+
+  useEffect(() => {
+    const refreshDay = (force = false) => {
+      if (document.visibilityState === "hidden") return;
+      if (
+        force ||
+        getTodoDay(new Date(), todoSettings.dayBoundaryHour) !== todoToday
+      )
+        void refresh().catch(() =>
+          setPlanningError("换日更新失败，请重试。已有记录已保留。"),
+        );
+    };
+    const wake = () => refreshDay(true);
+    const timer = window.setInterval(() => refreshDay(), 30_000);
+    window.addEventListener("focus", wake);
+    document.addEventListener("visibilitychange", wake);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", wake);
+      document.removeEventListener("visibilitychange", wake);
+    };
+  }, [refresh, todoSettings.dayBoundaryHour, todoToday]);
 
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
@@ -492,6 +547,21 @@ export function SmokeNotesApp({
             browsePositions.current.set(browseKey, positions);
           }}
         >
+          {planningError && (
+            <div className="planning-error" role="alert">
+              {planningError}
+              <button
+                type="button"
+                onClick={() =>
+                  void refresh().catch(() =>
+                    setPlanningError("读取记录失败，请重试。"),
+                  )
+                }
+              >
+                重试
+              </button>
+            </div>
+          )}
           {platform === "web" ? (
             <SyncIndicator status={syncStatus} />
           ) : (
@@ -542,8 +612,31 @@ export function SmokeNotesApp({
               filter={todoFilter}
               onFilterChange={setTodoFilter}
               todos={todos}
-              onCreate={async (text) => {
-                await repository.createTodo(text);
+              today={todoToday}
+              series={todoSeries}
+              syncMessage={syncMessage}
+              onCreate={async (text, options) => {
+                await repository.createTodo(text, options ?? {});
+                await refreshAfterMutation(selectedNotebookId);
+              }}
+              onSetStatus={async (id, status) => {
+                await repository.setTodoStatus(id, status);
+                await refreshAfterMutation(selectedNotebookId);
+              }}
+              onReschedule={async (id, date) => {
+                await repository.rescheduleTodo(id, date);
+                await refreshAfterMutation(selectedNotebookId);
+              }}
+              onUpdateRule={async (id, changes) => {
+                await repository.updateTodoRule(id, changes);
+                await refreshAfterMutation(selectedNotebookId);
+              }}
+              onPauseSeries={async (id, paused) => {
+                await repository.pauseTodoSeries(id, paused);
+                await refreshAfterMutation(selectedNotebookId);
+              }}
+              onStopSeries={async (id) => {
+                await repository.stopTodoSeries(id);
                 await refreshAfterMutation(selectedNotebookId);
               }}
               onToggle={async (id) => {
@@ -902,6 +995,12 @@ export function SmokeNotesApp({
             reduceTransparency={reduceTransparency}
             systemReduced={systemReduced}
             onReduceTransparencyChange={changeReduceTransparency}
+            todoBoundaryHour={todoSettings.dayBoundaryHour}
+            onTodoBoundaryChange={async (hour) => {
+              await repository.setTodoDayBoundary(hour);
+              await refreshAfterMutation(selectedNotebookId);
+            }}
+            syncMessage={syncMessage}
             trash={trash}
             onClose={() => setSettingsOpen(false)}
             onOpenPairing={() => {

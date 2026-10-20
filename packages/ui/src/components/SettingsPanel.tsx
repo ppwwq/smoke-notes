@@ -28,6 +28,9 @@ interface SettingsPanelProps {
   onRestore: (item: TrashRecord) => Promise<void>;
   onOpenPairing: () => void;
   onBackgroundOpacityChange?: (value: number) => void;
+  todoBoundaryHour?: 0 | 4;
+  onTodoBoundaryChange?: (hour: 0 | 4) => Promise<void>;
+  syncMessage?: string;
 }
 
 export function SettingsPanel({
@@ -43,6 +46,9 @@ export function SettingsPanel({
   onRestore,
   onOpenPairing,
   onBackgroundOpacityChange,
+  todoBoundaryHour = 0,
+  onTodoBoundaryChange,
+  syncMessage,
 }: SettingsPanelProps) {
   const [opacity, setOpacity] = useState(0.82);
   const [alwaysOnTop, setAlwaysOnTop] = useState(false);
@@ -55,6 +61,8 @@ export function SettingsPanel({
   const [restoreBusy, setRestoreBusy] = useState(false);
   const restorePending = useRef(false);
   const [restoreError, setRestoreError] = useState("");
+  const [boundaryBusy, setBoundaryBusy] = useState(false);
+  const [boundaryError, setBoundaryError] = useState("");
   const web = webBackground !== undefined;
 
   useEffect(() => {
@@ -222,6 +230,42 @@ export function SettingsPanel({
         </div>
       )}
 
+      {onTodoBoundaryChange && (!web || section === "overview") && (
+        <details className="planner-disclosure settings-todo-planning">
+          <summary>每日待办</summary>
+          <div className="planner-disclosure-body">
+            <label>
+              换日时间（香港时间）
+              <select
+                aria-label="待办换日时间"
+                value={todoBoundaryHour}
+                disabled={boundaryBusy}
+                onChange={async (event) => {
+                  const next = Number(event.target.value) === 4 ? 4 : 0;
+                  setBoundaryBusy(true);
+                  setBoundaryError("");
+                  try {
+                    await onTodoBoundaryChange(next);
+                  } catch {
+                    setBoundaryError(
+                      "保存失败，原来的换日设置已保留，请重试。",
+                    );
+                  } finally {
+                    setBoundaryBusy(false);
+                  }
+                }}
+              >
+                <option value={0}>00:00</option>
+                <option value={4}>04:00</option>
+              </select>
+            </label>
+            <p>每次打开会补算日期；电脑不必一直开着。历史记录会保留。</p>
+            <p>关闭网页后不会发送通知。</p>
+            {boundaryError && <p role="alert">{boundaryError}</p>}
+          </div>
+        </details>
+      )}
+
       {bridge && (
         <div className="settings-group">
           <h3>
@@ -313,6 +357,7 @@ export function SettingsPanel({
           <Link2 size={16} />
           手机同步
         </h3>
+        {syncMessage && <p role="status">{syncMessage}</p>}
         <p>
           {web
             ? "连接设备，让便签在手机与电脑之间接续。"

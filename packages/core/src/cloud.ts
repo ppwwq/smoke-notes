@@ -4,6 +4,7 @@ import {
   type SupabaseClient,
 } from "@supabase/supabase-js";
 import type { Note, Notebook, SyncEntity, Todo } from "./types";
+import type { TodoPlanning } from "./todo-planning";
 import {
   normalizeNoteColor,
   normalizeNoteKind,
@@ -97,6 +98,9 @@ export function mapRemoteRecord(
     workspaceId: String(row.workspace_id),
     text: String(row.text),
     completed: row.completed === true,
+    ...(row.planning && typeof row.planning === "object"
+      ? { planning: row.planning as TodoPlanning }
+      : {}),
   };
 }
 
@@ -136,6 +140,17 @@ class SupabaseSyncAdapter implements RemoteSyncAdapter {
   async push(
     operation: Parameters<RemoteSyncAdapter["push"]>[0],
   ): Promise<PushResult> {
+    const plannedTodo =
+      operation.entity === "todo" && !!operation.payload.planning;
+    if (plannedTodo) {
+      // Do not let an older endpoint accept text/completed while silently
+      // discarding schedule/history. A capability-only request cannot mutate.
+      const capability = await this.client.functions.invoke("apply-mutation", {
+        body: { capabilities: true },
+      });
+      if (capability.error || capability.data?.capabilities?.todoPlanning !== 1)
+        throw new Error("待办计划同步需要服务端升级；内容已保存在本机。");
+    }
     const { data, error } = await this.client.functions.invoke(
       "apply-mutation",
       {
@@ -155,15 +170,21 @@ class SupabaseSyncAdapter implements RemoteSyncAdapter {
           .json()
           .catch(() => null);
         if (
-          ["text_too_long", "content_too_large", "invalid_rank"].includes(
-            response?.error,
-          )
+          [
+            "text_too_long",
+            "content_too_large",
+            "invalid_rank",
+            "todo_planning_client_required",
+            "invalid_todo_planning",
+          ].includes(response?.error)
         ) {
           return { status: "rejected", reason: response.error };
         }
       }
       throw error;
     }
+    if (plannedTodo && data?.todoPlanningVersion !== 1)
+      throw new Error("服务端未确认待办计划同步；将保留本机变更重试。");
     if (
       data?.status === "conflict" &&
       data.record?.id === operation.entityId &&
