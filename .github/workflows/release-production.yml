@@ -94,6 +94,13 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/release-tools" --no-save supabase@2.121.0
           echo "$RUNNER_TEMP/release-tools/node_modules/.bin" >> "$GITHUB_PATH"
           command -v psql
+      - name: Recheck main and backup at the backend write boundary
+        run: python3 tools/production/guard.py --backup
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ENABLED: ${{ vars.RELEASE_ENABLED }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          BACKUP_RESTORE_ATTESTATION: ${{ vars.BACKUP_RESTORE_ATTESTATION }}
       - name: Apply only reviewed migration, check preservation and deploy existing Edge Function
         run: python3 tools/production/backend.py
         env:

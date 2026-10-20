@@ -6,6 +6,8 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from urllib.parse import urlparse, unquote, parse_qs
 
 MIGRATION = '202610200001_todo_planning.sql'
@@ -30,12 +32,49 @@ def db_environment(url, project):
     pool = host.endswith('.pooler.supabase.com') and user.endswith('.' + project) and parsed.port == 5432
     if not (direct or pool) or parsed.path != '/postgres':
         raise RuntimeError('Wrong project or connection type; use direct/session pooler, not transaction pooler')
-    if parse_qs(parsed.query).get('sslmode') != ['require']:
-        raise RuntimeError('Connection URL must explicitly require TLS')
-    env = dict(os.environ, PGHOST=host, PGPORT=str(parsed.port or 5432), PGUSER=user,
+    if parsed.fragment or parse_qs(parsed.query, keep_blank_values=True) != {'sslmode': ['require']}:
+        raise RuntimeError('URL may contain only sslmode=require; connection overrides are forbidden')
+    # Ignore inherited libpq overrides (especially PGHOSTADDR/PGSERVICE).
+    env = dict({k: v for k, v in os.environ.items() if not k.startswith('PG')},
+               PGHOST=host, PGPORT=str(parsed.port or 5432), PGUSER=user,
                PGPASSWORD=unquote(parsed.password), PGDATABASE='postgres', PGSSLMODE='require',
                PGCONNECT_TIMEOUT='20', PGOPTIONS='-c statement_timeout=120000 -c lock_timeout=15000')
+    # A database command does not need the project management token.
+    env.pop('SUPABASE_ACCESS_TOKEN', None)
     return env
+
+
+def function_environment():
+    # Function deployment must not inherit the database URL/password.
+    return {k: v for k, v in os.environ.items()
+            if not k.startswith('PG') and k not in ('SUPABASE_DB_URL', 'SUPABASE_DB_PASSWORD')}
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def preflight_function_access(project):
+    token = os.environ.get('SUPABASE_ACCESS_TOKEN')
+    if not token:
+        raise RuntimeError('Missing function deployment token')
+    request = urllib.request.Request(
+        f'https://api.supabase.com/v1/projects/{project}/functions/apply-mutation',
+        headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/json'})
+    try:
+        with urllib.request.build_opener(NoRedirect).open(request, timeout=30) as response:
+            result = json.load(response)
+    except urllib.error.HTTPError as error:
+        raise RuntimeError(f'Function read-only preflight failed (HTTP {error.code}); no database mutation attempted') from None
+    if result.get('slug') != 'apply-mutation':
+        raise RuntimeError('Existing apply-mutation function was not confirmed')
+    # GET proves token validity/read access only, not write permission.
+
+
+def history(env):
+    return run(['psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1'],
+        sql='select version from supabase_migrations.schema_migrations order by version;', env=env).splitlines()
 
 
 def snapshot(env):
@@ -60,8 +99,8 @@ def main():
     if migrations[-1] != path or hashlib.sha256(path.read_bytes()).hexdigest() != DIGEST:
         raise RuntimeError('Migration set changed; review this release workflow first')
     versions = [p.name.split('_')[0] for p in migrations]
-    remote = run(['psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1'],
-        sql='select version from supabase_migrations.schema_migrations order by version;', env=env).splitlines()
+    preflight_function_access(project)
+    remote = history(env)
     if remote not in (versions[:-1], versions):
         raise RuntimeError('Remote migration history differs: manual audit required; never auto-repair')
     # Snapshot is preservation detection, NOT a restorable backup. The prior manual gate is mandatory.
@@ -69,10 +108,12 @@ def main():
     if remote == versions[:-1]:
         run(['supabase', 'db', 'push', '--db-url', url, '--skip-vault', '--dry-run'], env=env)
         run(['supabase', 'db', 'push', '--db-url', url, '--skip-vault', '--yes'], env=env)
+    if history(env) != versions:
+        raise RuntimeError('Migration command did not confirm the expected final history; stop')
     after = snapshot(env)
     if before != after:
         raise RuntimeError('Rows changed during migration window. Stop for review; never auto-rollback')
-    run(['supabase', 'functions', 'deploy', 'apply-mutation', '--project-ref', project, '--use-api'], env=env)
+    run(['supabase', 'functions', 'deploy', 'apply-mutation', '--project-ref', project, '--use-api'], env=function_environment())
     print('Migration/history checked, original row hashes unchanged, apply-mutation deployed.')
     print('No database rollback or permanent deletion was performed.')
 

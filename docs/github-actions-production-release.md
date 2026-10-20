@@ -1,6 +1,6 @@
 # GitHub Actions 手動正式發布
 
-本次只新增流程及離線驗證；**沒有設定 Secrets／權限、建立憑證、合併 main 或執行發布**。現有應用基線為 `e0b3cb5a19641679a9e2584241ed8d5e9239930f`；倉庫原本沒有 `.github/workflows`。未來由 GitHub 託管 Ubuntu runner 執行，不要求用戶電腦開機。
+本分支只準備流程及離線驗證；**本雲端工作沒有設定 Secrets／權限、建立憑證、合併 main 或執行發布**。2026-10-20 桌面已回報部分設定完成，詳見[獨立復核紀錄](production-release-review-2026-10-20.md)；本環境未獨立核實那些設定。現有應用基線為 `e0b3cb5a19641679a9e2584241ed8d5e9239930f`；倉庫原本沒有 `.github/workflows`。未來由 GitHub 託管 Ubuntu runner 執行，不要求用戶電腦開機。
 
 ## 流程與真實限制
 
@@ -8,15 +8,15 @@
 
 1. 無生產 Secrets 的檢查：拒絕 fork、非 main、非完整 SHA、與當前 main 不同的 SHA 或 workflow SHA；檢查兩個 Environment 的審核／分支規則。執行型別、Lint、應用測試、臨時 PostgreSQL 回歸及 Web build。
 2. `production-backend` 獨立審核：審核者核實備份、保留期限及**已完成的隔離還原演練**。腳本只驗證證據綁定、時間及格式，**不會建立備份、讀取備份檔或自行證明還原成功**。
-3. 使用既有資料庫連線核對遷移歷史；只容許尚待 `202610200001_todo_planning.sql` 或已全數套用。其他差異立即停止，不自動 repair、補跑未知歷史或 reset。此 SQL 本身有交易；使用 `--skip-vault` 不處理其他 Vault 設定，流程不提供逆向遷移。
+3. 工具安裝完成後再次檢查 main 與備份門檻，先以唯讀 GET 確認既有 `apply-mutation` 及 Token 讀取權限（不能證明寫入權限），失敗不接觸資料庫。使用既有資料庫連線核對遷移歷史；只容許尚待 `202610200001_todo_planning.sql` 或已全數套用。其他差異立即停止，不自動 repair、補跑未知歷史或 reset。遷移後再次核對完整 history，缺少預期版本即停止，不部署函式。此 SQL 本身有交易；使用 `--skip-vault` 不處理其他 Vault 設定，流程不提供逆向遷移。
 4. 比較遷移前後八張應用表的筆數與完整資料雜湊（新增 planning 空值標準化）；差異即停止。這是保留偵測，**不是可還原備份**。建議維護時段暫停寫入；合法的同步寫入也可能導致保守停止，不能因此清空資料或忽略錯誤。
 5. 僅部署既有 `apply-mutation`，保留 `supabase/config.toml` 的內部驗證配置，不部署／刪除其他函式。
-6. 真實托管 API 探測：建立兩個新的匿名會話和新工作區，驗證配對前隔離、配對、能力回應、A→B／B→A 讀寫、重送冪等、離線舊版本衝突、完成／撤銷／歷史及軟刪除同步。只操作該測試空間；不用 service role。測試帳戶／工作區留存供審核，不做永久清理；失敗可能留下測試記錄，不能盲目重試。此測試**不是** IndexedDB 同步引擎、Realtime 推送、實機手機或 UI 驗收，這些仍需另行驗證。
-7. `production-web` 再次獨立審核；重查 main、構建、再次 API 探測。只將 `apps/web/dist` 部署到既有 `smoke-notes-philipwwq`，先核對正式分支為 main。拒絕隱藏檔、來源映射、符號連結、函式及非靜態檔案。核對正式部署 ID、SHA、每個靜態檔的雜湊；摘要回報網址與部署 ID。這不代替實際介面驗收。
+6. 真實托管 API 探測：建立兩個新的匿名會話和新工作區，先由 A 寫入並讀回真實探測列，再驗證未配對 B 讀不到且寫入回 403、A 原列與版本不變；之後驗證配對、能力回應、A→B／B→A 讀寫、重送冪等、離線舊版本衝突、完成／撤銷／歷史及軟刪除同步。只操作該測試空間；不用 service role。測試帳戶／工作區留存供審核，不做永久清理；失敗可能留下測試記錄，不能盲目重試。此測試**不是** IndexedDB 同步引擎、Realtime 推送、實機手機或 UI 驗收，這些仍需另行驗證。
+7. `production-web` 再次獨立審核；重查 main、構建、再次 API 探測。只將 `apps/web/dist` 部署到既有 `smoke-notes-philipwwq`，先核對正式分支為 main。拒絕隱藏檔、來源映射、符號連結、函式及非靜態檔案。要求新正式部署 ID 不同於上傳前 ID，且 environment=production、branch=main、指定 SHA、deploy 階段成功；再核對每個靜態檔的雜湊；摘要回報網址與部署 ID。這不代替實際介面驗收。
 
 全流程使用固定 concurrency group，`cancel-in-progress: false`，避免新任務中斷遷移；不同管理者的外部部署仍需協調。Actions／Node／pnpm／Supabase CLI／Wrangler 固定版本，checkout 不保留 Git 憑證。依賴安裝不接收部署 Secrets，不設定 `set -x`，失敗的服務端回應及 CLI 原始輸出不直接印出。不建立含資料庫、環境檔或會話憑證的公開 Actions artifact。
 
-## 一次性人工設定（尚未執行）
+## 一次性人工設定清單（完成狀態見復核紀錄）
 
 1. 審查本分支完整 diff，特別是 workflow 與 `tools/production/`。獲准後才合併 main；手動工作流程檔須在 default branch 才可正常啟動。保護 main，要求 PR 審核並限制直接寫入；有 main 寫入權的人仍能更改流程，程式內 ref 檢查不能代替倉庫保護。
 2. 倉庫 **Settings → Environments** 建立 `production-backend`、`production-web`。兩者均設 **Selected branches and tags → branch: main**，不要新增 tag／萬用字元。設 required reviewer、啟用 Prevent self-review，關閉管理員 bypass。需要另一位可信審核者；目前單人帳戶或套餐不支援時流程會停止，不能刪掉門檻來「先上線」。本次未新增成員或權限。
@@ -27,12 +27,12 @@
 
 ## 實際所需 Secrets
 
-| 名稱                       | Environment                        | 用途／最小可行權限                                                                                                                                                                                                                                                                                                                              | 官方入口                                                                  |
-| -------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `SUPABASE_DB_URL`          | production-backend                 | 僅該專案的 PostgreSQL 連線。需讀應用表、讀寫 migration history，及執行已審核 DDL／函式的擁有者權限；一般 read-only 帳號或 publishable key 不足。使用既有 postgres／受審核 migration role；不要自動建立角色或擴權。URL 使用 direct 或 session pooler 5432、資料庫 postgres、`sslmode=require`，密碼須 URL 編碼；不接受 transaction pooler 6543。 | [Supabase Dashboard](https://supabase.com/dashboard) → 正確專案 → Connect |
-| `SUPABASE_ACCESS_TOKEN`    | production-backend                 | 優先 scoped PAT，只選目標專案、**Edge Functions Read/Write**，設短有效期。本流程以 `--project-ref` 及 `--db-url`，不執行 `supabase link`，因此不要求讀 API Key Secrets。CLI 若回報缺權限，先核實具體端點，不盲目改用全權 Legacy token。資料庫 URL 的權限不受 PAT scope 限制。                                                                   | [Access Tokens](https://supabase.com/dashboard/account/tokens)            |
-| `SUPABASE_PUBLISHABLE_KEY` | 兩個 Environment，各填相同公開 key | 正確專案的 publishable key 或舊 anon JWT；供匿名測試及 Vite 公開瀏覽器配置，最終本來就會在前端可見。**不可填 service_role／secret key**，驗證器拒絕非 anon JWT。                                                                                                                                                                                | Dashboard → 專案 Settings → API Keys                                      |
-| `CLOUDFLARE_API_TOKEN`     | production-web                     | Custom token，Account → Cloudflare Pages → Edit；resource 僅既有專案所在帳戶，設有效期。這是帳戶範圍，勿宣稱可以縮到單一 Pages 專案；不需 DNS、Workers、全域 API key 或其他帳戶權限。                                                                                                                                                           | [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens)   |
+| 名稱                       | Environment                        | 用途／最小可行權限                                                                                                                                                                                                                                                                                                                                                                                                                        | 官方入口                                                                  |
+| -------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `SUPABASE_DB_URL`          | production-backend                 | 僅該專案的 PostgreSQL 連線。需讀應用表、讀寫 migration history，及執行已審核 DDL／函式的擁有者權限；一般 read-only 帳號或 publishable key 不足。使用既有 postgres／受審核 migration role；不要自動建立角色或擴權。URL 使用 direct 或 session pooler 5432、資料庫 postgres、`sslmode=require`，密碼須 URL 編碼；不接受 transaction pooler 6543。查詢參數只容許單一 `sslmode=require`，拒絕 host／user 等覆寫；也清除繼承的 libpq PG 參數。 | [Supabase Dashboard](https://supabase.com/dashboard) → 正確專案 → Connect |
+| `SUPABASE_ACCESS_TOKEN`    | production-backend                 | 優先 scoped PAT，只選目標專案、**Edge Functions Read/Write**，設短有效期。本流程以 `--project-ref` 及 `--db-url`，不執行 `supabase link`，因此不要求讀 API Key Secrets。CLI 若回報缺權限，先核實具體端點，不盲目改用全權 Legacy token。資料庫 URL 的權限不受 PAT scope 限制。資料庫子程序不繼承 PAT；函式部署子程序不繼承資料庫 URL／密碼或 PG 變數。                                                                                     | [Access Tokens](https://supabase.com/dashboard/account/tokens)            |
+| `SUPABASE_PUBLISHABLE_KEY` | 兩個 Environment，各填相同公開 key | 正確專案的 publishable key 或舊 anon JWT；供匿名測試及 Vite 公開瀏覽器配置，最終本來就會在前端可見。**不可填 service_role／secret key**，驗證器拒絕非 anon JWT。                                                                                                                                                                                                                                                                          | Dashboard → 專案 Settings → API Keys                                      |
+| `CLOUDFLARE_API_TOKEN`     | production-web                     | Custom token，Account → Cloudflare Pages → Edit；resource 僅既有專案所在帳戶，設有效期。這是帳戶範圍，勿宣稱可以縮到單一 Pages 專案；不需 DNS、Workers、全域 API key 或其他帳戶權限。                                                                                                                                                                                                                                                     | [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens)   |
 
 自帶 `GITHUB_TOKEN` 只有 `contents: read`、`actions: read`；用於 checkout、main／環境元資料核對，不需額外 GitHub PAT，也不會合併、推送、改 Secrets 或 GitHub 權限。
 

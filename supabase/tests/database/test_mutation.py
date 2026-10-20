@@ -529,10 +529,22 @@ class AtomicMutationTests(unittest.TestCase):
         self.assertEqual(self.sql("select count(*) from public.todos").stdout.strip(), "0")
         self.assertEqual(self.sql("select count(*) from public.applied_operations").stdout.strip(), "0")
 
-    def test_planned_rows_remain_workspace_scoped(self):
+    def test_populated_planning_workspace_is_isolated_from_non_member(self):
         row = self.planned_row()
         self.planned_call(row)
-        self.assert_error("workspace_forbidden", entity="todo", entity_id=row["id"], version=1, row=row, user=OTHER_USER)
+        query = f"select coalesce(jsonb_agg(to_jsonb(t)), '[]') from public.todos t where workspace_id = '{WORKSPACE}';"
+        owner = json.loads(self.sql(self.authenticated_sql(query)).stdout)
+        self.assertEqual(len(owner), 1)
+        self.assertEqual(owner[0]["id"], row["id"])
+        outsider = json.loads(self.sql(self.authenticated_sql(query, user=OTHER_USER)).stdout)
+        self.assertEqual(outsider, [])
+        result = self.sql(self.call_sql(entity="todo", entity_id=row["id"], version=1,
+            row={**row, "text": "unauthorized edit"}, user=OTHER_USER), check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("workspace_forbidden", result.stderr)
+        self.assertEqual(json.loads(self.sql(self.authenticated_sql(query)).stdout), owner)
+        self.assertEqual(json.loads(self.sql(self.authenticated_sql(query, user=MEMBER)).stdout), owner)
+
         other = {**row, "workspace_id": OTHER_WORKSPACE}
         self.assert_error("workspace_forbidden", entity="todo", entity_id=row["id"], version=1, row=other)
 

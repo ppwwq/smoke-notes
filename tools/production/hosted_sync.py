@@ -13,6 +13,12 @@ import urllib.request
 import uuid
 
 
+class HostedHTTPError(RuntimeError):
+    def __init__(self, status):
+        self.status = status
+        super().__init__(f'Hosted request failed with HTTP {status}')
+
+
 def check(ok, message):
     if not ok:
         raise RuntimeError(message)
@@ -39,7 +45,7 @@ class Client:
                 return json.load(response)
         except urllib.error.HTTPError as error:
             # Bodies can contain credentials, SQL details or row content. Never print them.
-            raise RuntimeError(f'Hosted request failed with HTTP {error.code}') from None
+            raise HostedHTTPError(error.code) from None
 
     def todos(self, workspace):
         return self.request('/rest/v1/todos?workspace_id=eq.' + workspace + '&select=*')
@@ -63,10 +69,6 @@ def verify(a, b):
     workspace = a.request('/rest/v1/rpc/bootstrap_workspace', {})
     check(isinstance(workspace, str) and str(uuid.UUID(workspace)) == workspace, 'Invalid test workspace')
     check(a.todos(workspace) == [], 'Fresh test workspace must be empty')
-    check(b.todos(workspace) == [], 'Unpaired session read another workspace')
-    pair = a.request('/functions/v1/create-pairing', {'workspaceId': workspace})
-    joined = b.request('/functions/v1/redeem-pairing', {'code': pair['code']})
-    check(joined.get('workspaceId') == workspace, 'Pairing mismatch')
     for client in (a, b):
         cap = client.request('/functions/v1/apply-mutation', {'capabilities': True})
         check(cap.get('capabilities', {}).get('todoPlanning') == 1, 'Planning not deployed')
@@ -79,6 +81,23 @@ def verify(a, b):
               'text': 'Release probe only', 'notes': '', 'repeat': {'kind': 'daily'},
               'paused': False, 'stopped': False}]}}
     check(a.push(series, 0)['status'] == 'applied', 'Series write failed')
+    owner_rows = a.todos(workspace)
+    check(len(owner_rows) == 1 and owner_rows[0]['id'] == sid and owner_rows[0]['version'] == 1,
+          'Owner must see probe before RLS check')
+    check(b.todos(workspace) == [], 'Unpaired session read the existing probe')
+    unauthorized = copy.deepcopy(series)
+    unauthorized['text'] = 'Unauthorized release probe edit'
+    unauthorized['planning']['revisions'][0]['text'] = unauthorized['text']
+    denied = False
+    try:
+        b.push(unauthorized, 1)
+    except HostedHTTPError as error:
+        denied = error.status == 403
+    check(denied, 'Unpaired mutation must be rejected with 403')
+    check(a.todos(workspace) == owner_rows, 'Denied write changed owner data')
+    pair = a.request('/functions/v1/create-pairing', {'workspaceId': workspace})
+    joined = b.request('/functions/v1/redeem-pairing', {'code': pair['code']})
+    check(joined.get('workspaceId') == workspace, 'Pairing mismatch')
     occurrence = {'id': oid, 'workspaceId': workspace, 'text': 'Release probe only', 'rank': 1,
                   'completed': False, 'deletedAt': None,
                   'planning': {'version': 1, 'kind': 'occurrence', 'seriesId': sid,

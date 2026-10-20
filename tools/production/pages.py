@@ -55,6 +55,7 @@ def main():
     project = api('')
     if project.get('subdomain') != PROJECT + '.pages.dev' or project.get('production_branch') != 'main':
         raise RuntimeError('Existing Pages target/branch does not match')
+    previous_id = (project.get('canonical_deployment') or {}).get('id')
     # Never create a project or upload the repository, environment files or a dump.
     result = subprocess.run(['wrangler', 'pages', 'deploy', str(DIST), '--project-name', PROJECT,
         '--branch', 'main', '--commit-hash', sha, '--commit-dirty=false'], capture_output=True, text=True, timeout=600)
@@ -64,7 +65,11 @@ def main():
     for _ in range(18):
         canonical = api('').get('canonical_deployment') or {}
         metadata = canonical.get('deployment_trigger', {}).get('metadata', {})
-        if metadata.get('commit_hash') == sha and canonical.get('latest_stage', {}).get('status') == 'success':
+        if (canonical.get('id') and canonical['id'] != previous_id
+                and canonical.get('environment') == 'production'
+                and metadata.get('branch') == 'main' and metadata.get('commit_hash') == sha
+                and canonical.get('latest_stage', {}).get('name') == 'deploy'
+                and canonical.get('latest_stage', {}).get('status') == 'success'):
             deployment = canonical
             break
         time.sleep(5)
