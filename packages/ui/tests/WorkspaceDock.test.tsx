@@ -112,6 +112,63 @@ describe("WorkspaceDock", () => {
     fireEvent.click(buttons[0], { detail: 1 });
     expect(selected).not.toHaveBeenCalled();
     expect(nav.style.getPropertyValue("--dock-index")).toBe("0");
+    expect(nav.style.getPropertyValue("--dock-stretch")).toBe("1");
+    expect(nav.style.getPropertyValue("--dock-offset")).toBe("0");
+  });
+
+  it("stretches toward travel, reverses immediately, and relaxes on release", () => {
+    const { nav, pointer, selected } = setup();
+    const value = (name: string) =>
+      Number(nav.style.getPropertyValue(`--dock-${name}`));
+    pointer("pointerdown", 40);
+    pointer("pointermove", 80);
+    expect(value("stretch")).toBeGreaterThan(1.2);
+    expect(value("stretch")).toBeLessThanOrEqual(1.28);
+    expect(value("offset")).toBeGreaterThan(0);
+    // A hold or coalesced release must not lose the direction/tension.
+    const held = nav.getAttribute("style");
+    pointer("pointermove", 80);
+    expect(nav.getAttribute("style")).toBe(held);
+    pointer("pointermove", 160);
+    pointer("pointermove", 120);
+    expect(value("offset")).toBeLessThan(0);
+    expect(value("stretch")).toBeGreaterThan(1.2);
+    expect(selected).not.toHaveBeenCalled();
+    pointer("pointerup", 120);
+    expect(selected).toHaveBeenCalledExactlyOnceWith(1);
+    expect(value("stretch")).toBe(1);
+    expect(value("offset")).toBe(0);
+  });
+
+  it("keeps both capsule edges inside the dock, even beyond either boundary", () => {
+    const { nav, pointer, selected } = setup();
+    pointer("pointerdown", 40);
+    for (const x of [
+      48, 70, 120, 200, 268, 279, 280, 900, 260, 120, 45, -500,
+    ]) {
+      pointer("pointermove", x);
+      const index = Number(nav.style.getPropertyValue("--dock-index"));
+      const extra = Number(nav.style.getPropertyValue("--dock-stretch")) - 1;
+      const offset = Number(nav.style.getPropertyValue("--dock-offset"));
+      expect(extra).toBeGreaterThanOrEqual(0);
+      expect(extra).toBeLessThanOrEqual(0.28 + Number.EPSILON);
+      expect(index + offset - extra / 2).toBeGreaterThanOrEqual(-1e-10);
+      expect(index + offset + extra / 2).toBeLessThanOrEqual(3 + 1e-10);
+    }
+    expect(selected).not.toHaveBeenCalled();
+    pointer("pointerup", -500);
+    expect(selected).toHaveBeenCalledExactlyOnceWith(0);
+  });
+
+  it("uses distance rather than event frequency for slow and fast pulls", () => {
+    const { nav, pointer } = setup();
+    pointer("pointerdown", 40);
+    for (const x of [48, 56, 64, 72, 80]) pointer("pointermove", x);
+    const slow = nav.getAttribute("style");
+    pointer("pointercancel", 80);
+    pointer("pointerdown", 40);
+    pointer("pointermove", 80);
+    expect(nav.getAttribute("style")).toBe(slow);
   });
 
   it("ignores vertical gestures and secondary touches; retains taps and keyboard", async () => {
