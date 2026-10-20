@@ -116,23 +116,24 @@ describe("WorkspaceDock", () => {
     expect(nav.style.getPropertyValue("--dock-offset")).toBe("0");
   });
 
-  it("stretches toward travel, reverses immediately, and relaxes on release", () => {
+  it("trails behind travel, switches tail on reversal, and relaxes on release", () => {
     const { nav, pointer, selected } = setup();
     const value = (name: string) =>
       Number(nav.style.getPropertyValue(`--dock-${name}`));
     pointer("pointerdown", 40);
     pointer("pointermove", 80);
-    expect(value("stretch")).toBeGreaterThan(1.2);
-    expect(value("stretch")).toBeLessThanOrEqual(1.28);
-    expect(value("offset")).toBeGreaterThan(0);
+    expect(value("stretch")).toBeCloseTo(1.35);
+    expect(value("offset")).toBeLessThan(0);
+    expect(value("offset") + (value("stretch") - 1) / 2).toBeCloseTo(0);
     // A hold or coalesced release must not lose the direction/tension.
     const held = nav.getAttribute("style");
     pointer("pointermove", 80);
     expect(nav.getAttribute("style")).toBe(held);
     pointer("pointermove", 160);
     pointer("pointermove", 120);
-    expect(value("offset")).toBeLessThan(0);
-    expect(value("stretch")).toBeGreaterThan(1.2);
+    expect(value("offset")).toBeGreaterThan(0);
+    expect(value("stretch")).toBeCloseTo(1.35);
+    expect(value("offset") - (value("stretch") - 1) / 2).toBeCloseTo(0);
     expect(selected).not.toHaveBeenCalled();
     pointer("pointerup", 120);
     expect(selected).toHaveBeenCalledExactlyOnceWith(1);
@@ -151,7 +152,7 @@ describe("WorkspaceDock", () => {
       const extra = Number(nav.style.getPropertyValue("--dock-stretch")) - 1;
       const offset = Number(nav.style.getPropertyValue("--dock-offset"));
       expect(extra).toBeGreaterThanOrEqual(0);
-      expect(extra).toBeLessThanOrEqual(0.28 + Number.EPSILON);
+      expect(extra).toBeLessThanOrEqual(0.35 + Number.EPSILON);
       expect(index + offset - extra / 2).toBeGreaterThanOrEqual(-1e-10);
       expect(index + offset + extra / 2).toBeLessThanOrEqual(3 + 1e-10);
     }

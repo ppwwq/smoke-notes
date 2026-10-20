@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
 
-OUT = Path(os.environ.get('SMOKE_REVIEW_OUTPUT', '/workspace/shared/dock-stretch'))
+OUT = Path(os.environ.get('SMOKE_REVIEW_OUTPUT', '/workspace/shared/dock-trailing-35'))
 OUT.mkdir(parents=True, exist_ok=True)
 URL = os.environ.get('SMOKE_REVIEW_URL', 'http://127.0.0.1:4174/review.html')
 RESULTS = []
@@ -83,14 +83,32 @@ def acceptance(browser, width, height, reduced=False):
     assert page.locator('.workspace-shell').inner_html() == content, 'page changed while held'
     held = geometry(page)
     assert held['buttons'] == initial['buttons'], 'icons/labels moved or changed geometry'
-    assert held['width'] / held['base'] > 1.25 if not reduced else abs(held['width'] - held['base']) < 0.1
-    assert held['offset'] > 0
+    assert abs(held['width'] / held['base'] - 1.35) < 0.001 if not reduced else abs(held['width'] - held['base']) < 0.1
+    assert held['offset'] < 0
+    target = buttons.nth(1).bounding_box()
+    assert abs(held['right'] - target['x'] - target['width']) < 0.2, 'rightward leading edge must follow the finger'
     page.screenshot(path=str(OUT / f'{name}-held-right.png'))
     drag(page, cdp, points[1], points[2])
-    drag(page, cdp, points[2], points[1], 12, 16)
+    page.wait_for_timeout(140)
+    turn = (points[2][0] - 8, points[2][1])
+    if not reduced:
+        page.locator('.dock-selection').evaluate('''e=>{
+          window.reversalTransition=false;
+          e.addEventListener('transitionrun',()=>{
+            window.reversalTransition=e.getAnimations().some(a=>a.transitionProperty==='transform' &&
+              a.effect.getTiming().duration===90 && a.playState==='running');
+          },{once:true});
+        }''')
+    touch(cdp, 'touchMove', turn)
+    if not reduced:
+        # CDP queues touch moves; observe the browser's transition event rather
+        # than assuming the pointer update has already run when dispatch returns.
+        page.wait_for_function('window.reversalTransition')
+    drag(page, cdp, turn, points[1], 12, 16)
     page.wait_for_timeout(180)
     reverse = geometry(page)
-    assert reverse['offset'] < 0
+    assert reverse['offset'] > 0
+    assert abs(reverse['left'] - target['x']) < 0.2, 'leftward leading edge must follow the finger'
     assert page.locator('.workspace-shell').inner_html() == content
     page.screenshot(path=str(OUT / f'{name}-held-left.png'))
     touch(cdp, 'touchEnd')
@@ -128,12 +146,13 @@ def acceptance(browser, width, height, reduced=False):
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     frames=page.evaluate('window.sampleDock=false;window.dockFrames')
     assert all(f['left'] >= -0.3 and f['right'] >= -0.3 for f in frames), min(f['left'] for f in frames)
+    assert all(f['width'] <= initial['base'] * 1.35 + 0.1 for f in frames), 'stretch exceeded 35%'
     if reduced:
         assert released['transition'] == '0s'
         assert all(abs(f['width']-initial['base'])<0.1 for f in frames)
     assert not errors, errors
     page.screenshot(path=str(OUT / f'{name}-settled.png'))
-    RESULTS.append({'viewport':name,'checks':'slow/hold/fast/reverse/bounds/touchCancel/Escape/release-only/four destinations/Tab/Space/focus/labels fixed',
+    RESULTS.append({'viewport':name,'checks':'slow/hold/fast/reverse interpolation/leading-edge alignment/bounds/35% cap/touchCancel/Escape/release-only/four destinations/Tab/Space/focus/labels fixed',
                     'heldScale':round(held['width']/held['base'],3),'sampledFrames':len(frames),
                     'minimumBoundaryClearance':round(min(min(f['left'],f['right']) for f in frames),3)})
     context.close()
@@ -150,11 +169,11 @@ def record_demo(browser):
       for(const type of ['pointerup','pointercancel'])document.addEventListener(type,()=>dot.style.display='none',true);
     }''')
     def label(text): page.locator('#demo-label').evaluate('(e,t)=>e.textContent=t',text)
-    label('慢拖：背景沿方向拉长，页面保持不动')
+    label('向右慢拖：左侧拖尾，最多延伸 35%')
     page.wait_for_timeout(650)
     touch(cdp,'touchStart',points[0]);drag(page,cdp,points[0],points[1],45,25)
     page.wait_for_timeout(650);label('放手：柔和缩回，吸附并切换页面');touch(cdp,'touchEnd');page.wait_for_timeout(1000)
-    label('反向拖动：拉伸方向随手指改变')
+    label('反向向左：换到右侧拖尾，前端跟手')
     touch(cdp,'touchStart',points[1]);drag(page,cdp,points[1],points[2],30,25);page.wait_for_timeout(250)
     drag(page,cdp,points[2],points[0],48,20);page.wait_for_timeout(350);touch(cdp,'touchEnd');page.wait_for_timeout(700)
     label('快拖：放手后才切页')
@@ -163,8 +182,8 @@ def record_demo(browser):
     touch(cdp,'touchStart',points[1]);drag(page,cdp,points[1],(385,points[1][1]),40,20);page.wait_for_timeout(500)
     drag(page,cdp,(385,points[1][1]),points[2],18,20);page.wait_for_timeout(300)
     label('取消手势：回到原来的页面');touch(cdp,'touchCancel');page.wait_for_timeout(1000)
-    label('仅背景变形 · 图标文字固定 · 放手切页');page.wait_for_timeout(900)
-    video=Path(page.video.path());context.close();video.rename(OUT/'dock-stretch-mobile.webm')
+    label('向后拖尾 35% · 图标文字固定 · 放手切页');page.wait_for_timeout(900)
+    video=Path(page.video.path());context.close();video.rename(OUT/'dock-trailing-35-mobile.webm')
 
 
 with sync_playwright() as p:

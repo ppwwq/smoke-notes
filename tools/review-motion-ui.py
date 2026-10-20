@@ -40,9 +40,10 @@ def dock_test(page, context, name):
     expect(buttons.nth(0)).to_have_attribute('aria-current', 'page')
     assert page.locator('.workspace-shell').inner_html() == old, 'Held drag must not render/preview another page'
     rect = page.locator('.dock-selection').bounding_box()
-    # Directional stretch extends the leading edge; the trailing edge remains
+    # The tail extends behind rightward travel; the leading/right edge remains
     # aligned with the base button (also true with reduced motion).
-    assert abs(rect['x'] - buttons.nth(2).bounding_box()['x']) < 3, (name, rect, end, nav.get_attribute('style'), nav.get_attribute('data-dragging'), page.evaluate('window.pointerTrace'))
+    target = buttons.nth(2).bounding_box()
+    assert abs(rect['x'] + rect['width'] - target['x'] - target['width']) < 3, (name, rect, end, nav.get_attribute('style'), nav.get_attribute('data-dragging'), page.evaluate('window.pointerTrace'))
     snapshot(page, f'{name}-dock-held')
     touch(cdp, 'touchEnd')
     expect(buttons.nth(2)).to_have_attribute('aria-current', 'page')

@@ -102,17 +102,17 @@ export function WorkspaceDock({
       String(current.position),
     );
     const direction = Math.sign(current.pull);
-    const room = direction > 0 ? 3 - position : position;
-    const stretch = Math.min(0.28, Math.abs(current.pull) * 0.55, room);
+    const room = direction > 0 ? position : 3 - position;
+    const stretch = Math.min(0.35, Math.abs(current.pull) * 0.7, room);
     event.currentTarget.style.setProperty(
       "--dock-stretch",
       String(1 + stretch),
     );
-    // Shift half the extra width toward the pull: the trailing edge stays at
-    // the finger's base capsule, and the leading edge never leaves the dock.
+    // Leave the leading edge with the finger's base capsule and extend the
+    // tail behind its travel. CSS interpolates the tail when direction flips.
     event.currentTarget.style.setProperty(
       "--dock-offset",
-      String((direction * stretch) / 2),
+      String((-direction * stretch) / 2),
     );
   }
 
