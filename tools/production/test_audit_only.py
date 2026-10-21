@@ -229,7 +229,7 @@ class AuditSafetyTests(unittest.TestCase):
     def test_workflow_audit_has_no_release_commands_or_other_secrets(self):
         # Sections bounded by top-level jobs; does not require third-party YAML in runner.
         text = (audit.ROOT/'.github/workflows/release-production.yml').read_text()
-        section = text.split('\n  audit:\n',1)[1].split('\n  backend:\n',1)[0]
+        section = text.split('\n  audit:\n',1)[1].split('\n  baseline:\n',1)[0]
         self.assertIn("inputs.operation == 'audit_only'",section)
         self.assertIn('environment: production-backend',section)
         self.assertIn('secrets.SUPABASE_DB_URL',section)

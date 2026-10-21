@@ -8,6 +8,7 @@ import sys
 
 import backend
 import audit_details
+import baseline_profile
 
 ROOT = Path(__file__).resolve().parents[2]
 CATALOG = Path(__file__).parent / 'audit/catalog.sql'
@@ -152,10 +153,12 @@ def compare(reference, observed, history):
         state = 'EMPTY_REVIEW_REQUIRED'
     else:
         state = 'DIVERGENT_REVIEW_REQUIRED'
-    report.extend(['history: ' + state,
+    hosted_match = baseline_profile.matches(reference, observed)
+    report.extend(['baseline_profile: ' + ('REVIEWED_HOSTED_MATCH' if hosted_match else 'NOT_MATCHED'),
+        'history: ' + state,
         'Historical data backfill and hosted RLS behavior: NOT VERIFIED by this catalog audit.',
         'No automatic repair or release approval. Review the observations before any write.'])
-    return '\n'.join(report) + '\n', matching and not planning and state == 'EXACT_PRIOR_SEVEN'
+    return '\n'.join(report) + '\n', (matching or hosted_match) and not planning and state == 'EXACT_PRIOR_SEVEN'
 
 
 def main(reference_path):

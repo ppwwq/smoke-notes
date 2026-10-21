@@ -24,6 +24,17 @@ create publication supabase_realtime;
 """
 
 
+# Reproduce hosted default ACLs BEFORE application migrations, so their explicit
+# REVOKEs still take effect. This never changes production permissions.
+HOSTED_DEFAULTS = """
+create role service_role nologin bypassrls;
+alter default privileges for role postgres in schema public
+  grant all on tables to anon, authenticated, service_role;
+alter default privileges for role postgres in schema public
+  grant all on functions to anon, authenticated, service_role;
+"""
+
+
 def command(args, sql=None):
     result = subprocess.run(args, input=sql, text=True, capture_output=True, timeout=120)
     if result.returncode:
@@ -32,7 +43,7 @@ def command(args, sql=None):
 
 
 @contextlib.contextmanager
-def isolated_database():
+def isolated_database(hosted=False):
     if any(os.environ.get(k) for k in ('SUPABASE_DB_URL', 'SUPABASE_ACCESS_TOKEN', 'PGPASSWORD')):
         raise RuntimeError('Reference setup must not receive production credentials')
     name = 'smoke-audit-' + uuid.uuid4().hex[:12]
@@ -51,6 +62,8 @@ def isolated_database():
             return command(['docker', 'exec', '-i', name, 'psql', '-U', 'postgres',
                             '-X', '-qAt', '-v', 'ON_ERROR_STOP=1'], text)
         sql(FIXTURE)
+        if hosted:
+            sql(HOSTED_DEFAULTS)
         migrations = sorted((audit_only.ROOT / 'supabase/migrations').glob('*.sql'))
         prior = [p for p in migrations if p.name.split('_')[0] in audit_only.VERSIONS]
         if [p.name.split('_')[0] for p in prior] != list(audit_only.VERSIONS):
@@ -67,6 +80,11 @@ def main(path):
         catalog, _ = audit_only.parse_capture(sql(audit_only.CATALOG.read_text()))
         if catalog['major'] != 17:
             raise RuntimeError('Unexpected reference PostgreSQL major')
+    with isolated_database(hosted=True) as (_, sql):
+        hosted, _ = audit_only.parse_capture(sql(audit_only.CATALOG.read_text()))
+        if hosted['major'] != 17:
+            raise RuntimeError('Unexpected hosted reference PostgreSQL major')
+        catalog['hosted_schema'] = hosted['schema']
     # This is repository-derived synthetic metadata, never a production export.
     Path(path).write_text(json.dumps(catalog))
     print('Synthetic prior-seven catalog reference ready.')
