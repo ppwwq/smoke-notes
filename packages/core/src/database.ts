@@ -61,5 +61,13 @@ export class SmokeNotesDatabase extends Dexie {
             note.body = richTextToPlainText(note.contentJson);
           });
       });
+    // Metadata is optional; preserve old rows and unsent operations byte-for-byte.
+    this.version(4).stores({
+      notebooks: "id, workspaceId, rank, deletedAt",
+      notes: "id, notebookId, rank, deletedAt, color, kind",
+      todos:
+        "id, workspaceId, rank, deletedAt, planning.kind, planning.date, planning.seriesId",
+      operations: "id, entity, entityId, createdAt, nextAttemptAt",
+    });
   }
 }

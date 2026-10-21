@@ -112,6 +112,76 @@ describe("WorkspaceDock", () => {
     fireEvent.click(buttons[0], { detail: 1 });
     expect(selected).not.toHaveBeenCalled();
     expect(nav.style.getPropertyValue("--dock-index")).toBe("0");
+    expect(nav.style.getPropertyValue("--dock-stretch")).toBe("1");
+    expect(nav.style.getPropertyValue("--dock-offset")).toBe("0");
+  });
+
+  it("trails behind travel, switches tail on reversal, and relaxes on release", () => {
+    const { nav, pointer, selected } = setup();
+    const value = (name: string) =>
+      Number(nav.style.getPropertyValue(`--dock-${name}`));
+    pointer("pointerdown", 40);
+    pointer("pointermove", 80);
+    expect(value("stretch")).toBeCloseTo(1.3);
+    expect(value("offset")).toBeLessThan(0);
+    expect(value("offset") + (value("stretch") - 1) / 2).toBeCloseTo(0);
+    // A hold or coalesced release must not lose the direction/tension.
+    const held = nav.getAttribute("style");
+    pointer("pointermove", 80);
+    expect(nav.getAttribute("style")).toBe(held);
+    pointer("pointermove", 160);
+    pointer("pointermove", 120);
+    expect(value("offset")).toBeGreaterThan(0);
+    expect(value("stretch")).toBeCloseTo(1.3);
+    expect(value("offset") - (value("stretch") - 1) / 2).toBeCloseTo(0);
+    expect(selected).not.toHaveBeenCalled();
+    pointer("pointerup", 120);
+    expect(selected).toHaveBeenCalledExactlyOnceWith(1);
+    expect(value("stretch")).toBe(1);
+    expect(value("offset")).toBe(0);
+  });
+
+  it("keeps both capsule edges inside the dock, even beyond either boundary", () => {
+    const { nav, pointer, selected } = setup();
+    pointer("pointerdown", 40);
+    for (const x of [
+      48, 70, 120, 200, 268, 279, 280, 900, 260, 120, 45, -500,
+    ]) {
+      pointer("pointermove", x);
+      const index = Number(nav.style.getPropertyValue("--dock-index"));
+      const extra = Number(nav.style.getPropertyValue("--dock-stretch")) - 1;
+      const offset = Number(nav.style.getPropertyValue("--dock-offset"));
+      expect(extra).toBeGreaterThanOrEqual(0);
+      expect(extra).toBeLessThanOrEqual(0.3 + Number.EPSILON);
+      expect(index + offset - extra / 2).toBeGreaterThanOrEqual(-1e-10);
+      expect(index + offset + extra / 2).toBeLessThanOrEqual(3 + 1e-10);
+    }
+    expect(selected).not.toHaveBeenCalled();
+    pointer("pointerup", -500);
+    expect(selected).toHaveBeenCalledExactlyOnceWith(0);
+  });
+
+  it("uses distance rather than event frequency for slow and fast pulls", () => {
+    const { nav, pointer } = setup();
+    pointer("pointerdown", 40);
+    for (const x of [48, 56, 64, 72, 80]) pointer("pointermove", x);
+    const slow = nav.getAttribute("style");
+    pointer("pointercancel", 80);
+    pointer("pointerdown", 40);
+    pointer("pointermove", 80);
+    expect(nav.getAttribute("style")).toBe(slow);
+  });
+
+  it("suppresses a pointer focus ring, then restores visible keyboard focus", () => {
+    const { nav, pointer, buttons } = setup();
+    pointer("pointerdown", 40);
+    pointer("pointermove", 120);
+    pointer("pointerup", 120);
+    expect(buttons[1]).toHaveFocus();
+    expect(nav).toHaveAttribute("data-pointer-focus", "true");
+    fireEvent.keyDown(window, { key: "Tab" });
+    expect(nav).not.toHaveAttribute("data-pointer-focus");
+    expect(buttons[1]).toHaveFocus();
   });
 
   it("ignores vertical gestures and secondary touches; retains taps and keyboard", async () => {

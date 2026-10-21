@@ -150,6 +150,9 @@ body:has(.workspace-app),
   width: auto;
   height: 48px;
   background: transparent;
+  /* Keep labels readable during both the drag and the release animation. */
+  color: #fff;
+  mix-blend-mode: difference;
 }
 .workspace-app[data-web-background] .web-dock button > span {
   display: inline;
@@ -162,9 +165,11 @@ body:has(.workspace-app),
   width: calc((100% - var(--dock-padding) * 2) / 4);
   border-radius: 999px;
   background: #fbfaf8;
-  transform: translateX(calc(var(--dock-index, 0) * 100%))
+  transform: translateX(
+      calc((var(--dock-index, 0) + var(--dock-offset, 0)) * 100%)
+    )
     scaleX(var(--dock-stretch, 1));
-  transition: transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 360ms cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: none;
 }
 .workspace-app[data-web-background] .web-dock button:hover:not([aria-current]) {
@@ -263,14 +268,16 @@ body:has(.workspace-app),
 ::view-transition-new(root) {
   animation-duration: 140ms;
 }
-/* Follow with a little damping, then settle without overshoot. */
+/* A soft, short follow while held; release uses the longer settling curve. */
 .workspace-app .web-dock[data-dragging] .dock-selection {
-  transition: transform 65ms linear;
+  transition: transform 90ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.workspace-app[data-web-background] .web-dock[data-dragging] button {
-  /* Keep every label legible wherever the moving light capsule passes. */
-  color: #fff;
-  mix-blend-mode: difference;
+.workspace-app[data-web-background]
+  .web-dock[data-pointer-focus]
+  button:focus-visible {
+  /* Programmatic focus after touch must not leave a keyboard ring behind.
+     Any keyboard input restores the normal focus-visible treatment. */
+  outline: none;
 }
 .workspace-app .notes-board-header {
   view-transition-name: board-header;
@@ -420,6 +427,7 @@ html.notebook-transition::view-transition-new(.paper) {
   .workspace-app .web-dock[data-dragging] .dock-selection {
     transition: none;
     --dock-stretch: 1;
+    --dock-offset: 0;
   }
   .workspace-app[data-web-background] .sidebar-shell.mobile-open .sidebar,
   .workspace-app .create-note-menu,

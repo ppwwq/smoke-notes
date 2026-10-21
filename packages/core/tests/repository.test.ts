@@ -172,7 +172,7 @@ describe("LocalRepository", () => {
     ).toEqual(["一", "三", "二"]);
   });
 
-  it("soft deletes immediately and purges records after thirty days", async () => {
+  it("soft deletes legacy todos without irreversibly clearing their history after thirty days", async () => {
     const todo = await repository.createTodo("旧任务");
     await repository.trashTodo(todo.id);
 
@@ -182,8 +182,10 @@ describe("LocalRepository", () => {
     await database.todos.update(todo.id, {
       deletedAt: "2026-07-20T00:00:00.000Z",
     });
-    expect(await repository.purgeExpiredTrash()).toBe(1);
-    expect(await database.todos.get(todo.id)).toBeUndefined();
+    expect(await repository.purgeExpiredTrash()).toBe(0);
+    expect(await database.todos.get(todo.id)).toBeDefined();
+    await repository.restore("todo", todo.id);
+    expect((await repository.listTodos())[0].id).toBe(todo.id);
   });
 
   it("edits and restores records without losing their identity", async () => {

@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, json } from "../_shared/http.ts";
+import { planningPayload, supportsTodoPlanning } from "./planning.ts";
 
 type Entity = "notebook" | "note" | "todo";
 
@@ -91,6 +92,7 @@ function mapPayload(entity: Entity, payload: Record<string, unknown>) {
     workspace_id: String(payload.workspaceId),
     text: text(payload.text, 500, "新待办"),
     completed: payload.completed === true,
+    ...planningPayload(payload),
   };
 }
 
@@ -109,7 +111,18 @@ Deno.serve(async (request) => {
     if (auth.error || !auth.data.user)
       return json({ error: "authentication_required" }, 401);
 
-    const { operation } = await request.json();
+    const body = await request.json();
+    // Old edge functions reject this shape before writing anything. New
+    // clients must preflight before sending planning data to an unknown server.
+    if (body?.capabilities === true) {
+      const { data, error } = await userClient.rpc(
+        "workspace_sync_capabilities",
+      );
+      if (error || !supportsTodoPlanning(data))
+        return json({ error: "todo_planning_unavailable" }, 503);
+      return json({ capabilities: data });
+    }
+    const { operation } = body;
     const entity = operation?.entity as Entity;
     if (
       !["notebook", "note", "todo"].includes(entity) ||
@@ -122,6 +135,16 @@ Deno.serve(async (request) => {
     const baseVersion = Number(operation.baseVersion);
     if (!Number.isInteger(baseVersion) || baseVersion < 0)
       return json({ error: "invalid_version" }, 400);
+    const row = mapPayload(entity, payload);
+    if (entity === "todo" && Object.hasOwn(row, "planning")) {
+      // Check again here: publishing the edge function before the migration
+      // must not call an old RPC that would silently discard planning fields.
+      const { data, error } = await userClient.rpc(
+        "workspace_sync_capabilities",
+      );
+      if (error || !supportsTodoPlanning(data))
+        return json({ error: "todo_planning_unavailable" }, 503);
+    }
     // The row change and retry receipt must commit together. Otherwise a lost
     // response can turn a successful save into a conflict on the next attempt.
     const { data, error } = await userClient.rpc("apply_workspace_mutation", {
@@ -129,7 +152,7 @@ Deno.serve(async (request) => {
       p_entity: entity,
       p_entity_id: operation.entityId,
       p_base_version: baseVersion,
-      p_row: mapPayload(entity, payload),
+      p_row: row,
     });
     if (error) {
       const status =

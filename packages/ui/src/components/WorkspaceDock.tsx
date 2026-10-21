@@ -14,6 +14,7 @@ interface Gesture {
   y: number;
   origin: number;
   position: number;
+  pull: number;
   width: number;
   dragging: boolean;
 }
@@ -39,6 +40,7 @@ export function WorkspaceDock({
     delete element.dataset.dragging;
     element.style.setProperty("--dock-index", String(selectedRef.current));
     element.style.setProperty("--dock-stretch", "1");
+    element.style.setProperty("--dock-offset", "0");
     if (current && element.hasPointerCapture?.(current.id))
       element.releasePointerCapture(current.id);
   }
@@ -49,11 +51,16 @@ export function WorkspaceDock({
   }, [selected]);
 
   useEffect(() => {
+    const keyboardFocus = () => {
+      if (nav.current) delete nav.current.dataset.pointerFocus;
+    };
     window.addEventListener("blur", reset);
     window.addEventListener("resize", reset);
+    window.addEventListener("keydown", keyboardFocus);
     return () => {
       window.removeEventListener("blur", reset);
       window.removeEventListener("resize", reset);
+      window.removeEventListener("keydown", keyboardFocus);
     };
   }, []);
 
@@ -76,18 +83,41 @@ export function WorkspaceDock({
     }
     event.preventDefault();
     // Clamping avoids edge overshoot; no spring or velocity-based destination.
-    current.position = Math.max(
+    const position = Math.max(
       0,
       Math.min(3, current.origin + dx / current.width),
     );
+    const delta = position - current.position;
+    if (delta !== 0) {
+      // Build tension from travel, not event frequency. Reversing starts a new
+      // pull immediately, including after dragging beyond either end.
+      current.pull = Math.max(
+        -0.6,
+        Math.min(
+          0.6,
+          Math.sign(delta) === Math.sign(current.pull)
+            ? current.pull + delta
+            : delta,
+        ),
+      );
+    }
+    current.position = position;
     event.currentTarget.style.setProperty(
       "--dock-index",
       String(current.position),
     );
-    const stretch = Math.sin((current.position % 1) * Math.PI) * 0.06;
+    const direction = Math.sign(current.pull);
+    const room = direction > 0 ? position : 3 - position;
+    const stretch = Math.min(0.3, Math.abs(current.pull) * 0.6, room);
     event.currentTarget.style.setProperty(
       "--dock-stretch",
       String(1 + stretch),
+    );
+    // Leave the leading edge with the finger's base capsule and extend the
+    // tail behind its travel. CSS interpolates the tail when direction flips.
+    event.currentTarget.style.setProperty(
+      "--dock-offset",
+      String((-direction * stretch) / 2),
     );
   }
 
@@ -103,6 +133,7 @@ export function WorkspaceDock({
             ? event.target.closest("button")
             : null;
         if (!button) return;
+        event.currentTarget.dataset.pointerFocus = "true";
         suppressClick.current = false;
         const width = button.getBoundingClientRect().width;
         if (!width) return;
@@ -115,6 +146,7 @@ export function WorkspaceDock({
           y: event.clientY,
           origin,
           position: origin,
+          pull: 0,
           width,
           dragging: false,
         };

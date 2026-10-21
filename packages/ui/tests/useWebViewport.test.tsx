@@ -136,7 +136,7 @@ describe("compact web editing", () => {
     act(() => document.querySelector<HTMLInputElement>("#outside")!.focus());
     expect(result.current.compactEditing).toBe(false);
   });
-  it("ignores portrait, hardware keyboard, non-touch screens and small chrome changes", () => {
+  it("compacts portrait keyboard editing without mistaking small chrome changes for a keyboard", () => {
     const { result, viewport, rerender } = setup();
     act(() => document.querySelector("input")!.focus());
     expect(result.current.compactEditing).toBe(false);
@@ -151,7 +151,7 @@ describe("compact web editing", () => {
       vi.stubGlobal("innerHeight", 1194);
       fireEvent(window, new Event("resize"));
     });
-    expect(result.current.compactEditing).toBe(false);
+    expect(result.current.compactEditing).toBe(true);
     act(() => {
       vi.stubGlobal("innerWidth", 1194);
       vi.stubGlobal("innerHeight", 834);

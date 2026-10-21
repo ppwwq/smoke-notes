@@ -1,0 +1,535 @@
+/* Shared soft selection and disclosure language for the daily planner. */
+.workspace-app .planner-segments {
+  --segment-padding: 5px;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--segment-count), minmax(0, 1fr));
+  gap: 0;
+  padding: var(--segment-padding);
+  border-radius: 999px;
+  background: #eeece8;
+  isolation: isolate;
+}
+.workspace-app .planner-segment-selection {
+  position: absolute;
+  inset: var(--segment-padding) auto var(--segment-padding)
+    var(--segment-padding);
+  width: calc((100% - var(--segment-padding) * 2) / var(--segment-count));
+  border-radius: 999px;
+  background: #fcfbf9;
+  box-shadow: 0 2px 8px #24211a0b;
+  transform: translateX(calc(var(--segment-index) * 100%));
+  transition: transform 360ms cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+.workspace-app .planner-segments > button {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #5c5953;
+  font-size: 13px;
+  font-weight: 500;
+}
+.workspace-app .planner-segments > button[aria-pressed="true"] {
+  color: #24211e;
+  font-weight: 650;
+}
+.workspace-app .planner-segments > button:focus-visible {
+  outline: 2px solid #7359b5;
+  outline-offset: -2px;
+}
+.workspace-app .planner-disclosure {
+  border-radius: 18px;
+  color: var(--ink, #24211e);
+}
+.workspace-app .planner-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 10px 14px;
+  cursor: pointer;
+  list-style: none;
+  color: #514c45;
+  font-size: 13px;
+  font-weight: 550;
+}
+.workspace-app .planner-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.workspace-app .planner-disclosure > summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(-45deg);
+  transition: transform 220ms ease;
+}
+.workspace-app .planner-disclosure[open] > summary::before {
+  transform: rotate(45deg);
+}
+.workspace-app .planner-disclosure > summary > span:not(:first-child) {
+  color: #767068;
+  font-size: 12px;
+}
+.workspace-app .planner-disclosure > summary:focus-visible {
+  outline: 2px solid #7359b5;
+  outline-offset: 1px;
+  border-radius: 14px;
+}
+@supports (interpolate-size: allow-keywords) {
+  .workspace-app .planner-disclosure::details-content {
+    interpolate-size: allow-keywords;
+    block-size: 0;
+    overflow: clip;
+    transition:
+      block-size 260ms cubic-bezier(0.16, 1, 0.3, 1),
+      content-visibility 260ms allow-discrete;
+  }
+  .workspace-app .planner-disclosure[open]::details-content {
+    block-size: auto;
+  }
+}
+.workspace-app .todo-planner .todo-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  min-height: 0;
+  padding: 0 0 22px;
+}
+.workspace-app .planner-today-count {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 4px;
+  min-width: 82px;
+  padding: 12px 16px;
+  text-align: center;
+  border-radius: 24px;
+  color: #423857;
+  background: #e4ddf3;
+}
+.workspace-app .planner-today-count strong {
+  font-size: 30px;
+  line-height: 1.1;
+}
+.workspace-app .planner-today-count span {
+  font-size: 11px;
+}
+.workspace-app .todo-planner .todo-composer {
+  margin: 18px 0 0;
+  min-height: 64px;
+  border: 1px solid #e7e2db;
+  border-radius: 20px;
+  background: #fdfcf9;
+}
+.workspace-app .todo-planner .todo-composer button,
+.workspace-app .planner-save {
+  min-height: 40px;
+  border-radius: 999px;
+  border: 0;
+  padding: 9px 17px;
+  background: #e3e8ca;
+  color: #303824;
+  font-size: 13px;
+  font-weight: 650;
+}
+.workspace-app .todo-planner .todo-composer input::placeholder {
+  color: #77716b;
+}
+.workspace-app .planner-create-options > summary {
+  padding-left: 8px;
+}
+.workspace-app .planner-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 8px 14px 16px;
+  color: #514c45;
+}
+.workspace-app .planner-fields label,
+.workspace-app .planner-row-options-content label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+}
+.workspace-app .planner-fields input,
+.workspace-app .planner-fields select,
+.workspace-app .planner-fields textarea,
+.workspace-app .planner-row-options-content input,
+.workspace-app .planner-history-picker input {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid #dcd6ce;
+  border-radius: 12px;
+  background: #fdfcf9;
+  color: #292622;
+  font: inherit;
+  font-size: 14px;
+}
+.workspace-app .planner-fields textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+.workspace-app .planner-fields label:has(textarea),
+.workspace-app .planner-fields .planner-help,
+.workspace-app .planner-fields > p,
+.workspace-app .planner-weekdays {
+  grid-column: 1 / -1;
+}
+.workspace-app .planner-weekdays {
+  display: flex;
+  justify-content: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.workspace-app .planner-weekdays legend {
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.workspace-app .planner-weekdays label {
+  position: relative;
+  display: block;
+}
+.workspace-app .planner-weekdays input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+}
+.workspace-app .planner-weekdays span {
+  display: grid;
+  place-items: center;
+  min-width: 34px;
+  min-height: 40px;
+  border: 1px solid #ddd6e7;
+  border-radius: 12px;
+  background: #f6f3f8;
+  color: #5e536c;
+}
+.workspace-app .planner-weekdays input:checked + span {
+  background: #dfd5ef;
+  border-color: #bcaad6;
+  color: #38264d;
+}
+.workspace-app .planner-weekdays input:focus-visible + span {
+  outline: 2px solid #7359b5;
+  outline-offset: 2px;
+}
+.workspace-app .todo-planner .planner-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e6e1da;
+}
+.workspace-app .todo-planner .planner-filter-bar button {
+  min-height: 38px;
+  padding: 8px 11px;
+  color: #6b635b;
+  font-size: 12px;
+}
+.workspace-app .todo-planner .planner-filter-bar button.active {
+  background: #eae5dd;
+  color: #312b25;
+}
+.workspace-app .todo-planner .planner-filter-bar .arrange-todos {
+  margin-left: auto;
+}
+.workspace-app .planner-feedback-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+}
+.workspace-app .todo-planner .todo-feedback {
+  flex: 1;
+  margin: 3px 0;
+  min-height: 0;
+  color: #5e6352;
+  font-size: 12px;
+}
+.workspace-app .planner-undo {
+  padding: 7px 11px;
+  border: 0;
+  border-radius: 999px;
+  background: #e9e2f2;
+  color: #4e3a6a;
+  font-size: 12px;
+}
+.workspace-app .todo-planner .planner-todo-row {
+  grid-template-columns: 42px minmax(0, 1fr) 38px;
+  column-gap: 5px;
+  padding: 5px 2px;
+  border-bottom: 1px solid #e6e1da;
+  background: transparent;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+.workspace-app .planner-todo-copy {
+  min-width: 0;
+}
+.workspace-app .todo-planner .planner-todo-copy > input {
+  width: 100%;
+  padding: 10px 3px;
+  color: #2f2b27;
+  background: transparent;
+  font-size: 14px;
+}
+.workspace-app .todo-planner .completed .planner-todo-copy > input {
+  color: #706a62;
+}
+.workspace-app .planner-todo-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: #6d655c;
+  font-size: 10px;
+}
+.workspace-app .planner-todo-meta:empty {
+  display: none;
+}
+.workspace-app .planner-todo-note {
+  margin: 5px 0 8px;
+  color: #676057;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.workspace-app .planner-row-options {
+  grid-column: 2 / -1;
+}
+.workspace-app .planner-row-options > summary {
+  min-height: 32px;
+  padding: 4px 0;
+  font-size: 11px;
+  color: #756d64;
+}
+.workspace-app .planner-row-options-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  padding: 7px 0 12px;
+}
+.workspace-app .planner-row-options-content button,
+.workspace-app .planner-series-actions button {
+  min-height: 36px;
+  padding: 8px 11px;
+  border: 0;
+  border-radius: 11px;
+  background: #eee8e0;
+  color: #4a4137;
+  font-size: 12px;
+}
+.workspace-app .planner-row-options-content label {
+  flex: 1 1 138px;
+}
+.workspace-app .todo-planner .is-completing {
+  opacity: 0;
+  transform: translateX(12px);
+}
+.workspace-app .planner-completed,
+.workspace-app .planner-skipped,
+.workspace-app .planner-overdue {
+  margin: 16px 0;
+  background: #f2efe9;
+}
+.workspace-app .planner-overdue {
+  background: #f5eee3;
+}
+.workspace-app .planner-completed > div,
+.workspace-app .planner-skipped > div,
+.workspace-app .planner-overdue > div {
+  padding: 0 8px 8px;
+}
+.workspace-app .planner-open > h2,
+.workspace-app .planner-series > h2 {
+  margin: 20px 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.workspace-app .planner-history-picker {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  margin: 16px 0 0;
+}
+.workspace-app .planner-history-picker label {
+  flex: 1;
+  display: grid;
+  gap: 6px;
+  color: #645c53;
+  font-size: 12px;
+}
+.workspace-app .planner-history-picker > button {
+  flex: 0 0 40px;
+  min-height: 42px;
+  border: 0;
+  border-radius: 12px;
+  background: #eee9e0;
+  color: #4b4239;
+  font-size: 24px;
+}
+.workspace-app .planner-series-item {
+  margin-top: 10px;
+  background: #eee9f3;
+}
+.workspace-app .planner-series-item > summary {
+  padding: 14px;
+}
+.workspace-app .planner-series-item > summary > span {
+  display: grid;
+  gap: 5px;
+}
+.workspace-app .planner-series-item small {
+  color: #73677d;
+  font-size: 11px;
+  font-weight: 400;
+}
+.workspace-app .planner-series-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  gap: 10px;
+  padding: 0 14px 12px;
+}
+.workspace-app .planner-stop-confirm {
+  font-size: 12px;
+  color: #765348;
+}
+.workspace-app .planner-stop-confirm > summary {
+  cursor: pointer;
+  padding: 10px 0;
+}
+.workspace-app .planner-stop-confirm > p {
+  max-width: 30em;
+  line-height: 1.6;
+}
+.workspace-app .planner-help {
+  margin: 12px 14px;
+  color: #72695f;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.workspace-app .planner-sync-message {
+  margin: 7px 0 0;
+  color: #71685f;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.workspace-app .settings-todo-planning {
+  margin-top: 12px;
+  background: #f2efe9;
+}
+.workspace-app .settings-todo-planning .planner-disclosure-body {
+  padding: 0 14px 14px;
+}
+.workspace-app .settings-todo-planning label {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  color: #514c45;
+}
+.workspace-app .settings-todo-planning select {
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 11px;
+  border: 1px solid #dcd6ce;
+  border-radius: 12px;
+  background: #fdfcf9;
+  color: #292622;
+  font: inherit;
+  font-size: 16px;
+}
+.workspace-app .settings-todo-planning p {
+  margin: 10px 0 0;
+  color: #676057;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.workspace-app .planning-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 18px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: #f5eee3;
+  color: #694638;
+  font-size: 13px;
+}
+.workspace-app .planning-error button {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #e9dfd1;
+  color: inherit;
+}
+@media (max-width: 760px) {
+  .workspace-app[data-web-background] .todo-planner {
+    padding-bottom: 104px;
+  }
+  .workspace-app .todo-planner .todo-hero {
+    padding-bottom: 18px;
+  }
+  .workspace-app .planner-segments > button {
+    min-height: 44px;
+  }
+  .workspace-app .planner-today-count {
+    min-width: 76px;
+    padding: 11px 14px;
+  }
+  .workspace-app .planner-today-count strong {
+    font-size: 28px;
+  }
+  .workspace-app .todo-planner .todo-composer {
+    min-height: 60px;
+    margin-top: 14px;
+  }
+  .workspace-app .todo-planner .todo-composer input,
+  .workspace-app .todo-planner .planner-todo-copy > input,
+  .workspace-app .planner-fields input,
+  .workspace-app .planner-fields select,
+  .workspace-app .planner-fields textarea,
+  .workspace-app .planner-row-options-content input,
+  .workspace-app .planner-history-picker input {
+    font-size: 16px;
+  }
+  .workspace-app .planner-fields {
+    padding-left: 8px;
+    padding-right: 8px;
+    gap: 12px;
+  }
+  .workspace-app .todo-planner .planner-todo-row {
+    grid-template-columns: 44px minmax(0, 1fr) 36px;
+    column-gap: 3px;
+  }
+  .workspace-app .todo-planner .planner-filter-bar button {
+    padding: 8px 9px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-app .planner-segment-selection,
+  .workspace-app .planner-disclosure > summary::before,
+  .workspace-app .planner-disclosure::details-content,
+  .workspace-app .todo-planner .planner-todo-row {
+    transition: none;
+  }
+}
