@@ -10,7 +10,12 @@ on:
         type: choice
         options:
           - audit_only
+          - adopt_baseline
           - release
+      baseline_ack:
+        description: "Metadata only: ADOPT_PRIOR_SEVEN_KEEP_DATA:<full SHA>:<project ref>"
+        required: false
+        type: string
       release_sha:
         description: Reviewed full 40-character SHA; must equal current main
         required: true
@@ -50,6 +55,7 @@ env:
   BACKUP_EVIDENCE_ID: ${{ inputs.backup_evidence_id }}
   RELEASE_MODE: ${{ inputs.release_mode }}
   NO_BACKUP_RISK_ACK: ${{ inputs.no_backup_risk_ack }}
+  BASELINE_ACK: ${{ inputs.baseline_ack }}
 
 jobs:
   validate:
@@ -117,6 +123,41 @@ jobs:
         run: python3 tools/production/audit_only.py "$RUNNER_TEMP/audit-reference.json"
         env:
           AUDIT_OPERATION: audit_only
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+  baseline:
+    needs: validate
+    if: >-
+      inputs.operation == 'adopt_baseline' &&
+      github.repository == 'ppwwq/smoke-notes' &&
+      github.ref == 'refs/heads/main' && inputs.release_sha == github.sha
+    environment: production-backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Validate exact metadata-only adoption and no-backup acknowledgement
+        run: |
+          python3 tools/production/guard.py
+          python3 -c 'import os,sys; sys.path.insert(0,"tools/production"); import adopt_baseline; adopt_baseline.validate_inputs(os.environ)'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASELINE_OPERATION: ${{ inputs.operation }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      - name: Build isolated references without production credentials
+        run: python3 tools/production/audit_reference.py "$RUNNER_TEMP/audit-reference.json"
+      - name: Recheck reviewed main and environment protection before metadata write
+        run: python3 tools/production/guard.py
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Adopt only the verified existing baseline metadata
+        run: python3 tools/production/adopt_baseline.py "$RUNNER_TEMP/audit-reference.json"
+        env:
+          BASELINE_OPERATION: ${{ inputs.operation }}
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
 
