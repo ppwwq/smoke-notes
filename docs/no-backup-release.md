@@ -32,7 +32,7 @@ SQL 自帶 `BEGIN`／`COMMIT`，本檔所有 DDL 可在同一交易內執行（�
 
 1. 審核本次變更，獲准後推送／合併至 main，記下最終 SHA。確認正式專案及前七份 migration 的實際效果。不要把「history 表不存在」解讀為「資料庫空白」。
 2. 若前七份效果已存在，只為明確版本補登 applied：`202608280001`、`202608280002`、`202608290001`、`202609050001`、`202609050002`、`202610150001`、`202610150002`。這會修改管理用 ledger，不重放那些 migration SQL；需獲准執行該具體 metadata 變更。**不能把尚未執行的 `202610200001` 提前標成 applied；不能使用無版本參數的 repair-all、reset 或重放全部 migration。**
-3. history 必須與前七份完全相符後，擁有人啟用 `production-backend.RELEASE_ENABLED=true`，手動 dispatch：main、最終 SHA、`release_mode=no_backup`、空白 evidence ID、精確風險確認。指定 reviewer 先批准 backend。
+3. history 必須與前七份完全相符後，擁有人啟用 `production-backend.RELEASE_ENABLED=true`，手動 dispatch：main、最終 SHA、`operation=release`、`release_mode=no_backup`、空白 evidence ID、精確風險確認。指定 reviewer 先批准 backend。預設的 `operation=audit_only` 只做[唯讀核對](production-read-only-audit.md)，不會接續發布。
 4. 按既有順序只套用已審查 planning SQL → 核對完整 history 和舊資料保留 → 部署 planning-aware Edge Function → API 隔離／同步測試 → reviewer 批准 web → 上傳靜態頁面及驗證。失敗停止，不能藉「資料可以丟」跳過未知 schema 或來源／目標不符。
 
 Migration history 是 CLI 的管理紀錄，不是 PostgreSQL 執行指定 SQL 的平台前提；直接執行單份 SQL 在技術上可以不依賴該 ledger。但現有可審核發布路徑使用 CLI 並嚴格核對 history，因此選擇先精確補登，避免另開無紀錄發布途徑。釘選 CLI 的 specific-version repair 會更新管理表；零版本的 repair-all 可能 TRUNCATE ledger，本次不採用。

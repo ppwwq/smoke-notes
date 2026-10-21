@@ -3,6 +3,14 @@ name: Manual production release
 on:
   workflow_dispatch:
     inputs:
+      operation:
+        description: Read-only baseline audit or separately approved production release
+        required: true
+        default: audit_only
+        type: choice
+        options:
+          - audit_only
+          - release
       release_sha:
         description: Reviewed full 40-character SHA; must equal current main
         required: true
@@ -79,9 +87,43 @@ jobs:
           python3 supabase/tests/database/test_mutation.py
           pnpm --filter @smoke-notes/web build
 
+  audit:
+    needs: validate
+    if: >-
+      inputs.operation == 'audit_only' &&
+      github.repository == 'ppwwq/smoke-notes' &&
+      github.ref == 'refs/heads/main' && inputs.release_sha == github.sha
+    environment: production-backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Recheck reviewed main and both protected environments
+        run: python3 tools/production/guard.py
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Build synthetic reference before receiving database credentials
+        run: |
+          command -v psql
+          python3 tools/production/audit_reference.py "$RUNNER_TEMP/audit-reference.json"
+      - name: Recheck reviewed main at the read boundary
+        run: python3 tools/production/guard.py
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Read-only catalog and migration history audit
+        run: python3 tools/production/audit_only.py "$RUNNER_TEMP/audit-reference.json"
+        env:
+          AUDIT_OPERATION: audit_only
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
   backend:
     needs: validate
     if: >-
+      inputs.operation == 'release' &&
       github.repository == 'ppwwq/smoke-notes' &&
       github.ref == 'refs/heads/main' && inputs.release_sha == github.sha
     environment: production-backend
@@ -130,6 +172,7 @@ jobs:
   web:
     needs: backend
     if: >-
+      inputs.operation == 'release' &&
       github.repository == 'ppwwq/smoke-notes' &&
       github.ref == 'refs/heads/main' && inputs.release_sha == github.sha
     environment: production-web

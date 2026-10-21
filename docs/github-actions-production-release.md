@@ -8,6 +8,8 @@
 
 `.github/workflows/release-production.yml` 只有 `workflow_dispatch`，push／PR 不發布。
 
+新增的 `operation` 預設為 `audit_only`：只做受保護的正式基線唯讀核對，詳見[操作及限制](production-read-only-audit.md)。以下正式發布步驟必須明選 `operation=release`；audit 不會自動轉入發布。
+
 1. 無生產 Secrets 的檢查：拒絕 fork、非 main、非完整 SHA、與當前 main 不同的 SHA 或 workflow SHA；檢查兩個 Environment 的審核／分支規則。執行型別、Lint、應用測試、臨時 PostgreSQL 回歸及 Web build。
 2. `production-backend` 獨立審核：預設 `verified_backup` 由審核者核實備份、保留期限及已完成的隔離還原；腳本只驗證聲明。選 `no_backup` 時，必須明確接受資料損失風險，確認字串綁定完整 SHA／目標專案，備份證據 ID 留空；摘要明示沒有備份／還原證據。不偽造聲明，也不略過環境審批。
 3. 工具安裝完成後再次檢查 main 與所選發布風險政策，先以唯讀 GET 確認既有 `apply-mutation` 及 Token 讀取權限（不能證明寫入權限），失敗不接觸資料庫。使用既有資料庫連線核對遷移歷史；只容許尚待 `202610200001_todo_planning.sql` 或已全數套用。其他差異立即停止，不自動 repair、補跑未知歷史或 reset。遷移後再次核對完整 history，缺少預期版本即停止，不部署函式。此 SQL 本身有交易；使用 `--skip-vault` 不處理其他 Vault 設定，流程不提供逆向遷移。
