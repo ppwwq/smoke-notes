@@ -1,6 +1,7 @@
 """Synthetic catalog/RLS drift and actual READ ONLY enforcement, network none."""
 import subprocess
 import unittest
+from unittest.mock import patch
 
 import audit_only as audit
 import audit_reference
@@ -86,6 +87,24 @@ class AuditDatabaseTests(unittest.TestCase):
                 # Prove PostgreSQL rejected writes because of READ ONLY, not a SQL error.
                 self.assertIn('25006',result.stderr)
         self.assertEqual(self.sql('select count(*) from public.workspaces;'),'0\n')
+
+    def test_real_psql_errors_produce_safe_sqlstate_diagnostics(self):
+        cases = [('begin read only; create schema diagnostic_probe;', '25006'),
+                 ('select secret_diagnostic_column;', '42703'),
+                 ('set role anon; select * from public.applied_operations;', '42501')]
+        for sql, state in cases:
+            with self.subTest(state=state):
+                result = subprocess.run(['docker', 'exec', '-i', self.name, 'psql',
+                    '-U', 'postgres', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1',
+                    '-v', 'VERBOSITY=sqlstate'], input=sql, text=True, capture_output=True)
+                self.assertEqual(result.returncode, 3)
+                self.assertEqual(audit.query_sqlstate(result.stderr), state)
+                self.assertNotIn('secret_diagnostic_column', result.stderr)
+                with patch('audit_only.subprocess.run', return_value=result), \
+                     self.assertRaises(audit.AuditFailure) as caught:
+                    audit.capture({})
+                self.assertEqual(caught.exception.diagnostic(),
+                    f'stage=query error=query_failed sqlstate={state}')
 
 
 if __name__ == '__main__':

@@ -46,7 +46,8 @@ class AuditSafetyTests(unittest.TestCase):
         with patch('audit_only.subprocess.run', return_value=subprocess.CompletedProcess([],0,output,'')) as run:
             audit.capture(audit.database_environment(self.url,self.project))
         args = run.call_args
-        self.assertEqual(args.args[0], ['psql','-X','-qAt','-v','ON_ERROR_STOP=1'])
+        self.assertEqual(args.args[0], ['psql','-X','-qAt','-v','ON_ERROR_STOP=1',
+                                      '-v','VERBOSITY=sqlstate'])
         self.assertNotIn(self.url, repr(args.args))
         self.assertEqual(args.kwargs['input'], audit.CATALOG.read_text())
 
@@ -119,6 +120,77 @@ class AuditSafetyTests(unittest.TestCase):
             with self.assertRaises(RuntimeError), audit_reference.isolated_database():
                 self.fail('Unexpected reference setup')
         run.assert_not_called()
+
+    def test_diagnostics_only_emit_reviewed_constants(self):
+        for payload in ('private-url', 'TOKEN', '28P01\n::error::private', 'secret-password'):
+            failure = audit.AuditFailure(payload, payload, payload)
+            self.assertEqual(failure.diagnostic(),
+                'stage=invocation error=unexpected sqlstate=UNAVAILABLE')
+        for raw in ('ERROR:  TOKEN\n', 'private ERROR:  28P01\n',
+                    'ERROR:  28P01: secret-password\n', 'ERROR:  28P01\nERROR:  42501\n'):
+            self.assertEqual(audit.query_sqlstate(raw), 'UNAVAILABLE')
+        self.assertEqual(audit.query_sqlstate('ERROR:  42501\n'), '42501')
+
+    def test_client_failures_have_safe_stage_and_category(self):
+        cases = [
+            (FileNotFoundError('private-path'), 'client_missing'),
+            (subprocess.TimeoutExpired(['private-url'], 90,
+                output='private-data', stderr='private-password'), 'timeout'),
+            (OSError('private-token'), 'io_error'),
+            (Exception('private-error'), 'unexpected'),
+        ]
+        for error, category in cases:
+            with self.subTest(category=category), patch('audit_only.subprocess.run', side_effect=error), \
+                 self.assertRaises(audit.AuditFailure) as caught:
+                audit.capture({})
+            self.assertEqual(caught.exception.diagnostic(),
+                f'stage=query error={category} sqlstate=UNAVAILABLE')
+
+    def test_entrypoint_failure_paths_suppress_payload_and_leave_summary_empty(self):
+        with tempfile.TemporaryDirectory() as folder:
+            reference = Path(folder) / 'reference.json'
+            summary = Path(folder) / 'summary'
+            reference.write_text(json.dumps(self.reference))
+            env = {'AUDIT_OPERATION': 'audit_only', 'SUPABASE_PROJECT_REF': self.project,
+                   'SUPABASE_DB_URL': self.url, 'GITHUB_STEP_SUMMARY': str(summary)}
+            good = dict(self.observed, read_only='on', database='postgres')
+            def response(catalog):
+                return json.dumps(catalog) + '\n' + json.dumps(self.history) + '\n'
+            cases = [
+                (2, 'private-data', 'private connection password',
+                 'stage=query error=connection_failed sqlstate=UNAVAILABLE'),
+                (3, 'private-data', 'ERROR:  42501\n',
+                 'stage=query error=query_failed sqlstate=42501'),
+                (0, 'private-data', '', 'stage=parse error=invalid_response sqlstate=UNAVAILABLE'),
+                (0, 'private-data\n{}\n', '', 'stage=parse error=invalid_json sqlstate=UNAVAILABLE'),
+                (0, response(dict(good, tls=False)), '',
+                 'stage=compare error=tls_unconfirmed sqlstate=UNAVAILABLE'),
+                (0, response(dict(good, major=16)), '',
+                 'stage=compare error=version_mismatch sqlstate=UNAVAILABLE'),
+            ]
+            for code, stdout, stderr, expected in cases:
+                with self.subTest(expected=expected), patch.dict(os.environ, env), \
+                     patch('sys.argv', ['audit_only.py', str(reference)]), \
+                     patch('audit_only.subprocess.run', return_value=subprocess.CompletedProcess(
+                         [], code, stdout, stderr)), contextlib.redirect_stderr(io.StringIO()) as error, \
+                     contextlib.redirect_stdout(io.StringIO()) as output:
+                    self.assertEqual(audit.entrypoint(), 1)
+                self.assertEqual(error.getvalue(), 'Read-only audit failed; ' + expected
+                                 + '. No repair or deployment attempted.\n')
+                self.assertEqual(output.getvalue(), '')
+                self.assertFalse(summary.exists())
+
+    def test_reference_target_and_summary_failures_are_distinguishable(self):
+        cases = [('reference', json.JSONDecodeError('private', 'private', 0), 'invalid_json'),
+                 ('reference', FileNotFoundError('private'), 'missing_input'),
+                 ('target', KeyError('private'), 'missing_input'),
+                 ('target', ValueError('private'), 'invalid_input'),
+                 ('summary', PermissionError('private'), 'io_error')]
+        for stage, error, category in cases:
+            with self.subTest(stage=stage, category=category), self.assertRaises(audit.AuditFailure) as caught:
+                audit.at_stage(stage, lambda: (_ for _ in ()).throw(error))
+            self.assertEqual(caught.exception.diagnostic(),
+                             f'stage={stage} error={category} sqlstate=UNAVAILABLE')
 
     def test_workflow_audit_has_no_release_commands_or_other_secrets(self):
         # Sections bounded by top-level jobs; does not require third-party YAML in runner.
