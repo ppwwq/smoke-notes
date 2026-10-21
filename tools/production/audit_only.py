@@ -7,6 +7,7 @@ import subprocess
 import sys
 
 import backend
+import audit_details
 
 ROOT = Path(__file__).resolve().parents[2]
 CATALOG = Path(__file__).parent / 'audit/catalog.sql'
@@ -135,6 +136,10 @@ def compare(reference, observed, history):
         same = reference['schema'][category] == observed['schema'][category]
         matching = matching and same
         report.append(f'{category}: ' + ('MATCH' if same else 'REVIEW_REQUIRED'))
+        if not same and category == 'table_grants':
+            report.extend(audit_details.grant_differences(reference['schema'][category], observed['schema'][category]))
+        if not same and category == 'functions':
+            report.extend(audit_details.function_differences(reference['schema'][category], observed['schema'][category]))
     planning = any(c.get('table_name') == 'todos' and c.get('name') == 'planning'
                    for c in (observed['schema']['columns'] or []))
     report.append('planning: ' + ('PRESENT_REVIEW_REQUIRED' if planning else 'ABSENT'))
