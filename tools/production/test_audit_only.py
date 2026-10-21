@@ -20,10 +20,16 @@ class AuditSafetyTests(unittest.TestCase):
         self.environment.start()
         self.addCleanup(self.environment.stop)
         self.reference = {'major': 17, 'schema': {k: [] for k in audit.CATEGORIES}}
-        self.observed = dict(copy.deepcopy(self.reference), tls=True)
+        self.observed = dict(copy.deepcopy(self.reference), tls=False, client_tls=True)
         self.history = {'exists': True, 'versions': list(audit.VERSIONS)}
         self.project = 'a' * 20
         self.url = f'postgresql://postgres:test-only@db.{self.project}.supabase.co:5432/postgres?sslmode=require'
+
+    def client_output(self, catalog, tls=True):
+        connection = 'You are connected to database "postgres" as user "private-user" on host "private-host" at port "5432".\n'
+        if tls:
+            connection += 'SSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, compression: off)\n'
+        return connection + audit.CATALOG_MARKER + '\n' + json.dumps(catalog) + '\n' + json.dumps(self.history) + '\n'
 
     def test_validated_target_and_read_only_environment(self):
         with patch.dict(os.environ, {'PGHOSTADDR': 'evil', 'PGSERVICE': 'evil',
@@ -42,14 +48,14 @@ class AuditSafetyTests(unittest.TestCase):
 
     def test_psql_only_and_no_url_in_arguments(self):
         observed = dict(self.observed, read_only='on', database='postgres')
-        output = json.dumps(observed) + '\n' + json.dumps(self.history) + '\n'
+        output = self.client_output(observed)
         with patch('audit_only.subprocess.run', return_value=subprocess.CompletedProcess([],0,output,'')) as run:
             audit.capture(audit.database_environment(self.url,self.project))
         args = run.call_args
         self.assertEqual(args.args[0], ['psql','-X','-qAt','-v','ON_ERROR_STOP=1',
                                       '-v','VERBOSITY=sqlstate'])
         self.assertNotIn(self.url, repr(args.args))
-        self.assertEqual(args.kwargs['input'], audit.CATALOG.read_text())
+        self.assertEqual(args.kwargs['input'], '\\conninfo\n\\echo ' + audit.CATALOG_MARKER + '\n' + audit.CATALOG.read_text())
 
     def test_missing_empty_partial_unknown_and_premarked_history_never_pass(self):
         cases = [{'exists':False,'versions':[]}, {'exists':True,'versions':[]},
@@ -72,9 +78,36 @@ class AuditSafetyTests(unittest.TestCase):
             self.assertNotIn('secret-catalog-value',report)
 
     def test_tls_and_version_fail_closed(self):
-        for changes in ({'tls':False},{'major':16},{'major':18}):
+        for changes in ({'client_tls':False},{'client_tls':None},{'major':16},{'major':18}):
             with self.assertRaises(RuntimeError):
                 audit.compare(self.reference,dict(self.observed,**changes),self.history)
+
+    def test_pooler_server_leg_does_not_override_actual_client_tls(self):
+        catalog = dict(self.observed, read_only='on', database='postgres', tls=False)
+        observed, history = audit.parse_client_capture(self.client_output(catalog))
+        self.assertTrue(audit.compare(self.reference, observed, history)[1])
+        # A TLS server leg cannot prove an unencrypted client session is safe.
+        catalog['tls'] = True
+        observed, history = audit.parse_client_capture(self.client_output(catalog, tls=False))
+        with self.assertRaises(audit.AuditFailure):
+            audit.compare(self.reference, observed, history)
+
+    def test_client_tls_formats_fail_closed_and_details_are_not_reported(self):
+        catalog = dict(self.observed, read_only='on', database='postgres')
+        output = self.client_output(catalog)
+        for protocol in ('TLSv1.2', 'TLSv1.3'):
+            observed, history = audit.parse_client_capture(output.replace('TLSv1.3', protocol))
+            report, passed = audit.compare(self.reference, observed, history)
+            self.assertTrue(passed)
+            self.assertNotIn('private-', report)
+        for bad in (output.replace('TLSv1.3', 'TLSv1.1'),
+                    output.replace('SSL connection', 'Unrecognized connection'),
+                    output.replace('compression: off', 'compression: on')):
+            observed, history = audit.parse_client_capture(bad)
+            with self.assertRaises(audit.AuditFailure):
+                audit.compare(self.reference, observed, history)
+        with self.assertRaises(RuntimeError):
+            audit.parse_client_capture(output.replace(audit.CATALOG_MARKER, 'wrong-boundary'))
 
     def test_requires_explicit_mode_before_any_connection(self):
         with patch('audit_only.capture') as capture, self.assertRaises(RuntimeError):
@@ -155,15 +188,16 @@ class AuditSafetyTests(unittest.TestCase):
                    'SUPABASE_DB_URL': self.url, 'GITHUB_STEP_SUMMARY': str(summary)}
             good = dict(self.observed, read_only='on', database='postgres')
             def response(catalog):
-                return json.dumps(catalog) + '\n' + json.dumps(self.history) + '\n'
+                return self.client_output(catalog, tls=catalog.get('client_tls') is True)
             cases = [
                 (2, 'private-data', 'private connection password',
                  'stage=query error=connection_failed sqlstate=UNAVAILABLE'),
                 (3, 'private-data', 'ERROR:  42501\n',
                  'stage=query error=query_failed sqlstate=42501'),
                 (0, 'private-data', '', 'stage=parse error=invalid_response sqlstate=UNAVAILABLE'),
-                (0, 'private-data\n{}\n', '', 'stage=parse error=invalid_json sqlstate=UNAVAILABLE'),
-                (0, response(dict(good, tls=False)), '',
+                (0, 'private-connection\n' + audit.CATALOG_MARKER + '\nprivate-data\n{}\n', '',
+                 'stage=parse error=invalid_json sqlstate=UNAVAILABLE'),
+                (0, response(dict(good, client_tls=False)), '',
                  'stage=compare error=tls_unconfirmed sqlstate=UNAVAILABLE'),
                 (0, response(dict(good, major=16)), '',
                  'stage=compare error=version_mismatch sqlstate=UNAVAILABLE'),

@@ -21,7 +21,7 @@ class AuditDatabaseTests(unittest.TestCase):
         # Isolated Unix socket has no TLS. Production comparison rejects this;
         # mark only the in-memory synthetic fixture for schema comparison tests.
         self.assertFalse(observed['tls'])
-        observed['tls'] = True
+        observed['client_tls'] = True
         return observed, history
 
     def test_baseline_missing_history_is_observed_not_repaired(self):
@@ -31,6 +31,14 @@ class AuditDatabaseTests(unittest.TestCase):
         self.assertIn('history: MISSING_REVIEW_REQUIRED',report)
         self.assertNotIn(': REVIEW_REQUIRED',report)
         self.assertEqual(self.sql("select to_regclass('supabase_migrations.schema_migrations') is null;"),'t\n')
+
+    def test_real_psql_unencrypted_session_cannot_pass_client_tls_gate(self):
+        output = self.sql('\\conninfo\n\\echo ' + audit.CATALOG_MARKER + '\n' + audit.CATALOG.read_text())
+        observed, history = audit.parse_client_capture(output)
+        self.assertFalse(observed['client_tls'])
+        with self.assertRaises(audit.AuditFailure) as caught:
+            audit.compare(self.reference, observed, history)
+        self.assertEqual(caught.exception.category, 'tls_unconfirmed')
 
     def test_history_exact_partial_and_new_version(self):
         self.sql('create schema supabase_migrations; create table supabase_migrations.schema_migrations(version text primary key);')
@@ -67,7 +75,7 @@ class AuditDatabaseTests(unittest.TestCase):
                 # This fixture transaction wrote synthetic DDL, so cannot become READ ONLY.
                 query = query.replace("current_setting('transaction_read_only')", "'on'")
                 observed, history = audit.parse_capture(self.sql(query))
-                observed['tls'] = True
+                observed['client_tls'] = True
                 report, passed = audit.compare(self.reference,observed,history)
                 self.assertFalse(passed)
                 self.assertIn(category + ': REVIEW_REQUIRED',report)

@@ -10,6 +10,7 @@ import backend
 
 ROOT = Path(__file__).resolve().parents[2]
 CATALOG = Path(__file__).parent / 'audit/catalog.sql'
+CATALOG_MARKER = 'SMOKE_AUDIT_CATALOG_START'
 VERSIONS = ('202608280001', '202608280002', '202608290001', '202609050001',
             '202609050002', '202610150001', '202610150002')
 CATEGORIES = ('client_roles', 'tables', 'columns', 'constraints', 'indexes', 'policies',
@@ -94,17 +95,35 @@ def parse_capture(output):
 
 def capture(env):
     sql = at_stage('reference', CATALOG.read_text)
+    # pg_stat_ssl describes the server-facing connection, which can be the
+    # pooler's connection rather than ours. Inspect this same psql session's
+    # libpq TLS status; keep connection details in memory and never log them.
+    sql = '\\conninfo\n\\echo ' + CATALOG_MARKER + '\n' + sql
     result = at_stage('query', lambda: subprocess.run(
         ['psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=sqlstate'],
         input=sql, text=True, capture_output=True, env=env, timeout=90))
     if result.returncode:
         category = 'connection_failed' if result.returncode == 2 else 'query_failed'
         raise AuditFailure('query', category, query_sqlstate(result.stderr))
-    return at_stage('parse', parse_capture, result.stdout)
+    return at_stage('parse', parse_client_capture, result.stdout)
+
+
+def parse_client_capture(output):
+    connection, separator, catalog_output = output.partition('\n' + CATALOG_MARKER + '\n')
+    if not separator:
+        raise RuntimeError('Missing connection status boundary')
+    catalog, history = parse_capture(catalog_output)
+    # LC_ALL=C fixes the psql message language. Unknown/new output formats,
+    # unencrypted sessions and obsolete TLS versions all fail closed.
+    tls_lines = [line for line in connection.splitlines() if line.startswith('SSL connection ')]
+    catalog['client_tls'] = len(tls_lines) == 1 and re.fullmatch(
+        r'SSL connection \(protocol: TLSv1\.[23], cipher: [A-Za-z0-9_-]+, '
+        r'compression: off(?:, ALPN: [A-Za-z0-9_-]+)?\)', tls_lines[0]) is not None
+    return catalog, history
 
 
 def compare(reference, observed, history):
-    if observed.get('tls') is not True:
+    if observed.get('client_tls') is not True:
         raise AuditFailure('compare', 'tls_unconfirmed')
     if observed.get('major') != reference.get('major'):
         raise AuditFailure('compare', 'version_mismatch')
