@@ -1,4 +1,4 @@
-"""Fail-closed release identity, environment and MANUAL backup attestation gate."""
+"""Fail-closed identity/environment gate with explicit backup or risk acceptance."""
 import datetime as dt
 import json
 import os
@@ -69,6 +69,25 @@ def validate_attestation(record, sha, evidence, project, now=None):
     require(expires >= now + dt.timedelta(days=7), 'Retain the backup at least seven more days')
 
 
+def validate_release_policy(env, now=None):
+    require(env.get('RELEASE_ENABLED') == 'true', 'Release setup not enabled by owner')
+    sha, project = env.get('RELEASE_SHA', ''), env.get('SUPABASE_PROJECT_REF', '')
+    require(bool(re.fullmatch('[0-9a-f]{40}', sha)) and bool(re.fullmatch('[a-z]{20}', project)),
+            'Invalid release SHA/project')
+    mode = env.get('RELEASE_MODE', 'verified_backup')
+    if mode == 'no_backup':
+        expected = f'I_ACCEPT_DATA_LOSS_WITHOUT_BACKUP:{sha}:{project}'
+        require(env.get('NO_BACKUP_RISK_ACK') == expected,
+                'Explicit no-backup risk acceptance must match this SHA and project')
+        require(not env.get('BACKUP_EVIDENCE_ID'), 'No-backup mode must not claim backup evidence')
+        return 'NO BACKUP: data-loss risk explicitly accepted for this SHA/project; no backup or restore is claimed.'
+    require(mode == 'verified_backup', 'Unknown release mode')
+    require(not env.get('NO_BACKUP_RISK_ACK'), 'Choose one release mode')
+    validate_attestation(json.loads(env.get('BACKUP_RESTORE_ATTESTATION', '{}')),
+        sha, env.get('BACKUP_EVIDENCE_ID', ''), project, now)
+    return 'Manual backup attestation accepted; reviewer, not this script, verified backup/restore.'
+
+
 def main():
     validate_context(os.environ, api('/git/ref/heads/main')['object']['sha'])
     for name in ENVIRONMENTS:
@@ -76,11 +95,12 @@ def main():
         branches = api('/environments/' + name + '/deployment-branch-policies?per_page=100')
         require(branches.get('total_count') == 1, 'Exactly one deployment branch rule is required')
         validate_environment(config, branches['branch_policies'])
-    if '--backup' in sys.argv:
-        require(os.environ.get('RELEASE_ENABLED') == 'true', 'Release setup not enabled by owner')
-        validate_attestation(json.loads(os.environ['BACKUP_RESTORE_ATTESTATION']),
-            os.environ['RELEASE_SHA'], os.environ['BACKUP_EVIDENCE_ID'], os.environ['SUPABASE_PROJECT_REF'])
-        print('Manual backup attestation accepted; reviewer, not this script, verified backup/restore.')
+    if '--release' in sys.argv or '--backup' in sys.argv:
+        report = validate_release_policy(os.environ)
+        print(report)
+        if os.environ.get('GITHUB_STEP_SUMMARY'):
+            with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as stream:
+                stream.write(report + '\n')
     print('Reviewed main SHA and protected environments verified.')
 
 
@@ -89,5 +109,5 @@ if __name__ == '__main__':
         main()
     except Exception:
         # Never echo API response bodies, credentials, URLs or attestation contents.
-        print('Release guard failed. Check SHA, environment protection and backup evidence; no bypass.', file=sys.stderr)
+        print('Release guard failed. Check SHA, environment protection and selected release policy; no bypass.', file=sys.stderr)
         sys.exit(1)

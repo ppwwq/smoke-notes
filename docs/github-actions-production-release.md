@@ -2,13 +2,15 @@
 
 本分支只準備流程及離線驗證；**本雲端工作沒有設定 Secrets／權限、建立憑證、合併 main 或執行發布**。2026-10-20 桌面已回報部分設定完成，詳見[獨立復核紀錄](production-release-review-2026-10-20.md)；本環境未獨立核實那些設定。現有應用基線為 `e0b3cb5a19641679a9e2584241ed8d5e9239930f`；倉庫原本沒有 `.github/workflows`。未來由 GitHub 託管 Ubuntu runner 執行，不要求用戶電腦開機。
 
+2026-10-21：已按用戶接受資料損失風險的指示新增明確 `no_backup` 模式。備份是本流程原先的政策，不是 Supabase／GitHub 對每次部署的硬性要求。詳見[無備份發布評估及操作](no-backup-release.md)。
+
 ## 流程與真實限制
 
 `.github/workflows/release-production.yml` 只有 `workflow_dispatch`，push／PR 不發布。
 
 1. 無生產 Secrets 的檢查：拒絕 fork、非 main、非完整 SHA、與當前 main 不同的 SHA 或 workflow SHA；檢查兩個 Environment 的審核／分支規則。執行型別、Lint、應用測試、臨時 PostgreSQL 回歸及 Web build。
-2. `production-backend` 獨立審核：審核者核實備份、保留期限及**已完成的隔離還原演練**。腳本只驗證證據綁定、時間及格式，**不會建立備份、讀取備份檔或自行證明還原成功**。
-3. 工具安裝完成後再次檢查 main 與備份門檻，先以唯讀 GET 確認既有 `apply-mutation` 及 Token 讀取權限（不能證明寫入權限），失敗不接觸資料庫。使用既有資料庫連線核對遷移歷史；只容許尚待 `202610200001_todo_planning.sql` 或已全數套用。其他差異立即停止，不自動 repair、補跑未知歷史或 reset。遷移後再次核對完整 history，缺少預期版本即停止，不部署函式。此 SQL 本身有交易；使用 `--skip-vault` 不處理其他 Vault 設定，流程不提供逆向遷移。
+2. `production-backend` 獨立審核：預設 `verified_backup` 由審核者核實備份、保留期限及已完成的隔離還原；腳本只驗證聲明。選 `no_backup` 時，必須明確接受資料損失風險，確認字串綁定完整 SHA／目標專案，備份證據 ID 留空；摘要明示沒有備份／還原證據。不偽造聲明，也不略過環境審批。
+3. 工具安裝完成後再次檢查 main 與所選發布風險政策，先以唯讀 GET 確認既有 `apply-mutation` 及 Token 讀取權限（不能證明寫入權限），失敗不接觸資料庫。使用既有資料庫連線核對遷移歷史；只容許尚待 `202610200001_todo_planning.sql` 或已全數套用。其他差異立即停止，不自動 repair、補跑未知歷史或 reset。遷移後再次核對完整 history，缺少預期版本即停止，不部署函式。此 SQL 本身有交易；使用 `--skip-vault` 不處理其他 Vault 設定，流程不提供逆向遷移。
 4. 比較遷移前後八張應用表的筆數與完整資料雜湊（新增 planning 空值標準化）；差異即停止。這是保留偵測，**不是可還原備份**。建議維護時段暫停寫入；合法的同步寫入也可能導致保守停止，不能因此清空資料或忽略錯誤。
 5. 僅部署既有 `apply-mutation`，保留 `supabase/config.toml` 的內部驗證配置，不部署／刪除其他函式。
 6. 真實托管 API 探測：建立兩個新的匿名會話和新工作區，先由 A 寫入並讀回真實探測列，再驗證未配對 B 讀不到且寫入回 403、A 原列與版本不變；之後驗證配對、能力回應、A→B／B→A 讀寫、重送冪等、離線舊版本衝突、完成／撤銷／歷史及軟刪除同步。只操作該測試空間；不用 service role。測試帳戶／工作區留存供審核，不做永久清理；失敗可能留下測試記錄，不能盲目重試。此測試**不是** IndexedDB 同步引擎、Realtime 推送、實機手機或 UI 驗收，這些仍需另行驗證。
@@ -23,7 +25,7 @@
 3. 將下表 Secrets 只放在指定 Environment（Environment secrets → Add secret），**不要放 repository／organization secrets**，不要貼進聊天、issue、dispatch input、程式碼或 `.env`。先確認既有憑證可重用；若須新建 token、增加權限或長期存取，另行取得授權後由用戶在官方頁面建立並手動填入。
 4. 填入 Environment variables，確認真實 project ref／帳戶。舊部署文件記載的 Supabase ref 是 `koundrkjeambrcodxkdd`，但不能只憑舊文就當成目前正式目標；須與 Dashboard、正式網站公開配置核對。
 5. 審核並對齊既有 Supabase 遷移歷史。歷史文件記載曾在 SQL Editor 手動執行，未必登記 CLI history。先比較實際 schema／函式及各遷移效果，再由授權管理者處理 history；本流程不提供自動 repair。
-6. 完成下面的備份與還原證據；全部準備就緒後才由擁有人把 `production-backend` 的 `RELEASE_ENABLED` 設為 `true`。
+6. 按所選模式完成真實備份聲明，或明確的無備份風險接受；其他準備就緒後才由擁有人把 `production-backend` 的 `RELEASE_ENABLED` 設為 `true`。
 
 ## 實際所需 Secrets
 
@@ -45,9 +47,9 @@ Environment variables：
 | `RELEASE_ENABLED`            | production-backend | 預設不設；完成設定及授權後才填 `true`               |
 | `BACKUP_RESTORE_ATTESTATION` | production-backend | 下述人工證據 JSON；不放私密下載 URL／密碼／用戶資料 |
 
-## 備份安全門檻：仍需實際完成
+## verified_backup 模式的備份門檻
 
-此倉庫沒有既有可驗證的遠端備份保留設施。**本流程刻意不自行新建外部儲存、長期 token、GitHub 公開 artifact 備份或付費還原專案**。若現有 Supabase 備份／隔離還原能力不夠，選擇加密儲存、保留政策、費用和必要權限後，須另行授權並實作／驗證，再開始發布。不能填假的證據使流程變綠。
+此倉庫沒有既有可驗證的遠端備份保留設施。**本流程刻意不自行新建外部儲存、長期 token、GitHub 公開 artifact 備份或付費還原專案**。若現有 Supabase 備份／隔離還原能力不夠，選擇加密儲存、保留政策、費用和必要權限後，須另行授權並實作／驗證，再使用 `verified_backup` 模式發布。用戶明確選擇無備份時走 `no_backup` 模式；不能填假的證據使流程變綠。
 
 由管理者在已授權的雲端環境建立完整可用備份並安全保留，核實 schema、角色／權限、應用資料、身份／關聯及遷移紀錄的還原需求；Supabase Storage 實體檔案不會因一般資料庫備份就自動被備份。將備份還原到**隔離目標**並實際檢查記錄／歷史及權限，絕不覆蓋正式資料庫做演練。審核者應能取回同一備份、核對 SHA-256 及演練報告。只有 `pg_restore --list` 或列出備份名稱並不足以證明還原成功。
 
@@ -69,11 +71,11 @@ Environment variables：
 }
 ```
 
-Environment reviewer 需親自核實證據；腳本只校驗聲明格式／新鮮度。備份未做、還原未驗證、權限／方案未批准時，維持 `RELEASE_ENABLED` 關閉，不批准 backend job。
+`verified_backup` 模式的 Environment reviewer 需親自核實證據；腳本只校驗聲明格式／新鮮度。該模式下備份未做或還原未驗證就停止；`no_backup` 改驗證明確風險接受，其他權限、目標、history 及環境審批仍不可省略。
 
 ## 手動執行與失敗處理
 
-準備完成且另行允許執行後：Actions → **Manual production release** → Run workflow；branch 選 **main**，`release_sha` 填當時已審核完整 SHA，`backup_evidence_id` 填證據編號。審核者先批准 backend，確認 API 測試及保留檢查通過後再批准 web。若等待期間 main 前進，流程停止；重新審核新 SHA 和更新證據後重新 dispatch，不能套用過期批准。
+準備完成且另行允許執行後：Actions → **Manual production release** → Run workflow；branch 選 **main**，`release_sha` 填當時已審核完整 SHA，`release_mode` 選 `verified_backup` 並填 `backup_evidence_id`，或選 `no_backup`、留空備份證據並按[操作說明](no-backup-release.md)填入精確風險確認字串。審核者先批准 backend，確認 API 測試及保留檢查通過後再批准 web。若等待期間 main 前進，流程停止；重新審核新 SHA 和重新綁定風險確認／備份證據後重新 dispatch，不能套用過期批准。
 
 任何階段失敗立即停止下游；不 `continue-on-error`，不自動重試整次部署。資料庫可能已成功遷移但函式／網頁尚未成功，應先查 Dashboard 的真實狀態與 migration history。資料雜湊不符時先判明是否有合法並行寫入。Cloudflare 上傳超時或版本驗證失敗時先查 deployment ID，不重複盲發。
 

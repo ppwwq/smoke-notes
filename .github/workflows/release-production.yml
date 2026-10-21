@@ -8,8 +8,20 @@ on:
         required: true
         type: string
       backup_evidence_id:
-        description: Opaque ID of retained backup AND completed isolated restore evidence (no URL/secrets)
+        description: Required for verified_backup; leave empty for no_backup (no URL/secrets)
+        required: false
+        type: string
+      release_mode:
+        description: Backup policy; no_backup explicitly accepts data-loss risk
         required: true
+        default: verified_backup
+        type: choice
+        options:
+          - verified_backup
+          - no_backup
+      no_backup_risk_ack:
+        description: "Only for no_backup: I_ACCEPT_DATA_LOSS_WITHOUT_BACKUP:<full SHA>:<project ref>"
+        required: false
         type: string
 
 permissions:
@@ -28,6 +40,8 @@ defaults:
 env:
   RELEASE_SHA: ${{ inputs.release_sha }}
   BACKUP_EVIDENCE_ID: ${{ inputs.backup_evidence_id }}
+  RELEASE_MODE: ${{ inputs.release_mode }}
+  NO_BACKUP_RISK_ACK: ${{ inputs.no_backup_risk_ack }}
 
 jobs:
   validate:
@@ -78,8 +92,8 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Recheck main and manually verified backup before accessing deployment secrets
-        run: python3 tools/production/guard.py --backup
+      - name: Recheck main and selected release risk policy before deployment secrets
+        run: python3 tools/production/guard.py --release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_ENABLED: ${{ vars.RELEASE_ENABLED }}
@@ -94,8 +108,8 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/release-tools" --no-save supabase@2.121.0
           echo "$RUNNER_TEMP/release-tools/node_modules/.bin" >> "$GITHUB_PATH"
           command -v psql
-      - name: Recheck main and backup at the backend write boundary
-        run: python3 tools/production/guard.py --backup
+      - name: Recheck main and selected release risk policy at the backend write boundary
+        run: python3 tools/production/guard.py --release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_ENABLED: ${{ vars.RELEASE_ENABLED }}

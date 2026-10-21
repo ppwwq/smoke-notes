@@ -103,7 +103,8 @@ def main():
     remote = history(env)
     if remote not in (versions[:-1], versions):
         raise RuntimeError('Remote migration history differs: manual audit required; never auto-repair')
-    # Snapshot is preservation detection, NOT a restorable backup. The prior manual gate is mandatory.
+    # Preservation detection, NOT a backup. The prior gate requires either a
+    # verified backup attestation or explicit SHA/project-bound no-backup risk acceptance.
     before = snapshot(env)
     if remote == versions[:-1]:
         run(['supabase', 'db', 'push', '--db-url', url, '--skip-vault', '--dry-run'], env=env)
