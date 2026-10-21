@@ -2,16 +2,19 @@
 import contextlib
 import copy
 import io
+import json
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
 from urllib.parse import urlparse
+from urllib.error import HTTPError
 
 import pages
 
 SHA = 'a' * 40
+DEPLOYMENT_ID = 'b5ae5285-bbcb-43d8-8de2-c401a4ef0ebb'
 
 
 def deployment(identifier='new'):
@@ -80,6 +83,59 @@ class PagesProbeTests(unittest.TestCase):
         self.assertEqual(self.upload_mock.call_count, 1)
         self.assertEqual(self.api_mock.call_count, 1)
         self.fetch_mock.assert_not_called()
+
+    def verify_existing(self, canonical, *, fetch_error=None):
+        (self.dist / 'release.json').write_text(json.dumps({'sha': SHA}) + '\n')
+        before = {p.name: p.read_bytes() for p in self.dist.iterdir()}
+
+        def fetch(request, timeout):
+            if fetch_error:
+                raise fetch_error
+            return io.BytesIO((self.dist / urlparse(request.full_url).path.lstrip('/')).read_bytes())
+
+        with patch.dict('os.environ', {'RELEASE_SHA': SHA, 'VERIFY_DEPLOYMENT_ID': DEPLOYMENT_ID}, clear=True), \
+             patch('pages.DIST', self.dist), patch('pages.api', return_value=project(canonical)) as api, \
+             patch('pages.subprocess.run') as upload, patch('pages.urllib.request.urlopen', side_effect=fetch) as fetcher, \
+             contextlib.redirect_stdout(io.StringIO()) as output:
+            self.api_mock, self.upload_mock, self.fetch_mock, self.output = api, upload, fetcher, output
+            try:
+                pages.main(verify_only=True)
+            finally:
+                upload.assert_not_called()
+                self.assertEqual(before, {p.name: p.read_bytes() for p in self.dist.iterdir()})
+
+    def test_verify_existing_exact_deployment_without_upload_or_local_writes(self):
+        self.verify_existing(deployment(DEPLOYMENT_ID))
+        self.assertEqual(self.api_mock.call_count, 1)
+        self.assertEqual(self.fetch_mock.call_count, 2)
+        self.assertIn('All 2 static files match', self.output.getvalue())
+
+    def test_verify_existing_rejects_wrong_id_sha_or_preview_before_public_reads(self):
+        cases = [deployment('some-other-deployment')]
+        wrong_sha = deployment(DEPLOYMENT_ID)
+        wrong_sha['deployment_trigger']['metadata']['commit_hash'] = 'b' * 40
+        cases += [wrong_sha, dict(deployment(DEPLOYMENT_ID), environment='preview')]
+        for candidate in cases:
+            with self.subTest(candidate=candidate), self.assertRaisesRegex(RuntimeError, 'not confirmed'):
+                self.verify_existing(candidate)
+            self.fetch_mock.assert_not_called()
+
+    def test_public_denial_is_not_retried_and_diagnostic_omits_sensitive_exception(self):
+        error = HTTPError('https://example.invalid/private?secret=never-print', 403,
+                          'sensitive response text', {'Authorization': 'secret'}, None)
+        with self.assertRaises(HTTPError):
+            self.verify_existing(deployment(DEPLOYMENT_ID), fetch_error=error)
+        self.assertEqual(self.fetch_mock.call_count, 1)
+        self.assertEqual(pages.failure_report(error),
+                         'Pages verification failed: stage=compare_public_assets kind=http http_status=403. No automatic retry or rollback.')
+
+    def test_missing_verification_identity_fails_before_network_or_upload(self):
+        with patch.dict('os.environ', {'RELEASE_SHA': SHA}, clear=True), patch('pages.DIST', self.dist), \
+             patch('pages.api') as api, patch('pages.subprocess.run') as upload:
+            with self.assertRaisesRegex(RuntimeError, 'exact existing deployment ID'):
+                pages.main(verify_only=True)
+            api.assert_not_called()
+            upload.assert_not_called()
 
 
 if __name__ == '__main__':
