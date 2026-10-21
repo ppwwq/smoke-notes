@@ -12,6 +12,8 @@ audit job 先在不接收正式憑證的步驟，以釘選 digest 的 PostgreSQL
 
 只讀系統目錄及 migration ledger 的版本欄，不讀應用列、Auth 使用者、Storage 物件、函式回傳值；不呼叫應用 RPC。正式 metadata 僅在 runner 記憶體比較，不寫檔、不上傳 artifact。標準輸出及 job summary 只含固定 category 與狀態，錯誤抑制原始伺服器／子程序輸出。
 
+失敗時 stderr 僅新增固定白名單診斷：`stage`（invocation／reference／target／query／parse／compare／summary）、`error` 與 `sqlstate`。例如 `stage=query error=query_failed sqlstate=42501`；psql 使用 `VERBOSITY=sqlstate`，只接受完整 severity/code 行內已列白名單的 SQLSTATE，沒有可靠代碼時輸出 `UNAVAILABLE`。不輸出錯誤本文、連線字串、命令參數、路徑或資料內容；連線失敗不從原始訊息猜測 DNS／密碼／TLS 根因。TLS 未確認與 PostgreSQL major 不符分別回報 `tls_unconfirmed`、`version_mismatch`，仍以 exit 1 停止。這些診斷不構成基線通過或修復證據。
+
 `backend`、`web` job 均明確要求 `operation=release`，audit 結束不會接續發布；沒有 DDL、repair、Edge 部署、hosted 寫入探測或 Pages 上傳。將來正式發布須重新手動 dispatch `operation=release`，繼續使用原本的 no-backup 精確確認及 backend／web 兩次環境審批。
 
 ## 比對及結果
