@@ -14,6 +14,7 @@ PROJECT = 'smoke-notes-philipwwq'
 ORIGIN = 'https://' + PROJECT + '.pages.dev'
 DIST = Path('apps/web/dist')
 STAGE = 'initialization'
+PUBLIC_USER_AGENT = 'SmokeNotesReleaseVerifier/1.0 (+https://github.com/ppwwq/smoke-notes)'
 
 
 def failure_report(error):
@@ -107,7 +108,7 @@ def main(*, verify_only=False):
         expected = hashlib.sha256(path.read_bytes()).hexdigest()
         for attempt in range(6):
             req = urllib.request.Request(ORIGIN + '/' + rel + '?release=' + sha,
-                                         headers={'Cache-Control': 'no-cache'})
+                                         headers={'Cache-Control': 'no-cache', 'User-Agent': PUBLIC_USER_AGENT})
             with urllib.request.urlopen(req, timeout=30) as response:
                 actual = hashlib.sha256(response.read()).hexdigest()
             if actual == expected:

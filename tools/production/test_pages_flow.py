@@ -38,6 +38,9 @@ class PagesProbeTests(unittest.TestCase):
     def run_release(self, responses, *, wrong_bytes=False, upload_code=0):
         def fetch(request, timeout):
             self.assertEqual(urlparse(request.full_url).hostname, pages.PROJECT + '.pages.dev')
+            self.assertEqual(request.get_header('User-agent'),
+                             'SmokeNotesReleaseVerifier/1.0 (+https://github.com/ppwwq/smoke-notes)')
+            self.assertEqual(request.get_header('Cache-control'), 'no-cache')
             relative = urlparse(request.full_url).path.lstrip('/')
             data = b'wrong bytes' if wrong_bytes else (self.dist / relative).read_bytes()
             return io.BytesIO(data)
@@ -89,6 +92,9 @@ class PagesProbeTests(unittest.TestCase):
         before = {p.name: p.read_bytes() for p in self.dist.iterdir()}
 
         def fetch(request, timeout):
+            self.assertEqual(request.get_header('User-agent'),
+                             'SmokeNotesReleaseVerifier/1.0 (+https://github.com/ppwwq/smoke-notes)')
+            self.assertEqual(request.get_header('Cache-control'), 'no-cache')
             if fetch_error:
                 raise fetch_error
             return io.BytesIO((self.dist / urlparse(request.full_url).path.lstrip('/')).read_bytes())
