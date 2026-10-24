@@ -1,3 +1,4 @@
+import { WorkspaceSelect } from "./WorkspaceSelect";
 export type RepeatChoice = "once" | "daily" | "weekdays" | "weekly";
 const weekdayLabels = ["日", "一", "二", "三", "四", "五", "六"];
 
@@ -20,16 +21,17 @@ export function RepeatFields({
     <>
       <label>
         重复
-        <select
-          aria-label={label}
+        <WorkspaceSelect<RepeatChoice>
+          label={label}
           value={value}
-          onChange={(event) => onChange(event.target.value as RepeatChoice)}
-        >
-          {allowOnce && <option value="once">不重复</option>}
-          <option value="daily">每天</option>
-          <option value="weekdays">工作日（周一至周五）</option>
-          <option value="weekly">指定星期</option>
-        </select>
+          onChange={onChange}
+          options={[
+            ...(allowOnce ? [{ value: "once" as const, label: "不重复" }] : []),
+            { value: "daily", label: "每天" },
+            { value: "weekdays", label: "工作日（周一至周五）" },
+            { value: "weekly", label: "指定星期" },
+          ]}
+        />
       </label>
       {value === "weekly" && (
         <fieldset className="planner-weekdays">

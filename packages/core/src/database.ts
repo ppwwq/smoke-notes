@@ -1,3 +1,9 @@
+import type { CalendarEvent } from "./calendar-events";
+import type {
+  PlannerType,
+  TodoTypeLink,
+  PlannerPreferences,
+} from "./planner-types";
 import Dexie, { type Table } from "dexie";
 import type { Note, Notebook, SyncOperation, Todo } from "./types";
 import {
@@ -8,6 +14,10 @@ import {
 } from "./note-content";
 
 export class SmokeNotesDatabase extends Dexie {
+  calendarEvents!: Table<CalendarEvent, string, CalendarEvent>;
+  plannerPreferences!: Table<PlannerPreferences, string>;
+  plannerTypes!: Table<PlannerType, string>;
+  todoTypeLinks!: Table<TodoTypeLink, string>;
   notebooks!: Table<Notebook, string, Notebook>;
   notes!: Table<Note, string, Note>;
   todos!: Table<Todo, string, Todo>;
@@ -69,5 +79,13 @@ export class SmokeNotesDatabase extends Dexie {
         "id, workspaceId, rank, deletedAt, planning.kind, planning.date, planning.seriesId",
       operations: "id, entity, entityId, createdAt, nextAttemptAt",
     });
+    this.version(5).stores({
+      calendarEvents: "id, workspaceId, start, deletedAt",
+    });
+    this.version(6).stores({
+      plannerTypes: "id, workspaceId",
+      todoTypeLinks: "id, workspaceId, todoId, typeId",
+    });
+    this.version(7).stores({ plannerPreferences: "workspaceId" });
   }
 }

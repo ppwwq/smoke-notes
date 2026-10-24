@@ -1,6 +1,9 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
+import { useReducedMotion } from "motion/react";
+import { stackedCardCollision } from "./stacked-card-collision";
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   MouseSensor,
   PointerSensor,
@@ -36,6 +39,9 @@ interface SortableStackProps<T extends RankedItem> {
   ) => Promise<void>;
   className?: string;
   wholeCard?: boolean;
+  itemKind?: string;
+  layout?: "grid" | "stack";
+  renderDragOverlay?: (item: T, index: number) => ReactNode;
 }
 
 function SortableRow<T extends RankedItem>({
@@ -43,11 +49,15 @@ function SortableRow<T extends RankedItem>({
   label,
   children,
   wholeCard,
+  itemKind,
+  disabled,
 }: {
   item: T;
   label: string;
   children: ReactNode;
   wholeCard: boolean;
+  itemKind: string;
+  disabled: boolean;
 }) {
   const {
     attributes,
@@ -58,6 +68,7 @@ function SortableRow<T extends RankedItem>({
     isDragging,
   } = useSortable({
     id: item.id,
+    disabled,
   });
   return (
     <div
@@ -67,15 +78,18 @@ function SortableRow<T extends RankedItem>({
       {...(wholeCard
         ? { ...attributes, role: "group", "aria-pressed": undefined }
         : {})}
-      aria-label={wholeCard ? `移动便签：${label}` : undefined}
-      aria-roledescription={wholeCard ? "可排序便签" : undefined}
+      aria-label={wholeCard ? `移动${itemKind}：${label}` : undefined}
+      aria-roledescription={wholeCard ? `可排序${itemKind}` : undefined}
       onMouseDown={
         wholeCard
           ? (event) => {
               const control = (event.target as Element).closest(
                 "button, input, textarea, select, a",
               );
-              if (!control || control.classList.contains("sticky-card-open"))
+              if (
+                !control ||
+                control.matches(".sticky-card-open, [data-sortable-open]")
+              )
                 listeners?.onMouseDown?.(event);
             }
           : undefined
@@ -86,7 +100,10 @@ function SortableRow<T extends RankedItem>({
               const control = (event.target as Element).closest(
                 "button, input, textarea, select, a",
               );
-              if (!control || control.classList.contains("sticky-card-open"))
+              if (
+                !control ||
+                control.matches(".sticky-card-open, [data-sortable-open]")
+              )
                 listeners?.onTouchStart?.(event);
             }
           : undefined
@@ -124,8 +141,21 @@ export function SortableStack<T extends RankedItem>({
   onMove,
   className = "",
   wholeCard = false,
+  itemKind = "便签",
+  layout = "grid",
+  renderDragOverlay,
 }: SortableStackProps<T>) {
   const [error, setError] = useState("");
+  const reducedMotion = useReducedMotion();
+  const [previewOrder, setPreviewOrder] = useState<string[] | null>(null);
+  const pending = useRef(false);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const draggedIndex = items.findIndex((item) => item.id === draggedId);
+  const displayedItems = previewOrder
+    ? [...items].sort(
+        (a, b) => previewOrder.indexOf(a.id) - previewOrder.indexOf(b.id),
+      )
+    : items;
   const handleSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, {
@@ -148,6 +178,8 @@ export function SortableStack<T extends RankedItem>({
   );
 
   async function handleDragEnd(event: DragEndEvent) {
+    setDraggedId(null);
+    if (pending.current) return;
     const activeId = String(event.active.id);
     const overId = event.over ? String(event.over.id) : null;
     if (!overId || activeId === overId) return;
@@ -163,43 +195,77 @@ export function SortableStack<T extends RankedItem>({
     const previousRank = withoutActive[insertIndex - 1]?.rank ?? null;
     const nextRank = withoutActive[insertIndex]?.rank ?? null;
     setError("");
+    pending.current = true;
+    const ordered = [...withoutActive];
+    ordered.splice(insertIndex, 0, items[originalIndex]);
+    setPreviewOrder(ordered.map((item) => item.id));
     try {
       await onMove(activeId, previousRank, nextRank);
     } catch {
       setError("排序失败，请重试");
+    } finally {
+      pending.current = false;
+      setPreviewOrder(null);
     }
   }
 
   return (
     <DndContext
       sensors={wholeCard ? cardSensors : handleSensors}
-      collisionDetection={closestCenter}
+      collisionDetection={
+        layout === "stack" ? stackedCardCollision : closestCenter
+      }
       onDragEnd={handleDragEnd}
+      onDragStart={({ active }) => setDraggedId(String(active.id))}
+      onDragCancel={() => setDraggedId(null)}
       accessibility={{
         screenReaderInstructions: {
           draggable: wholeCard
-            ? "按空格拾起便签，方向键移动，再按空格放下。Escape 取消。"
+            ? `按空格拾起${itemKind}，方向键移动，再按空格放下。Escape 取消。`
             : "按空格拾起，方向键移动，再按空格放下。Escape 取消。",
         },
       }}
     >
       <SortableContext
-        items={items.map((item) => item.id)}
-        strategy={wholeCard ? rectSortingStrategy : verticalListSortingStrategy}
+        items={displayedItems.map((item) => item.id)}
+        strategy={
+          wholeCard && layout !== "stack"
+            ? rectSortingStrategy
+            : verticalListSortingStrategy
+        }
       >
-        <div className={className}>
-          {items.map((item, index) => (
+        <div className={className} aria-busy={previewOrder !== null}>
+          {displayedItems.map((item, index) => (
             <SortableRow
               key={item.id}
               item={item}
               label={label(item)}
               wholeCard={wholeCard}
+              itemKind={itemKind}
+              disabled={previewOrder !== null}
             >
               {renderItem(item, index)}
             </SortableRow>
           ))}
         </div>
       </SortableContext>
+      {renderDragOverlay && (
+        <DragOverlay
+          dropAnimation={
+            reducedMotion
+              ? null
+              : {
+                  duration: 180,
+                  easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+                }
+          }
+          zIndex={80}
+        >
+          {draggedIndex >= 0
+            ? renderDragOverlay(items[draggedIndex], draggedIndex)
+            : null}
+        </DragOverlay>
+      )}
       {error && <p role="alert">{error}</p>}
     </DndContext>
   );

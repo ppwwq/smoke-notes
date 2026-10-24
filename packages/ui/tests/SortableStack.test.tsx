@@ -60,3 +60,34 @@ it("reports a failed reorder without an unhandled rejection", async () => {
   await act(async () => end("one", "two"));
   expect(screen.getByRole("alert")).toHaveTextContent("排序失败");
 });
+it("shows the dropped order while saving and rolls back on failure", async () => {
+  let rejectSave!: (reason: Error) => void;
+  const onMove = vi.fn(
+    () =>
+      new Promise<void>((_, reject) => {
+        rejectSave = reject;
+      }),
+  );
+  renderStack(onMove);
+  let operation: unknown;
+  await act(async () => {
+    operation = end("one", "two");
+  });
+  expect(
+    Array.from(
+      document.querySelectorAll(".sortable-content"),
+      (node) => node.textContent,
+    ),
+  ).toEqual(["two", "one", "three"]);
+  await act(async () => {
+    rejectSave(new Error("storage error"));
+    await operation;
+  });
+  expect(
+    Array.from(
+      document.querySelectorAll(".sortable-content"),
+      (node) => node.textContent,
+    ),
+  ).toEqual(["one", "two", "three"]);
+  expect(screen.getByRole("alert")).toHaveTextContent("排序失败");
+});

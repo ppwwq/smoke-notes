@@ -9,6 +9,7 @@ export function PlannerDatePicker({
   today,
   max,
   disabled,
+  placeholder = "选择日期",
   onChange,
 }: {
   label: string;
@@ -16,6 +17,7 @@ export function PlannerDatePicker({
   today: string;
   max?: string;
   disabled?: boolean;
+  placeholder?: string;
   onChange(value: string): void;
 }) {
   const [open, setOpen] = useState(false);
@@ -38,7 +40,7 @@ export function PlannerDatePicker({
           disabled={disabled}
         >
           <CalendarDays size={16} />
-          <span>{value.replaceAll("-", "/")}</span>
+          <span>{value ? value.replaceAll("-", "/") : placeholder}</span>
         </Popover.Trigger>
         <Popover.Portal container={container ?? undefined}>
           <Popover.Positioner

@@ -186,6 +186,53 @@ describe("SmokeNotesApp", () => {
     },
   );
 
+  it("finds content across notebooks and preserves the search when returning from an edit", async () => {
+    const life = (await repository.listNotebooks()).find(
+      (book) => book.name === "生活",
+    )!;
+    const note = await repository.createNote(life.id, {
+      title: "旅行",
+      body: "行李和相机",
+    });
+    render(<SmokeNotesApp repository={repository} platform="web" />);
+    const search = await screen.findByRole("searchbox", {
+      name: "搜索所有便签",
+    });
+    fireEvent.change(search, { target: { value: "相机" } });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "打开便签：旅行" }),
+    );
+    expect(
+      await screen.findByRole("textbox", { name: "便签标题" }),
+    ).toHaveValue("旅行");
+    fireEvent.change(screen.getByRole("textbox", { name: "便签标题" }), {
+      target: { value: "出发前" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "返回便签列表" }));
+    expect(
+      await screen.findByRole("searchbox", { name: "搜索所有便签" }),
+    ).toHaveValue("相机");
+    expect(
+      await screen.findByRole("button", { name: "打开便签：出发前" }),
+    ).toBeInTheDocument();
+    const returningSearch = screen.getByRole("searchbox");
+    returningSearch.focus();
+    fireEvent.change(returningSearch, { target: { value: "相" } });
+    expect(returningSearch).toHaveFocus();
+    expect(
+      (await repository.listNotes(life.id)).find((item) => item.id === note.id)
+        ?.title,
+    ).toBe("出发前");
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "没有这样的记录" },
+    });
+    expect(
+      screen.getByRole("heading", { name: "没有找到这张便签" }),
+    ).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("searchbox"), { key: "Escape" });
+    expect(screen.getByRole("searchbox")).toHaveValue("");
+  });
+
   it("reports a cloud failure on desktop even when the device network is online", async () => {
     render(
       <SmokeNotesApp
@@ -267,12 +314,13 @@ describe("SmokeNotesApp", () => {
       const notebook = (await repository.listNotebooks())[0];
       const earlier = await repository.listNotes(notebook.id);
       const delayed = deferred<typeof earlier>();
-      vi.mocked(repository.listNotes).mockReturnValueOnce(delayed.promise);
+      const readDelayedSnapshot = vi.fn(() => delayed.promise);
+      vi.mocked(repository.listNotes).mockImplementationOnce(readDelayedSnapshot);
       act(() => {
         window.dispatchEvent(new CustomEvent("smoke-notes:data-changed"));
       });
       await waitFor(() =>
-        expect(repository.listNotes).toHaveLastReturnedWith(delayed.promise),
+        expect(readDelayedSnapshot).toHaveBeenCalledOnce(),
       );
       act(() => {
         editor.commands.splitBlock();
@@ -838,8 +886,19 @@ describe("SmokeNotesApp", () => {
     trigger.focus();
     await user.keyboard("{ArrowDown}");
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /文字便签/ })).toHaveFocus(),
+      expect(
+        screen.getByRole("textbox", { name: "快速记录内容" }),
+      ).toHaveFocus(),
     );
+    await user.tab();
+    expect(document.activeElement?.tagName).toBe("SUMMARY");
+    await user.keyboard("{Enter}");
+    await user.tab();
+    expect(
+      screen.getByRole("combobox", { name: "新便签所属便签本" }),
+    ).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole("button", { name: /文字便签/ })).toHaveFocus();
     await user.tab();
     expect(screen.getByRole("button", { name: /清单便签/ })).toHaveFocus();
     await user.keyboard("{Escape}");

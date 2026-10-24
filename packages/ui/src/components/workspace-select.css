@@ -1,0 +1,164 @@
+.workspace-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 14px;
+  border: 1px solid var(--line-strong, #aaa49b);
+  border-radius: 14px;
+  background: var(--surface, #fff);
+  color: var(--ink, #111);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 160ms,
+    background 160ms;
+}
+.workspace-select-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-select-chevron {
+  display: flex;
+  flex-shrink: 0;
+  transition: transform 180ms;
+}
+.workspace-select-trigger[data-popup-open] .workspace-select-chevron {
+  transform: rotate(180deg);
+}
+.workspace-select-trigger:hover:not(:disabled),
+.workspace-select-trigger[data-popup-open] {
+  border-color: var(--ink, #111);
+}
+.workspace-select-trigger:focus-visible {
+  outline: 2px solid var(--ink, #111);
+  outline-offset: 3px;
+}
+.workspace-select-trigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.workspace-select-positioner {
+  z-index: 300;
+}
+.workspace-select-popup {
+  box-sizing: border-box;
+  width: max(var(--anchor-width), 200px);
+  max-width: calc(100vw - 24px);
+  max-height: var(--available-height);
+  border: 1px solid var(--line-strong, #aaa49b);
+  border-radius: 18px;
+  padding: 5px;
+  background: var(--surface, #fff);
+  color: var(--ink, #111);
+  box-shadow: 0 12px 36px #11111124;
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 160ms,
+    transform 160ms;
+}
+.workspace-select-popup[data-starting-style],
+.workspace-select-popup[data-ending-style] {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+}
+.workspace-select-list {
+  max-height: min(320px, calc(var(--available-height) - 12px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #b3a6d8 transparent;
+  scroll-padding-block: 6px;
+}
+@media (pointer: coarse) {
+  .workspace-select-trigger,
+  .workspace-select-option {
+    font-size: 16px;
+  }
+}
+.workspace-select-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  user-select: none;
+}
+.workspace-select-option[data-selected] {
+  font-weight: 600;
+}
+.workspace-select-option[data-highlighted] {
+  outline: none;
+  color: #111;
+  background: var(--lilac, #c4bbfe);
+}
+.workspace-select-check {
+  display: flex;
+  flex-shrink: 0;
+}
+.workspace-app[data-web-background] .editor-more-menu {
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 104px);
+  overflow-y: auto;
+  border-radius: 18px;
+  box-shadow: 0 12px 36px #11111124;
+}
+.workspace-app[data-web-background] .editor-more-menu button {
+  border-radius: 12px;
+  color: var(--ink);
+}
+.workspace-app[data-web-background]
+  .editor-more-menu
+  button:is(:hover, :focus-visible) {
+  background: var(--lilac);
+  outline: none;
+}
+.workspace-app[data-web-background] .editor-more-menu .destructive-action {
+  color: var(--danger);
+}
+.workspace-app[data-web-background]
+  .editor-more-menu
+  .destructive-action:is(:hover, :focus-visible) {
+  background: #f6e8e4;
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-select-trigger,
+  .workspace-select-chevron,
+  .workspace-select-popup {
+    transition: none;
+  }
+}
+.workspace-select-swatch {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border: 1px solid #00000026;
+  border-radius: 50%;
+}
+.workspace-select-trigger:has(.workspace-select-swatch)
+  .workspace-select-value {
+  flex: 1;
+}
+.workspace-select-option[data-color] {
+  justify-content: flex-start;
+  gap: 10px;
+}
+.workspace-select-option[data-color] .workspace-select-check {
+  margin-left: auto;
+}
+.workspace-select-option[data-color]:is([data-highlighted], :hover) {
+  background: var(--option-color);
+  color: var(--option-ink);
+}

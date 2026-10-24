@@ -28,7 +28,9 @@ it("expands the same notebooks and opens the original notebook identity", () => 
     <WebNotebookCollection
       notebooks={notebooks}
       onSelect={select}
-      onCreate={vi.fn()}
+      onRename={vi.fn()}
+      onTrash={vi.fn()}
+      onMove={vi.fn()}
     />,
   );
   const expand = screen.getByRole("button", { name: "展开卡片" });
@@ -40,60 +42,91 @@ it("expands the same notebooks and opens the original notebook identity", () => 
   expect(expand).toHaveAttribute("aria-expanded", "false");
 });
 
-it("keeps a failed creation draft and retries without submitting IME confirmation", async () => {
-  const create = vi
-    .fn()
-    .mockRejectedValueOnce(new Error("offline failure"))
-    .mockResolvedValue(undefined);
-  render(
-    <WebNotebookCollection
-      notebooks={[]}
-      onSelect={vi.fn()}
-      onCreate={create}
-    />,
-  );
-  fireEvent.click(screen.getByRole("button", { name: "建立第一个便签本" }));
-  const input = screen.getByRole("textbox", { name: "新便签本名称" });
-  fireEvent.change(input, { target: { value: "阅读" } });
-  fireEvent.keyDown(input, { key: "Enter", isComposing: true, keyCode: 229 });
-  expect(create).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "创建" }));
-  await screen.findByRole("alert");
-  expect(input).toHaveValue("阅读");
-  fireEvent.click(screen.getByRole("button", { name: "创建" }));
-  await waitFor(() =>
-    expect(
-      screen.queryByRole("textbox", { name: "新便签本名称" }),
-    ).not.toBeInTheDocument(),
-  );
-  expect(create).toHaveBeenCalledTimes(2);
-});
-
-it("prevents duplicate creates and retains a newer draft while a create is pending", async () => {
-  let resolve!: () => void;
-  const create = vi.fn(
-    () =>
-      new Promise<void>((done) => {
-        resolve = done;
-      }),
-  );
+it("edits from the card menu without opening the notebook and retains failed input", async () => {
+  const select = vi.fn(),
+    rename = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValue(undefined);
   render(
     <WebNotebookCollection
       notebooks={notebooks}
-      onSelect={vi.fn()}
-      onCreate={create}
+      onSelect={select}
+      onRename={rename}
+      onTrash={vi.fn()}
+      onMove={vi.fn()}
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: "建立新便签本" }));
-  const input = screen.getByRole("textbox", { name: "新便签本名称" });
-  fireEvent.change(input, { target: { value: "旧草稿" } });
-  fireEvent.click(screen.getByRole("button", { name: "创建" }));
-  fireEvent.submit(input.closest("form")!);
-  expect(create).toHaveBeenCalledTimes(1);
-  fireEvent.change(input, { target: { value: "新的草稿" } });
-  resolve();
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "创建" })).toBeEnabled(),
+  expect(
+    screen.queryByRole("button", { name: "建立新便签本" }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "更多便签本操作：工作" }));
+  fireEvent.click(screen.getByRole("button", { name: "编辑便签本" }));
+  const input = await screen.findByRole("textbox", { name: "便签本名称" });
+  fireEvent.change(input, { target: { value: "阅读" } });
+  fireEvent.click(screen.getByRole("button", { name: "保存" }));
+  await screen.findByRole("alert");
+  expect(input).toHaveValue("阅读");
+  expect(select).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "保存" }));
+  await waitFor(() => expect(rename).toHaveBeenCalledWith("one", "阅读"));
+});
+it("deletes through the same record action flow", async () => {
+  const trash = vi.fn(async () => {}),
+    select = vi.fn();
+  render(
+    <WebNotebookCollection
+      notebooks={notebooks}
+      onSelect={select}
+      onRename={vi.fn()}
+      onTrash={trash}
+      onMove={vi.fn()}
+    />,
   );
-  expect(input).toHaveValue("新的草稿");
+  fireEvent.click(screen.getByRole("button", { name: "更多便签本操作：工作" }));
+  fireEvent.click(screen.getByRole("button", { name: "删除便签本：工作" }));
+  await waitFor(() => expect(trash).toHaveBeenCalledWith("one"));
+  expect(select).not.toHaveBeenCalled();
+});
+it("keeps each notebook cover through sorting, rename, new notebooks and remount", () => {
+  const books = ["one", "two", "three", "four"].map((id, index) => ({
+    ...notebooks[0],
+    workspaceId: "cover-test",
+    id,
+    name: id,
+    rank: index,
+  }));
+  localStorage.removeItem("smoke-notes:notebook-tones:cover-test");
+  const callbacks = {
+    onSelect: vi.fn(),
+    onRename: vi.fn(),
+    onTrash: vi.fn(),
+    onMove: vi.fn(),
+  };
+  const { rerender, unmount } = render(
+    <WebNotebookCollection notebooks={books} {...callbacks} />,
+  );
+  const cover = (name: string) =>
+    screen.getByRole("button", { name: `进入便签本：${name}` }).className;
+  expect(cover("four")).toContain("collection-tone-3");
+  const reordered = [
+    books[3],
+    books[0],
+    books[1],
+    { ...books[2], name: "renamed" },
+  ];
+  rerender(<WebNotebookCollection notebooks={reordered} {...callbacks} />);
+  expect(cover("four")).toContain("collection-tone-3");
+  expect(cover("one")).toContain("collection-tone-0");
+  expect(cover("renamed")).toContain("collection-tone-2");
+  unmount();
+  render(
+    <WebNotebookCollection
+      notebooks={[...reordered, { ...books[0], id: "new", name: "new" }]}
+      {...callbacks}
+    />,
+  );
+  expect(cover("four")).toContain("collection-tone-3");
+  expect(cover("one")).toContain("collection-tone-0");
+  localStorage.removeItem("smoke-notes:notebook-tones:cover-test");
 });

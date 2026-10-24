@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "timeZone": "Asia/Hong_Kong",
+  "events": [
+    {
+      "id": "sample-20261026-study",
+      "title": "学习安排（示例）",
+      "start": "2026-10-26T09:00",
+      "end": "2026-10-26T10:30",
+      "type": "学习",
+      "color": "purple",
+      "notes": "替换为实际科目和目标"
+    },
+    {
+      "id": "sample-20261030-trip",
+      "title": "两日行程（示例）",
+      "start": "2026-10-30",
+      "end": "2026-11-01",
+      "allDay": true,
+      "type": "生活",
+      "color": "green"
+    }
+  ],
+  "todos": [
+    {
+      "id": "sample-20261026-review",
+      "text": "整理今日收获（示例）",
+      "date": "2026-10-26",
+      "time": "20:30",
+      "type": "学习",
+      "repeat": {
+        "kind": "daily"
+      }
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { WorkspaceSelect } from "./WorkspaceSelect";
 import { WebDialog } from "./glass/WebDialog";
 import { useEffect, useRef, useState } from "react";
 import type { TrashRecord } from "@smoke-notes/core";
@@ -236,12 +237,11 @@ export function SettingsPanel({
           <div className="planner-disclosure-body">
             <label>
               换日时间（香港时间）
-              <select
-                aria-label="待办换日时间"
+              <WorkspaceSelect
+                label="待办换日时间"
                 value={todoBoundaryHour}
                 disabled={boundaryBusy}
-                onChange={async (event) => {
-                  const next = Number(event.target.value) === 4 ? 4 : 0;
+                onChange={async (next) => {
                   setBoundaryBusy(true);
                   setBoundaryError("");
                   try {
@@ -254,10 +254,11 @@ export function SettingsPanel({
                     setBoundaryBusy(false);
                   }
                 }}
-              >
-                <option value={0}>00:00</option>
-                <option value={4}>04:00</option>
-              </select>
+                options={[
+                  { value: 0, label: "00:00" },
+                  { value: 4, label: "04:00" },
+                ]}
+              />
             </label>
             <p>每次打开会补算日期；电脑不必一直开着。历史记录会保留。</p>
             <p>关闭网页后不会发送通知。</p>
@@ -266,6 +267,29 @@ export function SettingsPanel({
         </details>
       )}
 
+      {web && section === "overview" && (
+        <details className="planner-disclosure settings-quick-help">
+          <summary>使用小提示</summary>
+          <div className="planner-disclosure-body">
+            <p>
+              <strong>找回记录：</strong>
+              在便签页搜索标题、正文或便签本名称，跨便签本找到想继续写的内容。
+            </p>
+            <p>
+              <strong>随手记下：</strong>打开新建就能输入，按 Ctrl / ⌘ + Enter
+              保存并继续写。清单便签留在本子里，每日待办按日期安排。
+            </p>
+            <p>
+              <strong>放心离开：</strong>
+              编辑器显示保存状态。误删后可立即撤销，也能从「最近删除」恢复。
+            </p>
+            <p>
+              <strong>本机与同步：</strong>
+              未配对时仅在当前浏览器保存。清除网站数据会移除本机记录；跨设备继续使用，请到「手机与同步」配对。
+            </p>
+          </div>
+        </details>
+      )}
       {bridge && (
         <div className="settings-group">
           <h3>

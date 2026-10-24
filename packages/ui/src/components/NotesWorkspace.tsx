@@ -9,6 +9,7 @@ import {
 import { SortableStack } from "./SortableStack";
 import { RecordActions } from "./RecordActions";
 import { NoteStacks, type NotebookNotes } from "./NoteStacks";
+import { NoteFinderToolbar, NoteFinderResults } from "./NoteFinder";
 
 interface NotesWorkspaceProps {
   web?: boolean;
@@ -19,7 +20,10 @@ interface NotesWorkspaceProps {
   onExpandNotebook?(id: string): void;
   onCollapse?(): void;
   openOnSingleClick: boolean;
-  onOpenNote(id: string): void;
+  onOpenNote(id: string, notebookId?: string): void;
+  query?: string;
+  onQueryChange?(value: string): void;
+  syncMessage?: string;
   onCreateRequest(): void;
   onTrashNote(id: string): Promise<void>;
   onMoveNote(
@@ -31,6 +35,7 @@ interface NotesWorkspaceProps {
 
 export function NotesWorkspace(props: NotesWorkspaceProps) {
   const collapsed = props.groups !== undefined && !props.expanded;
+  const finding = !!props.query?.trim();
   if (!props.notebook)
     return (
       <main className="empty-workspace">
@@ -76,21 +81,34 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
           </span>
         </div>
       </header>
-      {collapsed && (
+      {collapsed && !finding && (
         <p className="stack-context">
-          按便签本收好，点开一叠继续记录。新建到「{props.notebook.name}」。
+          点开一叠继续记录。分类、重命名与整理在「便签本」。
         </p>
       )}
-      {props.web && !collapsed && (
+      {props.web && props.groups && props.onQueryChange && (
+        <NoteFinderToolbar
+          query={props.query ?? ""}
+          onQueryChange={props.onQueryChange}
+        />
+      )}
+      {props.web && !collapsed && !finding && (
         <div className="list-context-bar">
           <span>长按便签任意位置，拖动调整顺序</span>
         </div>
       )}
       <section
         className="notes-board-scroll"
-        aria-label={`${props.notebook.name}便签列表`}
+        aria-label={finding ? "查找便签结果" : `${props.notebook.name}便签列表`}
       >
-        {collapsed ? (
+        {finding ? (
+          <NoteFinderResults
+            groups={props.groups ?? []}
+            query={props.query ?? ""}
+            onClear={() => props.onQueryChange?.("")}
+            onOpen={props.onOpenNote}
+          />
+        ) : collapsed ? (
           <NoteStacks
             groups={props.groups!}
             activeNotebookId={props.notebook.id}
@@ -186,6 +204,9 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
               />
             )}
           </>
+        )}
+        {props.web && props.syncMessage && (
+          <p className="notes-storage-status">{props.syncMessage}</p>
         )}
       </section>
     </main>

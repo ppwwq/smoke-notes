@@ -101,9 +101,7 @@ body:has(> #root .pairing-gate) {
   display: none;
 }
 .workspace-app .stack-paper:not(:first-child) strong {
-  flex-shrink: 0;
-  font-size: 11px;
-  line-height: 1.2;
+  visibility: hidden;
 }
 .workspace-app .stack-empty {
   display: flex;

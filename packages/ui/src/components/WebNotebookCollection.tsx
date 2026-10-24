@@ -1,10 +1,15 @@
 import { useRef, useState, type RefObject } from "react";
-import { ArrowUpRight, ChevronDown, Layers, Plus } from "../icons";
+import { ChevronDown, Layers, X } from "../icons";
 import {
   RecordValidationError,
   TEXT_LIMITS,
   type Notebook,
 } from "@smoke-notes/core";
+import { SortableStack } from "./SortableStack";
+import { useNotebookTones } from "./useNotebookTones";
+import { RecordActions } from "./RecordActions";
+import { WebDialog } from "./glass/WebDialog";
+import "./notebook-collection.css";
 
 interface Props {
   notebooks: Notebook[];
@@ -13,10 +18,14 @@ interface Props {
   onManage?(): void;
   manageRef?: RefObject<HTMLButtonElement | null>;
   onSelect(id: string): void;
-  onCreate(name: string): Promise<void>;
+  onRename(id: string, name: string): Promise<void>;
+  onTrash(id: string): Promise<void>;
+  onMove(
+    id: string,
+    previous: number | null,
+    next: number | null,
+  ): Promise<void>;
 }
-
-/** A web presentation of the same notebooks, with no separate data or ordering. */
 export function WebNotebookCollection({
   notebooks,
   expanded: controlledExpanded,
@@ -24,90 +33,27 @@ export function WebNotebookCollection({
   onManage,
   manageRef,
   onSelect,
-  onCreate,
+  onRename,
+  onTrash,
+  onMove,
 }: Props) {
   const [localExpanded, setLocalExpanded] = useState(false);
   const expanded = controlledExpanded ?? localExpanded;
-  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Notebook | null>(null);
   const [name, setName] = useState("");
-  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const pending = useRef(false);
-  const revision = useRef(0);
-  async function create() {
-    if (pending.current || !name.trim()) return;
-    pending.current = true;
-    const submittedRevision = revision.current;
-    setBusy(true);
-    setError("");
-    try {
-      await onCreate(name);
-      if (revision.current === submittedRevision) {
-        setName("");
-        setAdding(false);
-      }
-    } catch (reason) {
-      setError(
-        reason instanceof RecordValidationError
-          ? reason.message
-          : "新建失败，请重试",
-      );
-    } finally {
-      pending.current = false;
-      setBusy(false);
-    }
-  }
+  const tones = useNotebookTones(notebooks);
   return (
     <main className="web-notebook-collection">
       <header className="notes-board-header">
         <div>
           <p className="eyebrow">A PLACE FOR EVERYTHING</p>
           <h1>便签本</h1>
-          <span>{notebooks.length} 个空间，装下不同的日常</span>
+          <span>{notebooks.length} 个便签本 · 在这里分类、命名与整理</span>
         </div>
-        <button
-          type="button"
-          className="create-note-button"
-          aria-label="建立新便签本"
-          onClick={() => setAdding((value) => !value)}
-          aria-expanded={adding}
-        >
-          <Plus size={19} />
-          <span>新建便签本</span>
-        </button>
       </header>
-      {adding && (
-        <form
-          className="collection-create"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void create();
-          }}
-        >
-          <input
-            autoFocus
-            aria-label="新便签本名称"
-            maxLength={TEXT_LIMITS.notebookName}
-            placeholder="给这个空间起个名字"
-            value={name}
-            onChange={(event) => {
-              revision.current++;
-              setName(event.target.value);
-            }}
-            onKeyDown={(event) => {
-              if (
-                event.key === "Enter" &&
-                (event.nativeEvent.isComposing || event.keyCode === 229)
-              )
-                event.preventDefault();
-            }}
-          />
-          <button type="submit" disabled={busy}>
-            {busy ? "创建中…" : "创建"}
-          </button>
-        </form>
-      )}
-      {error && <p role="alert">{error}</p>}
       <div className="web-section-heading">
         <h2>我的收藏</h2>
         {onManage && (
@@ -135,40 +81,138 @@ export function WebNotebookCollection({
           <ChevronDown size={14} />
         </button>
       </div>
-      <div
-        id="notebook-collection-cards"
-        className={`collection-cards${expanded ? " expanded" : ""}`}
-      >
-        {notebooks.map((notebook, index) => (
-          <button
-            type="button"
-            className={`collection-card collection-tone-${index % 4}`}
-            key={notebook.id}
-            aria-label={`进入便签本：${notebook.name}`}
-            onClick={() => onSelect(notebook.id)}
-          >
-            <span className="collection-card-top">
-              <span>NOTEBOOK / {String(index + 1).padStart(2, "0")}</span>
-              <ArrowUpRight size={21} />
-            </span>
-            <strong>{notebook.name}</strong>
-            <span className="collection-card-bottom">
-              打开这个空间<span>记录 · 整理 · 继续</span>
-            </span>
-          </button>
-        ))}
+      <p className="collection-hint">点击进入 · 长按任意位置拖动排序</p>
+      <div id="notebook-collection-cards">
+        <SortableStack
+          wholeCard
+          layout="stack"
+          itemKind="便签本"
+          items={notebooks}
+          label={(book) => book.name}
+          onMove={onMove}
+          renderDragOverlay={(notebook, index) => (
+            <div className="collection-drag-overlay" aria-hidden="true" inert>
+              <div
+                className={`collection-card collection-tone-${tones[notebook.id]}`}
+              >
+                <span className="collection-card-top">
+                  <span>NOTEBOOK / {String(index + 1).padStart(2, "0")}</span>
+                </span>
+                <strong>{notebook.name}</strong>
+                <span className="collection-card-bottom">
+                  打开这个空间<span>记录 · 整理 · 继续</span>
+                </span>
+              </div>
+            </div>
+          )}
+          className={`collection-cards${expanded ? " expanded" : ""}`}
+          renderItem={(notebook, index) => (
+            <div className="collection-card-shell">
+              <button
+                type="button"
+                data-sortable-open
+                className={`collection-card collection-tone-${tones[notebook.id]}`}
+                aria-label={`进入便签本：${notebook.name}`}
+                onClick={() => onSelect(notebook.id)}
+              >
+                <span className="collection-card-top">
+                  <span>NOTEBOOK / {String(index + 1).padStart(2, "0")}</span>
+                </span>
+                <strong>{notebook.name}</strong>
+                <span className="collection-card-bottom">
+                  打开这个空间<span>记录 · 整理 · 继续</span>
+                </span>
+              </button>
+              <RecordActions
+                kind="便签本"
+                name={notebook.name}
+                renameLabel="编辑便签本"
+                onRename={() => {
+                  setName(notebook.name);
+                  setEditing(notebook);
+                  setError("");
+                }}
+                onTrash={() => onTrash(notebook.id)}
+              />
+            </div>
+          )}
+        />
       </div>
       {!notebooks.length && (
         <div className="collection-empty">
           <Layers size={32} />
           <h2>给想法一个落脚处。</h2>
-          <p>工作、生活、灵感，都可以拥有自己的便签本。</p>
-          <button type="button" onClick={() => setAdding(true)}>
-            建立第一个便签本 <Plus size={16} />
-          </button>
+          <p>点击右下角「新增」，建立你的第一个便签本。</p>
         </div>
       )}
-      <p className="collection-hint">便签本里的内容会一直保留在原处。</p>
+      {editing && (
+        <WebDialog
+          web
+          kind="actions"
+          label="编辑便签本"
+          onClose={() => {
+            if (!pending.current) setEditing(null);
+          }}
+        >
+          <header>
+            <h2>编辑便签本</h2>
+            <button
+              type="button"
+              aria-label="关闭编辑便签本"
+              disabled={busy}
+              onClick={() => setEditing(null)}
+            >
+              <X size={20} />
+            </button>
+          </header>
+          <form
+            className="planner-fields"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (pending.current || !name.trim()) return;
+              pending.current = true;
+              setBusy(true);
+              setError("");
+              try {
+                await onRename(editing.id, name);
+                setEditing(null);
+              } catch (reason) {
+                setError(
+                  reason instanceof RecordValidationError
+                    ? reason.message
+                    : "保存失败，名称已保留，请重试。",
+                );
+              } finally {
+                pending.current = false;
+                setBusy(false);
+              }
+            }}
+          >
+            <label>
+              名称
+              <input
+                autoFocus
+                aria-label="便签本名称"
+                value={name}
+                disabled={busy}
+                maxLength={TEXT_LIMITS.notebookName}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (
+                    e.key === "Enter" &&
+                    (e.nativeEvent.isComposing || e.keyCode === 229)
+                  )
+                    e.preventDefault();
+                }}
+              />
+            </label>
+            <button className="planner-save" disabled={busy || !name.trim()}>
+              {busy ? "保存中…" : "保存"}
+            </button>
+            {error && <p role="alert">{error}</p>}
+          </form>
+        </WebDialog>
+      )}
     </main>
   );
 }

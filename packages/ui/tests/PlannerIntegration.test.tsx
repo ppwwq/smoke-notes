@@ -1,3 +1,4 @@
+import userEvent from "@testing-library/user-event";
 import {
   act,
   cleanup,
@@ -65,7 +66,12 @@ it("catches up on focus after Hong Kong midnight and retains the prior completed
       todos.find((todo) => getTodoDate(todo) === "2026-10-21")?.completed,
     ).toBe(false);
   });
-  await screen.findByRole("textbox", { name: "编辑待办：每天读书" });
+  fireEvent.click(
+    await screen.findByRole("button", { name: "编辑待办：每天读书" }),
+  );
+  expect(
+    await screen.findByRole("textbox", { name: "每日待办内容" }),
+  ).toHaveValue("每天读书");
 });
 
 it("persists the 04:00 setting and shows the real local-only sync state", async () => {
@@ -75,9 +81,12 @@ it("persists the 04:00 setting and shows the real local-only sync state", async 
   });
   fireEvent.click(screen.getByRole("button", { name: "打开设置" }));
   fireEvent.click(screen.getByText("每日待办", { selector: "summary" }));
-  fireEvent.change(screen.getByRole("combobox", { name: "待办换日时间" }), {
-    target: { value: "4" },
-  });
+  await userEvent
+    .setup()
+    .click(screen.getByRole("combobox", { name: "待办换日时间" }));
+  await userEvent
+    .setup()
+    .click(await screen.findByRole("option", { name: "04:00" }));
   await waitFor(async () =>
     expect((await repository.getTodoSettings()).dayBoundaryHour).toBe(4),
   );
@@ -88,6 +97,7 @@ it("persists the 04:00 setting and shows the real local-only sync state", async 
   );
   fireEvent.click(screen.getByRole("button", { name: "关闭设置" }));
   fireEvent.click(screen.getByRole("button", { name: "待办" }));
+  await screen.findByRole("heading", { name: "今天，慢慢完成" });
   expect(
     await screen.findByText("已保存在本机 · 未启用云端同步"),
   ).toBeVisible();

@@ -1,3 +1,5 @@
+import { plannerTodoValue, plannerTypeVisible } from "@smoke-notes/core";
+import { calendarRange } from "./calendar-dates";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   RecordValidationError,
@@ -11,6 +13,7 @@ import {
   getTodoDate,
   getTodoRule,
   getTodoStatus,
+  projectTodoRange,
 } from "@smoke-notes/core";
 import { SlidersHorizontal, Repeat2, Sun, Plus } from "lucide-react";
 import { RepeatFields, type RepeatChoice } from "./TodoRepeatFields";
@@ -18,11 +21,16 @@ import { SortableStack } from "./SortableStack";
 import { RecordActions } from "./RecordActions";
 import { SegmentedControl } from "./SegmentedControl";
 import { PlannerDatePicker } from "./PlannerDatePicker";
+import {
+  CalendarTodoView,
+  type CalendarEventActions,
+} from "./CalendarTodoView";
 import SpringCheck from "./spring-check/SpringCheck";
+import { CalendarTodoEditor } from "./CalendarTodoEditor";
 
 export type TodoFilter = "all" | "open" | "done";
 
-interface TodoWorkspaceProps {
+interface TodoWorkspaceProps extends CalendarEventActions {
   web?: boolean;
   filter?: TodoFilter;
   onFilterChange?(filter: TodoFilter): void;
@@ -30,7 +38,10 @@ interface TodoWorkspaceProps {
   today?: string;
   syncMessage?: string;
   series?: Todo[];
-  onCreateRequest?(): void;
+  onCreateRequest?(date?: string): void;
+  deletedTodos?: Todo[];
+  onPrepareTodo?(todo: Todo): Promise<void>;
+  onCalendarDateChange?(date: string | null): void;
   showAllRequest?: number;
   onSetStatus?: (id: string, status: TodoStatus) => Promise<void>;
   onReschedule?: (id: string, date: string) => Promise<void>;
@@ -122,7 +133,7 @@ function TodoTextInput({
   );
 }
 
-type TodoView = "today" | "all" | "history";
+type TodoView = "today" | "all" | "calendar";
 function repeatLabel(repeat?: TodoRepeat) {
   const weekdayLabels = ["日", "一", "二", "三", "四", "五", "六"];
   if (!repeat) return "一次性";
@@ -237,11 +248,92 @@ function SeriesEditor({
 }
 
 export function TodoWorkspace(props: TodoWorkspaceProps) {
+  const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
   const today = props.today ?? getTodoDay();
   const [view, setView] = useState<TodoView>(
     props.showAllRequest ? "all" : "today",
   );
-  const [historyDate, setHistoryDate] = useState(addTodoDays(today, -1));
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [calendarMonth, setCalendarMonth] = useState(`${today.slice(0, 7)}-01`);
+  const calendarRecords = useMemo(
+    () => [
+      ...props.todos,
+      ...(props.series ?? []),
+      ...(props.deletedTodos ?? []),
+    ],
+    [props.todos, props.series, props.deletedTodos],
+  );
+  const visibleCalendarRecords = useMemo(() => {
+    if (props.preferences?.showReminders === false) return [];
+    return calendarRecords;
+  }, [calendarRecords, props.preferences?.showReminders]);
+  const calendarTodos = useMemo(() => {
+    const { from, to } = calendarRange(
+      calendarMonth,
+      props.preferences?.weekStartsOn ?? 1,
+    );
+    const selectedFrom = addTodoDays(selectedDate, -6),
+      selectedTo = addTodoDays(selectedDate, 6);
+    return projectTodoRange(
+      visibleCalendarRecords,
+      from < selectedFrom ? from : selectedFrom,
+      to > selectedTo ? to : selectedTo,
+      today,
+    ).filter(
+      (todo) =>
+        getTodoStatus(todo) !== "skipped" &&
+        plannerTypeVisible(
+          plannerTodoValue(props.todoTypeIds, todo),
+          props.preferences,
+        ),
+    );
+  }, [
+    visibleCalendarRecords,
+    calendarMonth,
+    selectedDate,
+    today,
+    props.todoTypeIds,
+    props.preferences,
+  ]);
+  const selectedTodos = useMemo(
+    () =>
+      projectTodoRange(
+        visibleCalendarRecords,
+        selectedDate,
+        selectedDate,
+        today,
+      ).filter(
+        (todo) =>
+          getTodoStatus(todo) !== "skipped" &&
+          plannerTypeVisible(
+            plannerTodoValue(props.todoTypeIds, todo),
+            props.preferences,
+          ),
+      ),
+    [
+      visibleCalendarRecords,
+      selectedDate,
+      today,
+      props.todoTypeIds,
+      props.preferences,
+    ],
+  );
+  const { onCalendarDateChange } = props;
+  useEffect(() => {
+    onCalendarDateChange?.(view === "calendar" ? selectedDate : null);
+  }, [view, selectedDate, onCalendarDateChange]);
+  function prepareTodo(id: string) {
+    const todo = [...selectedTodos, ...calendarTodos, ...props.todos].find(
+      (item) => item.id === id,
+    );
+    if (
+      todo?.planning?.kind === "occurrence" &&
+      todo.planning.generated &&
+      getTodoDate(todo) > today
+    )
+      return props.onPrepareTodo?.(todo);
+  }
+
   const [arranging, setArranging] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [lastShowAllRequest, setLastShowAllRequest] = useState(
@@ -283,17 +375,19 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
   ).length;
   const displayTodos = useMemo(() => {
     const moving = new Map(leaving.map((todo) => [todo.id, todo]));
-    const combined = props.todos.map((todo) => moving.get(todo.id) ?? todo);
+    const combined = (view === "calendar" ? selectedTodos : props.todos).map(
+      (todo) => moving.get(todo.id) ?? todo,
+    );
     for (const todo of leaving)
       if (!combined.some((item) => item.id === todo.id)) combined.push(todo);
     return combined;
-  }, [props.todos, leaving]);
+  }, [props.todos, leaving, view, selectedTodos]);
   const scoped = displayTodos.filter((todo) =>
-    view === "today"
-      ? todoDate(todo) === today
-      : view === "history"
-        ? todoDate(todo) === historyDate
-        : todo.planning?.kind !== "occurrence" || todoDate(todo) >= today,
+    view === "calendar"
+      ? todoDate(todo) === selectedDate
+      : view === "today"
+        ? todoDate(todo) === today
+        : true,
   );
   const visible = scoped.filter(
     (todo) =>
@@ -315,12 +409,18 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
     setBusyIds((current) => [...current, id]);
     setActionError("");
     try {
+      const preparation = prepareTodo(id);
+      if (preparation) await preparation;
       await action();
       setFeedback(message);
       return true;
-    } catch {
+    } catch (error) {
       setErrorId(id);
-      setActionError("更新失败，请重试。内容已保留。");
+      setActionError(
+        error instanceof RecordValidationError
+          ? error.message
+          : "更新失败，请重试。内容已保留。",
+      );
       return false;
     } finally {
       pending.current.delete(id);
@@ -349,7 +449,7 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
       status === "completed"
         ? "做得好，又完成一件。"
         : status === "skipped"
-          ? "今天已跳过，记录已保留。"
+          ? "这次已跳过，记录已保留。"
           : "已放回待办清单。",
     );
     if (success) setUndo({ id: todo.id, status: previous, text: todo.text });
@@ -373,6 +473,11 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
     const busy = busyIds.includes(todo.id);
     const recurring = todo.planning?.kind === "occurrence";
     const isLeaving = leaving.some((item) => item.id === todo.id);
+    const typeId = Object.hasOwn(props.todoTypeIds ?? {}, todo.id)
+      ? props.todoTypeIds?.[todo.id]
+      : props.todoTypeIds?.[todo.planning?.seriesId ?? ""];
+    const type = props.types?.find((t) => t.id === typeId);
+    const time = plannerTodoValue(props.todoTimes, todo);
     return (
       <article
         className={`todo-row planner-todo-row${status === "completed" ? " completed" : ""}${isLeaving ? " is-completing" : ""}`}
@@ -389,7 +494,26 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
             )
           }
           editableLabel
-          label={<TodoTextInput todo={todo} onUpdate={props.onUpdate} />}
+          label={
+            props.onSavePlannerTodo ? (
+              <button
+                type="button"
+                className="planner-todo-open"
+                aria-label={`编辑待办：${todo.text}`}
+                onClick={() => setEditingTodo(todo)}
+              >
+                {todo.text}
+              </button>
+            ) : (
+              <TodoTextInput
+                todo={todo}
+                onUpdate={async (id, text) => {
+                  await prepareTodo(id);
+                  await props.onUpdate(id, text);
+                }}
+              />
+            )
+          }
           color="var(--ink, #2f2b27)"
           fillColor="var(--ink, #2f2b27)"
           checkColor="var(--surface, #fbfaf8)"
@@ -402,12 +526,18 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
         />
         <div className="planner-todo-copy">
           <div className="planner-todo-meta">
+            {time && <span>{time}</span>}
             {view === "all" && (
               <time dateTime={todoDate(todo)}>
                 {todoDate(todo) === today ? "今天" : todoDate(todo)}
               </time>
             )}
             {recurring && <span>重复事项</span>}
+            {type && (
+              <span className={`planner-type-badge event-${type.color}`}>
+                {type.name}
+              </span>
+            )}
             {status === "skipped" && <span>已跳过</span>}
           </div>
           {todo.planning?.notes && (
@@ -417,7 +547,14 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
         <RecordActions
           name={todo.text}
           kind="待办"
-          onTrash={() => props.onTrash(todo.id)}
+          onRename={
+            props.onSavePlannerTodo ? () => setEditingTodo(todo) : undefined
+          }
+          renameLabel="编辑待办"
+          onTrash={async () => {
+            await prepareTodo(todo.id);
+            await props.onTrash(todo.id);
+          }}
         >
           {errorId === todo.id && actionError && (
             <p className="action-error" role="alert">
@@ -440,7 +577,7 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
                             )
                           }
                         >
-                          {status === "skipped" ? "恢复今天" : "跳过今天"}
+                          {status === "skipped" ? "恢复这一次" : "跳过这一次"}
                         </button>
                       )
                     : props.onReschedule && (
@@ -507,7 +644,10 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
       <SortableStack
         items={items}
         label={(todo) => todo.text}
-        onMove={props.onMove}
+        onMove={async (id, previous, next) => {
+          await prepareTodo(id);
+          await props.onMove(id, previous, next);
+        }}
         className="todo-stack"
         renderItem={(todo) => renderTodo(todo, past)}
       />
@@ -516,16 +656,25 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
 
   return (
     <main
-      className={`todo-workspace todo-planner${props.web && arranging ? " arranging" : ""}`}
+      className={`todo-workspace todo-planner${view === "calendar" ? " calendar-view" : ""}${props.web && arranging ? " arranging" : ""}`}
     >
+      {editingTodo && props.onSavePlannerTodo && (
+        <CalendarTodoEditor
+          {...props}
+          todo={editingTodo}
+          date={todoDate(editingTodo)}
+          today={today}
+          onClose={() => setEditingTodo(null)}
+        />
+      )}
       <header className="todo-hero">
         <div>
           <p className="eyebrow">ONE THING AT A TIME</p>
           <h1>
-            {view === "today"
-              ? "今天，慢慢完成"
-              : view === "history"
-                ? "回看每一天"
+            {view === "calendar"
+              ? "日历"
+              : view === "today"
+                ? "今天，慢慢完成"
                 : "所有安排"}
           </h1>
           <p className="planner-date">
@@ -567,8 +716,8 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
           onChange={setView}
           options={[
             { value: "today", label: "今天" },
+            { value: "calendar", label: "日历" },
             { value: "all", label: "全部" },
-            { value: "history", label: "历史" },
           ]}
         />
         <button
@@ -581,35 +730,6 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
           {filter === "all" ? "筛选" : filter === "open" ? "未完成" : "已完成"}
         </button>
       </div>
-      {view === "history" && (
-        <section className="planner-history-picker" aria-label="按日查看历史">
-          <button
-            type="button"
-            aria-label="前一天"
-            onClick={() => setHistoryDate(addTodoDays(historyDate, -1))}
-          >
-            ‹
-          </button>
-          <label>
-            记录日期
-            <PlannerDatePicker
-              label="历史日期"
-              today={today}
-              max={today}
-              value={historyDate}
-              onChange={setHistoryDate}
-            />
-          </label>
-          <button
-            type="button"
-            aria-label="后一天"
-            disabled={historyDate >= today}
-            onClick={() => setHistoryDate(addTodoDays(historyDate, 1))}
-          >
-            ›
-          </button>
-        </section>
-      )}
       <div className="filter-bar planner-filter-bar" hidden={!filtersOpen}>
         <SegmentedControl<TodoFilter>
           label="待办筛选"
@@ -671,20 +791,62 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
         )}
       </div>
       <div className="todo-list-scroll">
-        {visible.length > 0 && (
-          <section
-            className="planner-open"
-            aria-label={view === "history" ? "当日事项" : "待办事项"}
+        {view === "calendar" && (
+          <CalendarTodoView
+            types={props.types}
+            todoTypeIds={props.todoTypeIds}
+            todoTimes={props.todoTimes}
+            preferences={props.preferences}
+            onSavePreferences={props.onSavePreferences}
+            onToggleTodo={(todo) =>
+              changeStatus(
+                todo,
+                getTodoStatus(todo) === "completed" ? "open" : "completed",
+              )
+            }
+            busyTodoIds={busyIds}
+            onSaveType={props.onSaveType}
+            onDeleteType={props.onDeleteType}
+            onSavePlannerTodo={props.onSavePlannerTodo}
+            onMovePlannerTodo={props.onMovePlannerTodo}
+            events={props.events}
+            onImportPlan={props.onImportPlan}
+            onSaveEvent={props.onSaveEvent}
+            onDeleteEvent={props.onDeleteEvent}
+            onUndoEvent={props.onUndoEvent}
+            canUndoEvent={props.canUndoEvent}
+            month={calendarMonth}
+            date={selectedDate}
+            today={today}
+            todos={calendarTodos}
+            todoRecords={visibleCalendarRecords}
+            selectedTodos={selectedTodos}
+            onMonthChange={setCalendarMonth}
+            onDateChange={setSelectedDate}
+            onCreate={
+              props.onCreateRequest
+                ? () => props.onCreateRequest?.(selectedDate)
+                : undefined
+            }
           >
+            {visible.length ? (
+              list(visible)
+            ) : (
+              <p className="calendar-empty">
+                {filter === "all"
+                  ? "留一点空白，也可以安排一件小事。"
+                  : "这个筛选下没有事项。"}
+              </p>
+            )}
+          </CalendarTodoView>
+        )}
+        {view !== "calendar" && visible.length > 0 && (
+          <section className="planner-open" aria-label="待办事项">
             <h2>
-              {view === "history"
-                ? "当日事项"
-                : view === "today"
-                  ? "今天的事"
-                  : "全部事项"}{" "}
+              {view === "today" ? "今天的事" : "全部事项"}{" "}
               <span>· {visible.length}</span>
             </h2>
-            {list(visible, view === "history")}
+            {list(visible)}
           </section>
         )}
         {view === "today" && filter !== "done" && overdue.length > 0 && (
@@ -695,28 +857,24 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
             <div>{list(overdue)}</div>
           </details>
         )}
-        {visible.length === 0 && (
+        {view !== "calendar" && visible.length === 0 && (
           <div className="todo-empty">
             <Sun size={28} aria-hidden="true" />
             <p>
-              {view === "history"
-                ? "这一天没有记录。"
-                : filter !== "all"
-                  ? "这个筛选下没有事项。"
-                  : "留一点空白，给今天的小计划。"}
+              {filter !== "all"
+                ? "这个筛选下没有事项。"
+                : "留一点空白，给今天的小计划。"}
             </p>
-            {view !== "history" &&
-              filter === "all" &&
-              props.onCreateRequest && (
-                <button
-                  type="button"
-                  className="planner-empty-add"
-                  onClick={props.onCreateRequest}
-                >
-                  <Plus size={16} />
-                  添加一件事
-                </button>
-              )}
+            {filter === "all" && props.onCreateRequest && (
+              <button
+                type="button"
+                className="planner-empty-add"
+                onClick={() => props.onCreateRequest?.()}
+              >
+                <Plus size={16} />
+                添加一件事
+              </button>
+            )}
           </div>
         )}
         {view === "today" && openToday === 0 && currentTodos.length > 0 && (
@@ -724,7 +882,7 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
             今天的事项已安排妥当。休息一下，也很好。
           </p>
         )}
-        {(props.series?.length ?? 0) > 0 && view !== "history" && (
+        {(props.series?.length ?? 0) > 0 && (
           <details
             className="planner-series planner-disclosure"
             aria-label="重复计划"

@@ -819,12 +819,12 @@ export const RichNoteEditor = forwardRef<
                 <span>
                   {
                     {
-                      amber: "暖沙",
+                      amber: progressive ? "纸白" : "暖沙",
                       rose: "浅玫",
-                      sage: "鼠尾草",
+                      sage: progressive ? "青柠" : "鼠尾草",
                       sky: "晴空",
-                      violet: "淡紫",
-                      graphite: "雾灰",
+                      violet: progressive ? "鸢尾紫" : "淡紫",
+                      graphite: progressive ? "墨黑" : "雾灰",
                       lavender: "薰衣草",
                       mauve: "藕粉",
                       mist: "雾蓝",

@@ -9,19 +9,27 @@
   --surface: #fffaf2;
   --surface-soft: #e9e1d4;
   --ink: #282722;
-  --muted: #716b60;
+  --muted: #605a50;
   --line: #ded6c8;
 }
 .workspace-app .todo-planner {
-  /* Palette 01 controls, paired with palette 02's completion card. */
-  --segment-track: #e9e1d4;
-  --segment-thumb: #34332e;
-  --segment-text: #645e53;
-  --segment-active-text: #fff9ef;
-  --completion-surface: #f3eadc;
-  --completion-ink: #44372c;
-  --completion-muted: #786652;
-  --completion-accent: #8c6546;
+  /* Share the notebook paper palette across planner controls and progress. */
+  --segment-track: color-mix(
+    in srgb,
+    var(--paper-violet, #c4bbfe) 15%,
+    var(--surface)
+  );
+  --segment-thumb: var(--paper-violet, #c4bbfe);
+  --segment-text: var(--muted);
+  --segment-active-text: var(--paper-black, #111);
+  --completion-surface: color-mix(
+    in srgb,
+    var(--paper-violet, #c4bbfe) 22%,
+    var(--surface)
+  );
+  --completion-ink: var(--paper-black, #111);
+  --completion-muted: var(--muted);
+  --completion-accent: var(--paper-lime, #d4e73e);
 }
 .workspace-app .app-segments.rubber-segment,
 .workspace-app[data-web-background] .web-dock.rubber-segment {
@@ -36,7 +44,7 @@
   isolation: isolate;
 }
 .workspace-app .app-segments.rubber-segment {
-  --rs-h: 50px !important;
+  --rs-h: 54px !important;
   width: 100%;
 }
 .workspace-app[data-web-background] .web-dock.rubber-segment {
@@ -126,7 +134,10 @@
   outline-color: var(--segment-thumb);
   outline-offset: 3px;
 }
-.workspace-app .todo-planner .planner-todo-meta > span {
+.workspace-app
+  .todo-planner
+  .planner-todo-meta
+  > span:not(.planner-type-badge) {
   background: var(--surface-soft);
   color: var(--muted);
 }

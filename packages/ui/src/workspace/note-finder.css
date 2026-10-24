@@ -1,0 +1,283 @@
+/* Extend the existing paper workspace; motion remains owned by its components. */
+.workspace-app .note-finder-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 20px;
+  flex-shrink: 0;
+}
+.workspace-app .note-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 4px 0 16px;
+  border: 1px solid var(--line-strong, #b8afa0);
+  border-radius: 18px;
+  color: var(--muted);
+  background: var(--surface);
+}
+.workspace-app .note-search:focus-within {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+.workspace-app .note-search input {
+  min-width: 0;
+  width: 100%;
+  height: 46px;
+  border: 0;
+  padding: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+.workspace-app .note-search input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+.workspace-app .note-search input::-webkit-search-cancel-button {
+  display: none;
+}
+.workspace-app .note-search button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--ink);
+}
+.workspace-app .note-finder-count {
+  margin: 4px 0 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.workspace-app .note-result-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.workspace-app .note-result {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 18px 22px;
+  border: 1px solid #28272214;
+  border-radius: 18px;
+  background: var(--card-color, var(--surface));
+  color: #282722;
+  text-align: left;
+  font: inherit;
+}
+.workspace-app .note-result:hover {
+  border-color: #615a4c;
+}
+.workspace-app .note-result-copy {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.workspace-app .note-result-copy strong {
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.workspace-app .note-result-copy > span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.workspace-app .note-result-copy small {
+  color: #504b43;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.workspace-app .note-result-end {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.workspace-app .note-result-end time {
+  font-size: 12px;
+  color: #504b43;
+}
+.workspace-app .note-search-empty {
+  padding: 36px 12px;
+  text-align: center;
+}
+.workspace-app .note-search-empty h2 {
+  font-size: 20px;
+}
+.workspace-app .note-search-empty p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.8;
+}
+.workspace-app .note-search-empty button {
+  min-height: 44px;
+  padding: 10px 22px;
+  border: 0;
+  border-radius: 22px;
+  background: var(--ink);
+  color: var(--canvas);
+}
+.workspace-app .notes-storage-status {
+  margin: 24px 8px 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.workspace-app .family-popup .quick-note-label {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.workspace-app .family-popup .quick-note-label textarea {
+  width: 100%;
+  min-height: 100px;
+  resize: vertical;
+  padding: 14px;
+  border: 1px solid var(--line-strong, #b8afa0);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.6;
+}
+.workspace-app .quick-note-label textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+.workspace-app .create-destination {
+  margin: 8px 0 12px;
+}
+.workspace-app .create-destination summary {
+  padding: 12px 0;
+  min-height: 44px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.workspace-app .create-destination summary span {
+  margin-left: 10px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.workspace-app .create-destination .create-notebook-field {
+  margin: 8px 0 14px;
+}
+.workspace-app[data-web-background] .settings-entry small {
+  color: #504b43;
+}
+.workspace-app[data-web-background] .settings-entry:first-child small {
+  color: #4c4264;
+}
+.workspace-app[data-web-background]
+  :is(.settings-panel, .appearance-panel)
+  > header
+  > button,
+.workspace-app[data-web-background] .settings-back,
+.workspace-app .pairing-close {
+  min-width: 44px;
+  min-height: 44px;
+}
+.workspace-app
+  :is(
+    .note-result,
+    .note-search button,
+    .create-destination summary,
+    .quick-note-label textarea
+  ):focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+.pairing-gate-card .pairing-local-hint {
+  font-size: 12px;
+  margin: 22px 0 0;
+}
+.pairing-gate-card > .pairing-skip {
+  background: transparent;
+  color: #302647;
+  border: 1px solid #776997;
+}
+.pairing-gate-card :is(button, input):focus-visible {
+  outline: 3px solid #302647;
+  outline-offset: 4px;
+}
+@media (min-width: 1100px) {
+  .workspace-app .note-result-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workspace-app .note-result {
+    height: 100%;
+  }
+}
+@media (max-width: 760px) {
+  .workspace-app .note-finder-toolbar {
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .workspace-app .note-search {
+    flex-basis: 100%;
+  }
+  .workspace-app .note-search input {
+    font-size: 16px;
+  }
+  .workspace-app .note-stack-papers {
+    height: 164px;
+    margin-bottom: 12px;
+  }
+  .workspace-app .stack-paper {
+    padding: 18px;
+    gap: 8px;
+  }
+  .workspace-app .stack-paper > span {
+    -webkit-line-clamp: 2;
+  }
+  .workspace-app .stack-paper small {
+    display: none;
+  }
+  .workspace-app .stack-empty {
+    height: 132px;
+  }
+  .workspace-app .note-stacks {
+    gap: 28px;
+  }
+  .workspace-app .stack-context {
+    display: none;
+  }
+  .workspace-app .note-result {
+    padding: 16px;
+    gap: 10px;
+  }
+  .workspace-app .note-result-end time {
+    font-size: 11px;
+  }
+}
+@media (max-height: 540px) and (max-width: 760px) {
+  .workspace-app .notes-board-header {
+    padding-bottom: 10px;
+  }
+  .workspace-app .stack-context {
+    display: none;
+  }
+}

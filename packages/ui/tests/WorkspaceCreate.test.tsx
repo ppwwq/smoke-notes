@@ -22,7 +22,10 @@ const book: Notebook = {
   deletedAt: null,
   updatedAt: "2026-10-23T00:00:00Z",
 };
-function setup(defaultMode: "note" | "todo" = "todo", notebooks = [book]) {
+function setup(
+  defaultMode: "note" | "todo" | "notebook" = "todo",
+  notebooks = [book],
+) {
   const callbacks = {
     onCreateNote: vi.fn(async () => {}),
     onCreateNotebook: vi.fn(async () => "new-book"),
@@ -40,6 +43,7 @@ function setup(defaultMode: "note" | "todo" = "todo", notebooks = [book]) {
         onModeChange={setMode}
         defaultMode={defaultMode}
         hidden={false}
+        allowNotebook={defaultMode === "notebook"}
         notebooks={notebooks}
         selectedNotebookId="book-1"
         today="2026-10-23"
@@ -112,9 +116,13 @@ it("creates a checklist note in the chosen notebook without creating a daily tas
     { ...book, id: "book-2", name: "工作" },
   ]);
   fireEvent.click(screen.getByRole("button", { name: "新建便签" }));
-  fireEvent.change(screen.getByRole("combobox", { name: "新便签所属便签本" }), {
-    target: { value: "book-2" },
-  });
+  fireEvent.click(screen.getByText(/保存到「日常」/));
+  await userEvent
+    .setup()
+    .click(screen.getByRole("combobox", { name: "新便签所属便签本" }));
+  await userEvent
+    .setup()
+    .click(await screen.findByRole("option", { name: "工作" }));
   fireEvent.click(screen.getByRole("button", { name: /清单便签/ }));
   await waitFor(() =>
     expect(callbacks.onCreateNote).toHaveBeenCalledExactlyOnceWith(
@@ -124,6 +132,37 @@ it("creates a checklist note in the chosen notebook without creating a daily tas
   );
   expect(callbacks.onCreateTodo).not.toHaveBeenCalled();
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+});
+
+it("keeps a quick note draft after closing and after a failed save, then submits it once", async () => {
+  const callbacks = setup("note");
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "新建便签" }));
+  const input = screen.getByRole("textbox", { name: "快速记录内容" });
+  await waitFor(() => expect(input).toHaveFocus());
+  fireEvent.change(input, { target: { value: "先记下这个想法\n再慢慢整理" } });
+  await user.keyboard("{Escape}");
+  await user.click(screen.getByRole("button", { name: "新建便签" }));
+  expect(screen.getByRole("textbox", { name: "快速记录内容" })).toHaveValue(
+    "先记下这个想法\n再慢慢整理",
+  );
+  callbacks.onCreateNote.mockRejectedValueOnce(new Error("disk"));
+  fireEvent.click(screen.getByRole("button", { name: /保存并继续写/ }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("新建失败");
+  expect(screen.getByRole("textbox", { name: "快速记录内容" })).toHaveValue(
+    "先记下这个想法\n再慢慢整理",
+  );
+  fireEvent.keyDown(input, { key: "Enter", ctrlKey: true, isComposing: true });
+  expect(callbacks.onCreateNote).toHaveBeenCalledTimes(1);
+  fireEvent.keyDown(input, { key: "Enter", ctrlKey: true });
+  fireEvent.keyDown(input, { key: "Enter", ctrlKey: true });
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(callbacks.onCreateNote).toHaveBeenCalledTimes(2);
+  expect(callbacks.onCreateNote).toHaveBeenLastCalledWith(
+    "note",
+    "book-1",
+    "先记下这个想法\n再慢慢整理",
+  );
 });
 
 it("retains failed note creation in the panel for retry", async () => {
@@ -148,5 +187,20 @@ it("can establish the first notebook without leaving the creation flow", async (
     expect(callbacks.onCreateNotebook).toHaveBeenCalledExactlyOnceWith(
       "日常灵感",
     ),
+  );
+});
+
+it("creates notebooks from the shared add panel and retains failed input", async () => {
+  const callbacks = setup("notebook");
+  callbacks.onCreateNotebook.mockRejectedValueOnce(new Error("offline"));
+  fireEvent.click(screen.getByRole("button", { name: "新增" }));
+  const input = screen.getByRole("textbox", { name: "新便签本名称" });
+  fireEvent.change(input, { target: { value: "旅行" } });
+  fireEvent.click(screen.getByRole("button", { name: "建立便签本" }));
+  await screen.findByRole("alert");
+  expect(input).toHaveValue("旅行");
+  fireEvent.click(screen.getByRole("button", { name: "建立便签本" }));
+  await waitFor(() =>
+    expect(callbacks.onCreateNotebook).toHaveBeenCalledTimes(2),
   );
 });

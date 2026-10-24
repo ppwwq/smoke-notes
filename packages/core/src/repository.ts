@@ -1,4 +1,20 @@
+import type { CalendarImportResult } from "./calendar-import";
+import { DEFAULT_CALENDAR_ZONE, validCalendarZone } from "./calendar-timezone";
+import {
+  validateCalendarEvent,
+  CALENDAR_COLORS,
+  calendarRule,
+  type CalendarEvent,
+  type CalendarEventInput,
+} from "./calendar-events";
 import type { Table } from "dexie";
+import {
+  DEFAULT_PLANNER_PREFERENCES,
+  type PlannerPreferences,
+  type PlannerType,
+  type PlannerTodoInput,
+} from "./planner-types";
+import { makeTodoOccurrence } from "./todo-calendar";
 import {
   createConflictCopy,
   isTrashExpired,
@@ -70,6 +86,566 @@ export class LocalRepository {
   ) {
     this.now = context.now ?? (() => new Date());
     this.createId = context.createId ?? (() => crypto.randomUUID());
+  }
+
+  // Calendar events intentionally remain local until a separate sync contract is introduced.
+  async getPlannerPreferences(): Promise<PlannerPreferences> {
+    return (
+      (await this.database.plannerPreferences.get(
+        this.context.workspaceId,
+      )) ?? {
+        ...DEFAULT_PLANNER_PREFERENCES,
+        hiddenTypeIds: [],
+        workspaceId: this.context.workspaceId,
+      }
+    );
+  }
+  async savePlannerPreferences(input: PlannerPreferences): Promise<void> {
+    if (!validCalendarZone(input.timeZone ?? DEFAULT_CALENDAR_ZONE))
+      throw new RecordValidationError("请选择有效时区。");
+    if (
+      ![15, 30, 60, 90, 120].includes(input.defaultDuration) ||
+      ![0, 1, 2, 3, 4, 5, 6].includes(input.weekStartsOn ?? 1) ||
+      typeof (input.showWeekNumbers ?? false) !== "boolean" ||
+      !["compact", "comfortable"].includes(input.monthDensity ?? "compact") ||
+      typeof input.showUnclassified !== "boolean" ||
+      typeof input.showReminders !== "boolean" ||
+      !Array.isArray(input.hiddenTypeIds) ||
+      input.hiddenTypeIds.some((id) => typeof id !== "string")
+    )
+      throw new RecordValidationError("请选择有效的日历设置。");
+    await this.database.transaction(
+      "rw",
+      this.database.plannerPreferences,
+      this.database.plannerTypes,
+      async () => {
+        await this.requirePlannerType(input.defaultTypeId);
+        const types = await this.listPlannerTypes();
+        await this.database.plannerPreferences.put({
+          workspaceId: this.context.workspaceId,
+          hiddenTypeIds: [...new Set(input.hiddenTypeIds)].filter((id) =>
+            types.some((t) => t.id === id),
+          ),
+          showUnclassified: input.showUnclassified,
+          showReminders: input.showReminders,
+          defaultTypeId: input.defaultTypeId ?? null,
+          defaultDuration: input.defaultDuration,
+          timeZone: input.timeZone ?? DEFAULT_CALENDAR_ZONE,
+          weekStartsOn: input.weekStartsOn ?? 1,
+          showWeekNumbers: input.showWeekNumbers ?? false,
+          monthDensity: input.monthDensity ?? "compact",
+        });
+      },
+    );
+  }
+  async listPlannerTypes(): Promise<PlannerType[]> {
+    return this.database.plannerTypes
+      .where("workspaceId")
+      .equals(this.context.workspaceId)
+      .toArray();
+  }
+  async listTodoTypeLinks() {
+    return this.database.todoTypeLinks
+      .where("workspaceId")
+      .equals(this.context.workspaceId)
+      .toArray();
+  }
+  async savePlannerType(
+    name: string,
+    color: PlannerType["color"],
+    id?: string,
+  ): Promise<PlannerType> {
+    name = name.trim();
+    if (!name || name.length > 40)
+      throw new RecordValidationError("类型名称须为 1 至 40 字。");
+    if (!CALENDAR_COLORS.includes(color))
+      throw new RecordValidationError("请选择有效颜色。");
+    return this.database.transaction(
+      "rw",
+      this.database.plannerTypes,
+      async () => {
+        const types = await this.listPlannerTypes();
+        if (id && !types.some((t) => t.id === id))
+          throw new RecordValidationError("类型已不存在，请刷新后重试。");
+        if (
+          types.some(
+            (t) =>
+              t.id !== id &&
+              t.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
+          )
+        )
+          throw new RecordValidationError("已有同名类型，请换一个名称。");
+        const type: PlannerType = {
+          id: id ?? this.createId(),
+          workspaceId: this.context.workspaceId,
+          name,
+          color,
+        };
+        await this.database.plannerTypes.put(type);
+        return type;
+      },
+    );
+  }
+  async deletePlannerType(id: string): Promise<void> {
+    await this.database.transaction(
+      "rw",
+      this.database.plannerTypes,
+      this.database.todoTypeLinks,
+      this.database.calendarEvents,
+      this.database.plannerPreferences,
+      async () => {
+        const type = await this.database.plannerTypes.get(id);
+        if (!type || type.workspaceId !== this.context.workspaceId)
+          throw new RecordValidationError("类型已不存在。");
+        await this.database.plannerTypes.delete(id);
+        const preferences = await this.getPlannerPreferences();
+        await this.database.plannerPreferences.put({
+          ...preferences,
+          hiddenTypeIds: preferences.hiddenTypeIds.filter(
+            (value) => value !== id,
+          ),
+          defaultTypeId:
+            preferences.defaultTypeId === id ? null : preferences.defaultTypeId,
+        });
+        await this.database.todoTypeLinks
+          .where("workspaceId")
+          .equals(this.context.workspaceId)
+          .filter((link) => link.typeId === id)
+          .modify({ typeId: null });
+        await this.database.calendarEvents
+          .where("workspaceId")
+          .equals(this.context.workspaceId)
+          .modify((event) => {
+            if (event.typeId === id) event.typeId = null;
+            for (const value of Object.values(event.exceptions))
+              if (value?.typeId === id) value.typeId = null;
+          });
+      },
+    );
+  }
+  private async requirePlannerType(typeId?: string | null) {
+    if (!typeId) return;
+    const type = await this.database.plannerTypes.get(typeId);
+    if (!type || type.workspaceId !== this.context.workspaceId)
+      throw new RecordValidationError("所选类型已不存在，请重新选择。");
+  }
+  async savePlannerTodo(input: PlannerTodoInput, target?: Todo): Promise<Todo> {
+    if (
+      !input.text.trim() ||
+      input.text.length > TEXT_LIMITS.todoText ||
+      input.notes.length > 10000
+    )
+      throw new RecordValidationError(
+        "请填写有效的待办内容（不超过 500 字）及备注。",
+      );
+    if (input.time != null && !/^([01]\d|2[0-3]):[0-5]\d$/.test(input.time))
+      throw new RecordValidationError("请选择有效的待办时间。");
+    if (!isTodoDate(input.date))
+      throw new RecordValidationError("请选择有效日期。");
+    return this.database.transaction(
+      "rw",
+      [
+        this.database.todos,
+        this.database.operations,
+        this.database.notebooks,
+        this.database.plannerTypes,
+        this.database.todoTypeLinks,
+      ],
+      async () => {
+        await this.requirePlannerType(input.typeId);
+        let saved: Todo;
+        if (target) {
+          if (target.workspaceId !== this.context.workspaceId)
+            throw new RecordValidationError("无法编辑其他工作区的待办。");
+          if (target.planning?.kind === "occurrence")
+            await this.ensureTodoOccurrence(
+              target.planning.seriesId!,
+              getTodoDate(target),
+            );
+          const current = await this.requireRecord(
+            this.database.todos,
+            target.id,
+          );
+          if (
+            current.deletedAt ||
+            current.workspaceId !== this.context.workspaceId
+          )
+            throw new RecordValidationError("待办已删除，请刷新。");
+          if (current.planning?.kind === "series")
+            throw new RecordValidationError("请选择具体日期的待办。");
+          if (input.repeat)
+            throw new RecordValidationError("编辑这一次时不能更改重复规则。");
+          if (
+            current.planning?.kind === "occurrence" &&
+            input.date !== getTodoDate(current)
+          )
+            throw new RecordValidationError("重复待办的本次日期不可更改。");
+          saved = await this.updateTodo(target.id, {
+            text: input.text,
+            notes: input.notes,
+          });
+          if (input.date !== getTodoDate(saved))
+            saved = await this.rescheduleTodo(saved.id, input.date);
+        } else saved = await this.createTodo(input.text, input);
+        const previousLink = await this.database.todoTypeLinks.get(
+          `${this.context.workspaceId}:${saved.id}`,
+        );
+        await this.database.todoTypeLinks.put({
+          importKey: previousLink?.importKey,
+          id: `${this.context.workspaceId}:${saved.id}`,
+          workspaceId: this.context.workspaceId,
+          todoId: saved.id,
+          typeId: input.typeId ?? null,
+          time: input.time ?? null,
+        });
+        return saved;
+      },
+    );
+  }
+  /** Move one calendar reminder; recurring occurrences detach without changing the rule. */
+  async movePlannerTodo(
+    target: Todo,
+    date: string,
+    time?: string | null,
+  ): Promise<Todo> {
+    if (target.workspaceId !== this.context.workspaceId || !isTodoDate(date))
+      throw new RecordValidationError("请选择有效的待办和日期。");
+    return this.database.transaction(
+      "rw",
+      [
+        this.database.todos,
+        this.database.operations,
+        this.database.notebooks,
+        this.database.plannerTypes,
+        this.database.todoTypeLinks,
+      ],
+      async () => {
+        const current =
+          target.planning?.kind === "occurrence"
+            ? await this.ensureTodoOccurrence(
+                target.planning.seriesId!,
+                getTodoDate(target),
+              )
+            : await this.requireRecord(this.database.todos, target.id);
+        if (
+          current.deletedAt ||
+          current.workspaceId !== this.context.workspaceId ||
+          current.planning?.kind === "series" ||
+          getTodoStatus(current) === "skipped"
+        )
+          throw new RecordValidationError("待办已变更，请刷新后重试。");
+        const own = await this.database.todoTypeLinks.get(
+          `${this.context.workspaceId}:${current.id}`,
+        );
+        const link =
+          own ??
+          (current.planning?.seriesId
+            ? await this.database.todoTypeLinks.get(
+                `${this.context.workspaceId}:${current.planning.seriesId}`,
+              )
+            : undefined);
+        const input: PlannerTodoInput = {
+          text: current.text,
+          notes: current.planning?.notes ?? "",
+          date,
+          time: time === undefined ? link?.time : time,
+          typeId: link?.typeId,
+        };
+        if (
+          current.planning?.kind !== "occurrence" ||
+          date === getTodoDate(current)
+        )
+          return this.savePlannerTodo(input, current);
+        const moved = await this.savePlannerTodo(input);
+        const saved =
+          getTodoStatus(current) === "completed"
+            ? await this.setTodoStatus(moved.id, "completed")
+            : moved;
+        await this.setTodoStatus(current.id, "skipped");
+        return saved;
+      },
+    );
+  }
+  async importCalendarPlan(
+    text: string,
+    timeZone = DEFAULT_CALENDAR_ZONE,
+  ): Promise<CalendarImportResult> {
+    const { parseCalendarImport } = await import("./calendar-import");
+    const plan = parseCalendarImport(text, timeZone);
+    return this.database.transaction(
+      "rw",
+      [
+        this.database.calendarEvents,
+        this.database.plannerTypes,
+        this.database.todos,
+        this.database.operations,
+        this.database.notebooks,
+        this.database.todoTypeLinks,
+      ],
+      async () => {
+        const existing = await this.listCalendarEvents();
+        const links = await this.listTodoTypeLinks();
+        const liveTodos = await this.database.todos
+          .where("workspaceId")
+          .equals(this.context.workspaceId)
+          .filter((todo) => !todo.deletedAt)
+          .toArray();
+        const seen = new Set([
+          ...existing.map((event) => event.importKey),
+          ...links
+            .filter((link) => liveTodos.some((todo) => todo.id === link.todoId))
+            .map((link) => link.importKey),
+        ]);
+        const types = await this.listPlannerTypes();
+        const result = { imported: 0, skipped: 0 };
+        for (const item of plan.items) {
+          const key = `${item.kind}:${item.uid ?? JSON.stringify(item)}`;
+          if (seen.has(key)) {
+            result.skipped++;
+            continue;
+          }
+          const name = item.typeName?.trim();
+          let type = name
+            ? types.find(
+                (type) =>
+                  type.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
+              )
+            : undefined;
+          if (name && !type) {
+            type = await this.savePlannerType(
+              name,
+              item.kind === "event" ? item.input.color : "purple",
+            );
+            types.push(type);
+          }
+          if (item.kind === "event") {
+            const event = await this.saveCalendarEvent({
+              ...item.input,
+              typeId: type?.id,
+            });
+            const exceptions = Object.fromEntries(
+              Object.entries(item.exceptions ?? {}).map(([day, value]) => [
+                day,
+                value
+                  ? validateCalendarEvent({ ...value, typeId: type?.id })
+                  : null,
+              ]),
+            );
+            await this.database.calendarEvents.put({
+              ...event,
+              importKey: key,
+              exceptions,
+            });
+          } else {
+            const todo = await this.savePlannerTodo({
+              ...item.input,
+              typeId: type?.id,
+            });
+            await this.database.todoTypeLinks.update(
+              `${this.context.workspaceId}:${todo.id}`,
+              { importKey: key },
+            );
+          }
+          seen.add(key);
+          result.imported++;
+        }
+        return result;
+      },
+    );
+  }
+  async listCalendarEvents(): Promise<CalendarEvent[]> {
+    return this.database.calendarEvents
+      .where("workspaceId")
+      .equals(this.context.workspaceId)
+      .filter((event) => !event.deletedAt)
+      .toArray();
+  }
+  async saveCalendarEvent(
+    input: CalendarEventInput,
+    id?: string,
+    occurrenceDate?: string,
+    following = false,
+  ): Promise<CalendarEvent> {
+    const fields = validateCalendarEvent({
+      ...input,
+      repeat: occurrenceDate && !following ? undefined : input.repeat,
+    });
+    if (occurrenceDate && !isTodoDate(occurrenceDate))
+      throw new RecordValidationError("无效的重复日期。");
+    return this.database.transaction(
+      "rw",
+      this.database.calendarEvents,
+      this.database.plannerTypes,
+      async () => {
+        await this.requirePlannerType(fields.typeId);
+        const previous = id
+          ? await this.database.calendarEvents.get(id)
+          : undefined;
+        if (
+          id &&
+          (!previous ||
+            previous.deletedAt ||
+            previous.workspaceId !== this.context.workspaceId)
+        )
+          throw new RecordValidationError("日程已删除，请刷新后重试。");
+        const base = {
+          id: id ?? this.createId(),
+          workspaceId: this.context.workspaceId,
+          updatedAt: this.now().toISOString(),
+          deletedAt: null,
+        };
+        if (following && occurrenceDate && previous?.repeat) {
+          // Split atomically: the history keeps its IDs and future edits become a new series.
+          const futureExceptions = Object.fromEntries(
+            Object.entries(previous.exceptions).filter(
+              ([day]) => day >= occurrenceDate,
+            ),
+          );
+          const pastExceptions = Object.fromEntries(
+            Object.entries(previous.exceptions).filter(
+              ([day]) => day < occurrenceDate,
+            ),
+          );
+          const remaining =
+            fields.repeat?.count === previous.repeat.count &&
+            fields.repeat?.count
+              ? Math.max(
+                  1,
+                  fields.repeat.count -
+                    (calendarRule(previous)
+                      ?.between(
+                        new Date(`${previous.start.slice(0, 10)}T00:00:00Z`),
+                        new Date(`${occurrenceDate}T00:00:00Z`),
+                        true,
+                      )
+                      .filter(
+                        (d) => d.toISOString().slice(0, 10) < occurrenceDate,
+                      ).length ?? 0),
+                )
+              : fields.repeat?.count;
+          const next: CalendarEvent = {
+            ...fields,
+            ...base,
+            id: this.createId(),
+            repeat: fields.repeat
+              ? { ...fields.repeat, count: remaining }
+              : undefined,
+            // Explicit exceptions retain their individually chosen dates. The edited instance
+            // itself is replaced by the new series and must not shadow its first event.
+            exceptions: fields.repeat
+              ? Object.fromEntries(
+                  Object.entries(futureExceptions).filter(
+                    ([day]) => day !== occurrenceDate,
+                  ),
+                )
+              : {},
+          };
+          await this.database.calendarEvents.put({
+            ...previous,
+            updatedAt: base.updatedAt,
+            repeat: {
+              ...previous.repeat,
+              count: undefined,
+              until: addTodoDays(occurrenceDate, -1),
+            },
+            exceptions: pastExceptions,
+            deletedAt:
+              occurrenceDate <= previous.start.slice(0, 10)
+                ? base.updatedAt
+                : null,
+          });
+          await this.database.calendarEvents.put(next);
+          return next;
+        }
+        const event: CalendarEvent =
+          previous && occurrenceDate
+            ? {
+                ...previous,
+                ...base,
+                exceptions: {
+                  ...previous.exceptions,
+                  [occurrenceDate]: fields,
+                },
+              }
+            : {
+                ...fields,
+                ...base,
+                importKey: previous?.importKey,
+                exceptions: fields.repeat ? (previous?.exceptions ?? {}) : {},
+              };
+        await this.database.calendarEvents.put(event);
+        return event;
+      },
+    );
+  }
+  async deleteCalendarEvent(
+    id: string,
+    occurrenceDate?: string,
+    following = false,
+  ): Promise<void> {
+    await this.database.transaction(
+      "rw",
+      this.database.calendarEvents,
+      async () => {
+        const event = await this.database.calendarEvents.get(id);
+        if (!event || event.workspaceId !== this.context.workspaceId) return;
+        await this.database.calendarEvents.put({
+          ...event,
+          updatedAt: this.now().toISOString(),
+          ...(occurrenceDate && following && event.repeat
+            ? {
+                repeat: {
+                  ...event.repeat,
+                  count: undefined,
+                  until: addTodoDays(occurrenceDate, -1),
+                },
+                exceptions: Object.fromEntries(
+                  Object.entries(event.exceptions).filter(
+                    ([day]) => day < occurrenceDate,
+                  ),
+                ),
+                deletedAt:
+                  occurrenceDate <= event.start.slice(0, 10)
+                    ? this.now().toISOString()
+                    : null,
+              }
+            : occurrenceDate
+              ? { exceptions: { ...event.exceptions, [occurrenceDate]: null } }
+              : { deletedAt: this.now().toISOString() }),
+        });
+      },
+    );
+  }
+  async restoreCalendarEvent(
+    snapshot: CalendarEvent,
+    occurrenceDate?: string,
+    following = false,
+  ): Promise<void> {
+    await this.database.transaction(
+      "rw",
+      this.database.calendarEvents,
+      async () => {
+        const current = await this.database.calendarEvents.get(snapshot.id);
+        if (!current || current.workspaceId !== this.context.workspaceId)
+          return;
+        const exceptions = { ...current.exceptions };
+        if (occurrenceDate && following) {
+          for (const [day, value] of Object.entries(snapshot.exceptions))
+            if (day >= occurrenceDate) exceptions[day] = value;
+        } else if (occurrenceDate) {
+          if (Object.hasOwn(snapshot.exceptions, occurrenceDate))
+            exceptions[occurrenceDate] = snapshot.exceptions[occurrenceDate];
+          else delete exceptions[occurrenceDate];
+        }
+        await this.database.calendarEvents.put({
+          ...current,
+          deletedAt: null,
+          ...(following ? { repeat: snapshot.repeat } : {}),
+          exceptions,
+          updatedAt: this.now().toISOString(),
+        });
+      },
+    );
   }
 
   async listNotebooks(): Promise<Notebook[]> {
@@ -260,6 +836,48 @@ export class LocalRepository {
     return (await this.database.todos.toArray())
       .filter((todo) => !todo.deletedAt && todo.planning?.kind === "series")
       .sort(byRank);
+  }
+
+  /** Persist a projected date only when the user acts; concurrent tabs share its stable ID. */
+  async ensureTodoOccurrence(seriesId: string, date: string): Promise<Todo> {
+    if (!isTodoDate(date)) throw new RecordValidationError("请选择有效日期。");
+    return this.database.transaction(
+      "rw",
+      this.database.todos,
+      this.database.operations,
+      async () => {
+        const series = await this.requireRecord(this.database.todos, seriesId);
+        if (
+          series.workspaceId !== this.context.workspaceId ||
+          series.deletedAt ||
+          series.planning?.kind !== "series"
+        )
+          throw new RecordValidationError("重复计划已不存在，请刷新日历。");
+        const id = todoOccurrenceId(seriesId, date);
+        const previous = await this.database.todos.get(id);
+        if (previous?.deletedAt)
+          throw new RecordValidationError(
+            "这次待办已删除，可以在最近删除中恢复。",
+          );
+        if (previous && !previous.planning?.generated) return previous;
+        const rule = getTodoRule(series, date);
+        if (!rule || !todoOccursOn(rule, date))
+          throw new RecordValidationError(
+            "这一天的重复安排已改变，请刷新日历。",
+          );
+        if (previous?.planning?.sourceRevisionId === rule.id) return previous;
+        const projected = makeTodoOccurrence(
+          series,
+          rule,
+          date,
+          this.now().toISOString(),
+        );
+        const saved = { ...projected, version: (previous?.version ?? 0) + 1 };
+        await this.database.todos.put(saved);
+        await this.enqueue("todo", saved, previous?.version ?? 0);
+        return saved;
+      },
+    );
   }
 
   async getTodoSettings(): Promise<TodoSettings> {

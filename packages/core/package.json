@@ -3,9 +3,15 @@
   "version": "0.1.1",
   "private": true,
   "type": "module",
-  "exports": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./calendar-import": "./src/calendar-import.ts"
+  },
   "dependencies": {
+    "@js-temporal/polyfill": "0.5.1",
     "@supabase/supabase-js": "latest",
-    "dexie": "latest"
+    "dexie": "latest",
+    "ical.js": "2.2.1",
+    "rrule": "2.8.1"
   }
 }

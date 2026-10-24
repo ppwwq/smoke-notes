@@ -1,3 +1,4 @@
+import userEvent from "@testing-library/user-event";
 import {
   cleanup,
   fireEvent,
@@ -218,7 +219,8 @@ it("keeps past repeated misses only in history and offers one-time overdue resch
     expect(onReschedule).toHaveBeenCalledWith("旧一次性", "2026-10-21"),
   );
   fireEvent.click(screen.getByRole("button", { name: "关闭操作" }));
-  fireEvent.click(screen.getByRole("button", { name: "历史" }));
+  fireEvent.click(screen.getByRole("button", { name: "日历" }));
+  fireEvent.click(screen.getByRole("button", { name: /2026年10月19日/ }));
   expect(
     screen.getByRole("textbox", { name: "编辑待办：旧重复" }),
   ).toBeVisible();
@@ -254,9 +256,12 @@ it("creates specified-weekday repeats with date and notes and validates no-day s
   });
   fireEvent.click(screen.getByRole("button", { name: "选日期" }));
   fireEvent.click(screen.getByRole("button", { name: /2026年10月22日/ }));
-  fireEvent.change(screen.getByRole("combobox", { name: "新待办重复" }), {
-    target: { value: "weekly" },
-  });
+  await userEvent
+    .setup()
+    .click(screen.getByRole("combobox", { name: "新待办重复" }));
+  await userEvent
+    .setup()
+    .click(await screen.findByRole("option", { name: "指定星期" }));
   for (const day of ["一", "二", "三", "四", "五"])
     fireEvent.click(screen.getByRole("checkbox", { name: `星期${day}` }));
   fireEvent.click(screen.getByRole("button", { name: "添加" }));
@@ -278,7 +283,7 @@ it("creates specified-weekday repeats with date and notes and validates no-day s
   );
 });
 
-it("shows completion, unfinished and skipped records for one selected historical date", () => {
+it("shows completed and unfinished records while omitting skipped occurrences from the historical calendar", () => {
   render(
     <TodoWorkspace
       today={today}
@@ -290,15 +295,18 @@ it("shows completion, unfinished and skipped records for one selected historical
       {...handlers()}
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: "历史" }));
-  expect(screen.getByRole("region", { name: "当日事项" })).toHaveTextContent(
-    "当日事项 · 3",
-  );
+  fireEvent.click(screen.getByRole("button", { name: "日历" }));
+  fireEvent.click(screen.getByRole("button", { name: /2026年10月19日/ }));
+  expect(
+    screen.getByRole("region", { name: "选中日期的待办" }),
+  ).toHaveTextContent("2 项待办");
   expect(screen.getByRole("textbox", { name: "编辑待办：已做" })).toBeVisible();
   expect(
-    screen.getByRole("textbox", { name: "编辑待办：跳过了" }),
-  ).toBeVisible();
-  expect(screen.getByLabelText("历史日期")).toHaveTextContent("2026/10/19");
+    screen.queryByRole("textbox", { name: "编辑待办：跳过了" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "历史" }),
+  ).not.toBeInTheDocument();
 });
 
 it("separates completion and skipping from deletion, and can undo the saved status", async () => {
@@ -315,7 +323,7 @@ it("separates completion and skipping from deletion, and can undo the saved stat
   fireEvent.click(
     screen.getByRole("button", { name: "更多待办操作：今日重复" }),
   );
-  fireEvent.click(screen.getByRole("button", { name: "跳过今天" }));
+  fireEvent.click(screen.getByRole("button", { name: "跳过这一次" }));
   await waitFor(() =>
     expect(onSetStatus).toHaveBeenCalledWith("今日重复", "skipped"),
   );
@@ -347,8 +355,8 @@ it("retains keyboard access for the moving segment selection", () => {
   const button = screen.getByRole("button", { name: "今天" });
   button.focus();
   fireEvent.keyDown(button, { key: "ArrowRight" });
-  expect(screen.getByRole("button", { name: "全部" })).toHaveFocus();
-  expect(screen.getByRole("button", { name: "全部" })).toHaveAttribute(
+  expect(screen.getByRole("button", { name: "日历" })).toHaveFocus();
+  expect(screen.getByRole("button", { name: "日历" })).toHaveAttribute(
     "aria-pressed",
     "true",
   );
@@ -511,8 +519,11 @@ it("places legacy unfinished records in overdue and legacy completions on their 
   expect(
     screen.getByRole("progressbar", { name: "今天完成进度" }),
   ).toHaveAttribute("value", "0");
-  fireEvent.click(screen.getByRole("button", { name: "历史" }));
-  expect(screen.getByLabelText("历史日期")).toHaveTextContent("2026/10/19");
+  fireEvent.click(screen.getByRole("button", { name: "日历" }));
+  fireEvent.click(screen.getByRole("button", { name: /2026年10月19日/ }));
+  expect(
+    screen.queryByRole("button", { name: "历史" }),
+  ).not.toBeInTheDocument();
   expect(
     screen.getByRole("textbox", { name: "编辑待办：旧已完成" }),
   ).toBeVisible();

@@ -1,3 +1,8 @@
+import type {
+  CalendarEvent,
+  PlannerType,
+  PlannerPreferences,
+} from "@smoke-notes/core";
 import {
   lazy,
   Suspense,
@@ -31,6 +36,8 @@ import {
   X,
   NoteAppearance as Palette,
 } from "./icons";
+import { CalendarEventEditor } from "./components/CalendarEventEditor";
+import type { PlannerTypeActions } from "./components/PlannerTypeField";
 import { WorkspaceCreate } from "./components/WorkspaceCreate";
 import { WorkspaceDock } from "./components/WorkspaceDock";
 import { Sidebar } from "./components/Sidebar";
@@ -96,6 +103,7 @@ export function SmokeNotesApp({
     {},
   );
   const [notesExpanded, setNotesExpanded] = useState(false);
+  const [noteQuery, setNoteQuery] = useState("");
   const [todos, setTodos] = useState<Todo[]>([]);
   const [todoSeries, setTodoSeries] = useState<Todo[]>([]);
   const [todoSettings, setTodoSettings] = useState<TodoSettings>({
@@ -116,6 +124,7 @@ export function SmokeNotesApp({
   const [todoFilter, setTodoFilter] = useState<TodoFilter>("all");
   const workspaceRef = useRef<HTMLDivElement>(null);
   const lastOpenedNote = useRef<string | null>(null);
+  const wasEditing = useRef(false);
   const browsePositions = useRef(new Map<string, Map<string, number>>());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -142,12 +151,43 @@ export function SmokeNotesApp({
     : "已保存在本机 · 未启用云端同步";
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.82);
   const [saveStatus, setSaveStatus] = useState("已自动保存");
+  const reportEditorSaveStatus = useCallback((next: string) => {
+    // The editor's effect can arrive after the explicit save promise resolves.
+    // Keep the more specific manual result until a new edit or save starts.
+    setSaveStatus((current) =>
+      (current === "已保存" && next === "已自动保存") ||
+      (current === "保存失败，请重试" && next === "保存失败")
+        ? current
+        : next,
+    );
+  }, []);
   const [manualSaving, setManualSaving] = useState(false);
   const manualSavePending = useRef(false);
   const creatingRef = useRef(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [createMode, setCreateMode] = useState<"note" | "todo">("note");
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const [plannerPreferences, setPlannerPreferences] =
+    useState<PlannerPreferences>();
+  const [todoTimes, setTodoTimes] = useState<Record<string, string | null>>({});
+  const [plannerTypes, setPlannerTypes] = useState<PlannerType[]>([]);
+  const [todoTypeIds, setTodoTypeIds] = useState<Record<string, string | null>>(
+    {},
+  );
+  const [plannerCreateDate, setPlannerCreateDate] = useState<string | null>(
+    null,
+  );
+  const [calendarUndo, setCalendarUndo] = useState<{
+    snapshot: CalendarEvent;
+    date?: string;
+    following?: boolean;
+  } | null>(null);
+  const [createMode, setCreateMode] = useState<"note" | "todo" | "notebook">(
+    "note",
+  );
   const [showAllTodosRequest, setShowAllTodosRequest] = useState(0);
+  const [calendarCreateDate, setCalendarCreateDate] = useState<string | null>(
+    null,
+  );
   const editorRef = useRef<RichNoteEditorHandle>(null);
   const { preparingQuit, quitError } = useDesktopQuit(desktopBridge, editorRef);
   const activeNoteRef = useRef<Note | null>(null);
@@ -170,14 +210,27 @@ export function SmokeNotesApp({
       // Materialize missed dates locally before displaying today. This also
       // runs after remote changes; deterministic occurrence IDs make it safe.
       await repository.reconcileTodos();
-      const [nextNotebooks, nextTodos, nextTrash, nextSeries, nextSettings] =
-        await Promise.all([
-          repository.listNotebooks(),
-          repository.listTodos(),
-          repository.listTrash(),
-          repository.listTodoSeries(),
-          repository.getTodoSettings(),
-        ]);
+      const [
+        nextNotebooks,
+        nextTodos,
+        nextTrash,
+        nextSeries,
+        nextSettings,
+        nextEvents,
+        nextTypes,
+        nextTypeLinks,
+        nextPlannerPreferences,
+      ] = await Promise.all([
+        repository.listNotebooks(),
+        repository.listTodos(),
+        repository.listTrash(),
+        repository.listTodoSeries(),
+        repository.getTodoSettings(),
+        repository.listCalendarEvents(),
+        repository.listPlannerTypes(),
+        repository.listTodoTypeLinks(),
+        repository.getPlannerPreferences(),
+      ]);
       if (revision !== refreshRevision.current) return;
       const requestedId =
         preferredNotebookId === undefined
@@ -211,6 +264,21 @@ export function SmokeNotesApp({
       setNotebooks(nextNotebooks);
       setTodos(nextTodos);
       setTodoSeries(nextSeries);
+      setCalendarEvents(nextEvents);
+      setPlannerTypes(nextTypes);
+      setPlannerPreferences(nextPlannerPreferences);
+      setTodoTimes(
+        Object.fromEntries(
+          nextTypeLinks
+            .filter((link) => link.time !== undefined)
+            .map((link) => [link.todoId, link.time!]),
+        ),
+      );
+      setTodoTypeIds(
+        Object.fromEntries(
+          nextTypeLinks.map((link) => [link.todoId, link.typeId]),
+        ),
+      );
       setTodoSettings(nextSettings);
       setTodoToday(getTodoDay(new Date(), nextSettings.dayBoundaryHour));
       setPlanningError("");
@@ -314,6 +382,7 @@ export function SmokeNotesApp({
 
   async function selectNotebook(id: string) {
     if (!(await saveBeforeLeaving())) return;
+    setNoteQuery("");
     setView("notes");
     selectedNotebookIdRef.current = id;
     setSelectedNoteId(null);
@@ -360,10 +429,14 @@ export function SmokeNotesApp({
     ? "notebooks"
     : view === "todos"
       ? `todos:${todoFilter}`
-      : notesExpanded
-        ? `notes:${selectedNotebookId}`
-        : "note-stacks";
+      : noteQuery.trim()
+        ? `note-find:${noteQuery}`
+        : notesExpanded
+          ? `notes:${selectedNotebookId}`
+          : "note-stacks";
   useLayoutEffect(() => {
+    const returningFromEditor = wasEditing.current && !webEditing;
+    wasEditing.current = webEditing;
     if (webEditing) return;
     const positions = browsePositions.current.get(browseKey);
     workspaceRef.current
@@ -373,14 +446,16 @@ export function SmokeNotesApp({
       .forEach((element) => {
         element.scrollTop = positions?.get(element.classList[0]) ?? 0;
       });
-    if (notesExpanded && lastOpenedNote.current) {
+    if (returningFromEditor && lastOpenedNote.current) {
       const card = Array.from(
         workspaceRef.current?.querySelectorAll<HTMLElement>("[data-note-id]") ??
           [],
       ).find((el) => el.dataset.noteId === lastOpenedNote.current);
       card
+        ?.closest<HTMLElement>(".note-result, .sticky-card")
         ?.querySelector<HTMLButtonElement>(".sticky-card-open")
         ?.focus({ preventScroll: true });
+      if (card?.matches(".note-result")) card.focus({ preventScroll: true });
     }
   }, [browseKey, webEditing, notesExpanded]);
   const { style: viewportStyle, compactEditing } = useWebViewport(
@@ -426,20 +501,25 @@ export function SmokeNotesApp({
     setNotesExpanded(true);
   }
 
-  async function createWorkspaceNote(kind: NoteKind, notebookId: string) {
+  async function createWorkspaceNote(
+    kind: NoteKind,
+    notebookId: string,
+    body = "",
+  ) {
     if (creatingRef.current) return;
     creatingRef.current = true;
     try {
       await editorRef.current?.flushSave();
       const note = await repository.createNote(notebookId, {
         title: "",
-        body: "",
+        body,
         kind,
       });
       await refreshAfterMutation(notebookId);
       setView("notes");
       setNotebookCollectionOpen(false);
       setNotesExpanded(true);
+      setNoteQuery("");
       transitionWorkspace(() => setSelectedNoteId(note.id));
     } finally {
       creatingRef.current = false;
@@ -461,6 +541,33 @@ export function SmokeNotesApp({
     }
   }
 
+  const plannerActions: PlannerTypeActions = {
+    types: plannerTypes,
+    todoTimes,
+    preferences: plannerPreferences,
+    onSavePreferences: async (preferences) => {
+      await repository.savePlannerPreferences(preferences);
+      await refreshAfterMutation(selectedNotebookId);
+    },
+    todoTypeIds,
+    onSaveType: async (name, color, id) => {
+      const type = await repository.savePlannerType(name, color, id);
+      await refreshAfterMutation(selectedNotebookId);
+      return type;
+    },
+    onDeleteType: async (id) => {
+      await repository.deletePlannerType(id);
+      await refreshAfterMutation(selectedNotebookId);
+    },
+    onSavePlannerTodo: async (input, todo) => {
+      await repository.savePlannerTodo(input, todo);
+      await refreshAfterMutation(selectedNotebookId);
+    },
+    onMovePlannerTodo: async (todo, date, time) => {
+      await repository.movePlannerTodo(todo, date, time);
+      await refreshAfterMutation(selectedNotebookId);
+    },
+  };
   return (
     <GlassContext.Provider
       value={{
@@ -641,18 +748,85 @@ export function SmokeNotesApp({
                 setNotebookCollectionOpen(false);
                 void selectNotebook(id);
               }}
-              onCreate={createNotebook}
+              onRename={async (id, name) => {
+                await repository.renameNotebook(id, name);
+                await refreshAfterMutation(selectedNotebookId);
+              }}
+              onMove={async (id, previous, next) => {
+                await repository.moveNotebook(id, previous, next);
+                await refreshAfterMutation(selectedNotebookId);
+              }}
+              onTrash={async (id) => {
+                const book = notebooks.find((item) => item.id === id);
+                await repository.trashNotebook(id);
+                setLastTrashed({
+                  entity: "notebook",
+                  id,
+                  label: book?.name ?? "便签本",
+                });
+                await refreshAfterMutation(selectedNotebookId);
+              }}
             />
           ) : view === "todos" ? (
             <TodoWorkspace
+              {...plannerActions}
+              events={calendarEvents}
+              onImportPlan={async (text, timeZone) => {
+                const result = await repository.importCalendarPlan(
+                  text,
+                  timeZone,
+                );
+                await refreshAfterMutation(selectedNotebookId);
+                return result;
+              }}
+              onSaveEvent={async (input, id, occurrenceDate, following) => {
+                await repository.saveCalendarEvent(
+                  input,
+                  id,
+                  occurrenceDate,
+                  following,
+                );
+                await refreshAfterMutation(selectedNotebookId);
+              }}
+              onDeleteEvent={async (id, date, following) => {
+                const snapshot = calendarEvents.find(
+                  (event) => event.id === id,
+                );
+                await repository.deleteCalendarEvent(id, date, following);
+                if (snapshot) setCalendarUndo({ snapshot, date, following });
+                await refreshAfterMutation(selectedNotebookId);
+              }}
+              canUndoEvent={!!calendarUndo}
+              onUndoEvent={async () => {
+                if (!calendarUndo) return;
+                await repository.restoreCalendarEvent(
+                  calendarUndo.snapshot,
+                  calendarUndo.date,
+                  calendarUndo.following,
+                );
+                setCalendarUndo(null);
+                await refreshAfterMutation(selectedNotebookId);
+              }}
               web
               filter={todoFilter}
               onFilterChange={setTodoFilter}
               todos={todos}
               today={todoToday}
               series={todoSeries}
+              deletedTodos={trash
+                .filter((item) => item.entity === "todo")
+                .map((item) => item.record as Todo)}
+              onCalendarDateChange={setCalendarCreateDate}
+              onPrepareTodo={async (todo) => {
+                if (todo.planning?.seriesId && todo.planning.date)
+                  await repository.ensureTodoOccurrence(
+                    todo.planning.seriesId,
+                    todo.planning.date,
+                  );
+              }}
               syncMessage={syncMessage}
-              onCreateRequest={() => {
+              onCreateRequest={(date) => {
+                setCalendarCreateDate(date ?? null);
                 setCreateMode("todo");
                 setCreateOpen(true);
               }}
@@ -779,6 +953,15 @@ export function SmokeNotesApp({
                       onClick={() =>
                         setEditorMenu(editorMenu === "more" ? null : "more")
                       }
+                      onKeyDown={(event) => {
+                        if (
+                          event.key === "ArrowDown" ||
+                          event.key === "ArrowUp"
+                        ) {
+                          event.preventDefault();
+                          setEditorMenu("more");
+                        }
+                      }}
                     >
                       <MoreHorizontal size={18} />
                     </button>
@@ -786,7 +969,18 @@ export function SmokeNotesApp({
                   {editorMenu === "more" && (
                     <div
                       role="menu"
+                      aria-label="便签操作"
                       className="editor-more-menu"
+                      onBlur={(event) => {
+                        if (
+                          !event.currentTarget.parentElement?.contains(
+                            event.relatedTarget,
+                          )
+                        )
+                          setEditorMenu((current) =>
+                            current === "more" ? null : current,
+                          );
+                      }}
                       onKeyDown={(event) => {
                         if (
                           !["ArrowDown", "ArrowUp", "Home", "End"].includes(
@@ -901,7 +1095,7 @@ export function SmokeNotesApp({
                   appearanceOpen={editorMenu === "appearance"}
                   onAppearanceClose={closeEditorMenu}
                   note={selectedNote}
-                  onSaveStatusChange={setSaveStatus}
+                  onSaveStatusChange={reportEditorSaveStatus}
                   onSave={async (changes) => {
                     const updated = await repository.updateNote(
                       changes.baseSnapshot?.id ?? selectedNote.id,
@@ -947,6 +1141,9 @@ export function SmokeNotesApp({
           ) : (
             <NotesWorkspace
               web
+              query={noteQuery}
+              onQueryChange={setNoteQuery}
+              syncMessage={syncMessage}
               notebook={selectedNotebook}
               groups={notebooks.map((notebook) => ({
                 notebook,
@@ -961,9 +1158,17 @@ export function SmokeNotesApp({
               }
               notes={notes}
               openOnSingleClick
-              onOpenNote={(id) => {
+              onOpenNote={(id, notebookId) => {
                 lastOpenedNote.current = id;
-                transitionWorkspace(() => setSelectedNoteId(id));
+                transitionWorkspace(() => {
+                  if (notebookId && notebookId !== selectedNotebookId) {
+                    invalidateRefresh();
+                    selectedNotebookIdRef.current = notebookId;
+                    setSelectedNotebookId(notebookId);
+                    setNotes(notebookNotes[notebookId] ?? []);
+                  }
+                  setSelectedNoteId(id);
+                });
               }}
               onCreateRequest={() => {
                 setCreateMode("note");
@@ -1017,15 +1222,30 @@ export function SmokeNotesApp({
         <WorkspaceCreate
           hidden={webEditing || settingsOpen || pairingOpen || mobileNavOpen}
           open={createOpen}
-          onOpenChange={setCreateOpen}
+          onOpenChange={(open) => {
+            if (open && view === "todos" && calendarCreateDate)
+              setPlannerCreateDate(calendarCreateDate);
+            else setCreateOpen(open);
+          }}
+          triggerLabel={
+            view === "todos" && calendarCreateDate ? "新增安排" : undefined
+          }
           mode={createMode}
           onModeChange={setCreateMode}
+          allowNotebook={notebookCollectionOpen}
           defaultMode={
-            view === "todos" && !notebookCollectionOpen ? "todo" : "note"
+            notebookCollectionOpen
+              ? "notebook"
+              : view === "todos"
+                ? "todo"
+                : "note"
           }
           notebooks={notebooks}
           selectedNotebookId={selectedNotebookId}
           today={todoToday}
+          todoDate={
+            view === "todos" ? (calendarCreateDate ?? undefined) : undefined
+          }
           onCreateNote={createWorkspaceNote}
           onCreateNotebook={async (name) => {
             const book = await repository.createNotebook(name);
@@ -1039,10 +1259,24 @@ export function SmokeNotesApp({
           onShowTodos={() => {
             setNotebookCollectionOpen(false);
             setTodoFilter("all");
-            setShowAllTodosRequest((value) => value + 1);
+            if (!calendarCreateDate || view !== "todos")
+              setShowAllTodosRequest((value) => value + 1);
             void showTodos();
           }}
         />
+        {plannerCreateDate && (
+          <CalendarEventEditor
+            {...plannerActions}
+            date={plannerCreateDate}
+            today={todoToday}
+            time="09:00"
+            onClose={() => setPlannerCreateDate(null)}
+            onSave={async (input) => {
+              await repository.saveCalendarEvent(input);
+              await refreshAfterMutation(selectedNotebookId);
+            }}
+          />
+        )}
         {settingsOpen && (
           <SettingsPanel
             bridge={desktopBridge}

@@ -1,0 +1,110 @@
+/* Notebook covers are the web workspace's palette source. Stored color IDs stay intact. */
+.workspace-app[data-web-background] {
+  --paper-violet: #c4bbfe;
+  --paper-lime: #d4e73e;
+  --paper-white: #ffffff;
+  --paper-black: #111111;
+}
+.workspace-app .collection-tone-0 {
+  background: var(--paper-violet);
+}
+.workspace-app .collection-tone-1 {
+  background: var(--paper-lime);
+}
+.workspace-app .collection-tone-2 {
+  background: var(--paper-white);
+}
+.workspace-app .collection-tone-3 {
+  background: var(--paper-black);
+}
+.workspace-app[data-web-background]
+  :is(.note-color-amber, .note-color-dot-amber) {
+  --card-color: var(--paper-white);
+}
+.workspace-app[data-web-background]
+  :is(.note-color-violet, .note-color-dot-violet) {
+  --card-color: var(--paper-violet);
+}
+.workspace-app[data-web-background]
+  :is(.note-color-sage, .note-color-dot-sage) {
+  --card-color: var(--paper-lime);
+}
+.workspace-app[data-web-background]
+  :is(.note-color-graphite, .note-color-dot-graphite) {
+  --card-color: var(--paper-black);
+  --card-ink: #fbfaf8;
+  --card-muted: #ddd9d2;
+}
+.workspace-app[data-web-background]
+  :is(.note-color-rose, .note-color-dot-rose) {
+  --card-color: #e9c3de;
+}
+.workspace-app[data-web-background] :is(.note-color-sky, .note-color-dot-sky) {
+  --card-color: #c5cff8;
+}
+.workspace-app[data-web-background]
+  :is(.note-color-lavender, .note-color-dot-lavender) {
+  --card-color: #ded8ff;
+}
+.workspace-app[data-web-background]
+  :is(.note-color-mauve, .note-color-dot-mauve) {
+  --card-color: #eee5f4;
+}
+.workspace-app[data-web-background]
+  :is(.note-color-mist, .note-color-dot-mist) {
+  --card-color: #e6eafa;
+}
+.workspace-app[data-web-background]
+  :is(.note-color-dustyrose, .note-color-dot-dustyrose) {
+  --card-color: #efdde5;
+}
+.workspace-app[data-web-background]
+  :is(.note-color-peach, .note-color-dot-peach) {
+  --card-color: #f4e8c8;
+}
+.workspace-app[data-web-background]
+  :is(.note-color-clay, .note-color-dot-clay) {
+  --card-color: #e7e3dd;
+}
+.workspace-app[data-web-background]
+  :is(
+    .sticky-card,
+    .sticky-card-open,
+    .stack-paper,
+    .note-result,
+    .appearance-swatch
+  ) {
+  color: var(--card-ink, #111);
+}
+.workspace-app[data-web-background]
+  :is(
+    .sticky-card p,
+    .sticky-card time,
+    .stack-paper > span,
+    .stack-paper small,
+    .note-result-copy small,
+    .note-result-end time
+  ) {
+  color: var(--card-muted, #46423d);
+}
+.workspace-app[data-web-background] .note-color-dot {
+  background: var(--card-color);
+  color: var(--card-ink, #111);
+}
+.workspace-app[data-web-background] .sticky-open-icon {
+  color: var(--card-muted, #46423d);
+}
+.workspace-app[data-web-background] .note-color-graphite .note-kind-marker {
+  color: #fbfaf8;
+  background: #ffffff18;
+}
+.workspace-app[data-web-background] .appearance-swatch {
+  box-shadow: inset 0 0 0 1px #11111114;
+}
+/* A pale sheet keeps authored text colors legible while carrying the cover hue. */
+.workspace-app[data-web-background] .progressive-editor {
+  background: color-mix(in srgb, var(--card-color) 16%, var(--surface));
+}
+.workspace-app[data-web-background] .progressive-editor.note-color-graphite {
+  background: var(--surface);
+}

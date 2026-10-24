@@ -88,8 +88,8 @@
 .family-close {
   display: grid;
   place-items: center;
-  flex: 0 0 40px;
-  height: 40px;
+  flex: 0 0 44px;
+  height: 44px;
   border: 1px solid var(--line, #e4e3de);
   border-radius: 50%;
   background: var(--surface, #fff);

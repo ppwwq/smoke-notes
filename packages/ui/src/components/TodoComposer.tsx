@@ -11,11 +11,13 @@ import { PlannerCalendar } from "./PlannerCalendar";
 
 export function TodoComposer({
   today,
+  defaultDate,
   active = true,
   onCreate,
   onShowTodos,
 }: {
   today: string;
+  defaultDate?: string | undefined;
   active?: boolean;
   onCreate(text: string, options?: TodoCreateOptions): Promise<void>;
   onShowTodos?(): void;
@@ -32,7 +34,9 @@ export function TodoComposer({
   const revision = useRef(0);
   const pending = useRef(false);
   const input = useRef<HTMLInputElement>(null);
-  const chosenDate = date || today;
+  // Capture the suggested date when a draft starts; changing the calendar must not move that draft.
+  const [draftDate, setDraftDate] = useState("");
+  const chosenDate = date || draftDate || defaultDate || today;
   async function add() {
     if (!text.trim() || pending.current) return;
     if (repeat === "weekly" && !days.length) {
@@ -60,6 +64,8 @@ export function TodoComposer({
       if (revision.current === savedRevision) {
         setText("");
         setNotes("");
+        setDraftDate("");
+        setDate("");
       }
       setFeedback(
         `已添加到${chosenDate === today ? "今天" : chosenDate === addTodoDays(today, 1) ? "明天" : chosenDate}${repeat === "once" ? "" : "，将按规则重复"}。`,
@@ -100,6 +106,7 @@ export function TodoComposer({
         value={text}
         onChange={(event) => {
           revision.current++;
+          if (!text) setDraftDate(chosenDate);
           setText(event.target.value);
           setError("");
         }}
@@ -116,7 +123,7 @@ export function TodoComposer({
           aria-pressed={chosenDate === today}
           onClick={() => {
             revision.current++;
-            setDate("");
+            setDate(today);
             setCustomDate(false);
           }}
         >
@@ -184,6 +191,7 @@ export function TodoComposer({
               placeholder="可选，写下一点提醒"
               onChange={(event) => {
                 revision.current++;
+                if (!notes && !text) setDraftDate(chosenDate);
                 setNotes(event.target.value);
               }}
             />

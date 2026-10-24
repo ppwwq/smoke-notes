@@ -48,7 +48,9 @@ export default function FamilyButton({
         transition={
           reduced
             ? { duration: 0 }
-            : { type: "spring", damping: 25, stiffness: 400 }
+            : open
+              ? { type: "spring", damping: 25, stiffness: 400 }
+              : { type: "spring", damping: 36, stiffness: 420, mass: 0.9 }
         }
         style={{ borderRadius: open ? 28 : 24 }}
       >

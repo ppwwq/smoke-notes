@@ -1,5 +1,5 @@
 import { WebDialog } from "./glass/WebDialog";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Link2, X } from "../icons";
 import { LoadingStatus } from "./LoadingStatus";
@@ -140,17 +140,26 @@ export function PairingGate({
   embedded = false,
 }: PairingGateProps) {
   const [code, setCode] = useState(initialCode ?? "");
+  const [connecting, setConnecting] = useState(
+    embedded || !!initialCode || !onSkip,
+  );
+  const errorId = useId();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const pending = useRef(false);
 
   async function submit() {
     if (pending.current) return;
+    const normalizedCode = code.replace(/\s/g, "");
+    if (!/^\d{6}$/.test(normalizedCode)) {
+      setError("请输入完整的 6 位配对码，可在电脑端的「连接手机」中找到。");
+      return;
+    }
     pending.current = true;
     setLoading(true);
     setError(null);
     try {
-      await onRedeem(code);
+      await onRedeem(normalizedCode);
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "配对失败，请检查配对码",
@@ -167,35 +176,67 @@ export function PairingGate({
     >
       <div className="pairing-gate-card">
         <span className="brand-mark">烟</span>
-        <h1>连接你的烟笺</h1>
-        <p>在电脑端打开「设置与同步 → 连接手机」，然后输入出现的 6 位码。</p>
-        <p>也可以先在本机记录，稍后从「设置 → 手机与同步」配对。</p>
-        <input
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          maxLength={7}
-          aria-label="6 位配对码"
-          placeholder="000 000"
-          value={code}
-          onChange={(event) =>
-            setCode(event.target.value.replace(/[^0-9 ]/g, ""))
-          }
-          onKeyDown={(event) => {
-            if (event.nativeEvent.isComposing || event.keyCode === 229) return;
-            if (event.key === "Enter") void submit();
-          }}
-        />
-        <button type="button" disabled={loading} onClick={() => void submit()}>
-          {loading ? (
-            <span className="pairing-pending">
-              <DiamondGrid />
-              连接中…
-            </span>
-          ) : (
-            "配对并同步"
-          )}
-        </button>
-        {onSkip && (
+        <h1>{connecting ? "连接你的烟笺" : "从一张烟笺开始"}</h1>
+        {connecting ? (
+          <>
+            <p>
+              在电脑端打开「设置与同步 → 连接手机」，然后输入出现的 6 位码。
+            </p>
+            <p>已有本机记录会保留，配对后可以在设备间接着写。</p>
+            <input
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={7}
+              aria-label="6 位配对码"
+              aria-invalid={!!error}
+              aria-describedby={error ? errorId : undefined}
+              placeholder="000 000"
+              value={code}
+              onChange={(event) => {
+                setCode(event.target.value.replace(/[^0-9 ]/g, ""));
+                setError(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.nativeEvent.isComposing || event.keyCode === 229)
+                  return;
+                if (event.key === "Enter") void submit();
+              }}
+            />
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => void submit()}
+            >
+              {loading ? (
+                <span className="pairing-pending">
+                  <DiamondGrid />
+                  连接中…
+                </span>
+              ) : (
+                "配对并同步"
+              )}
+            </button>
+          </>
+        ) : (
+          <>
+            <p>留住一个想法，写下今天的小计划。</p>
+            <p>先在此浏览器保存；需要跨设备使用时，再从设置连接电脑。</p>
+            <button type="button" onClick={onSkip}>
+              开始记录
+            </button>
+            <button
+              type="button"
+              className="pairing-skip"
+              onClick={() => setConnecting(true)}
+            >
+              连接已有设备
+            </button>
+            <p className="pairing-local-hint">
+              本机记录仅在当前浏览器保存，清除网站数据会将它移除。
+            </p>
+          </>
+        )}
+        {onSkip && connecting && (
           <button
             type="button"
             className="pairing-skip"
@@ -206,7 +247,7 @@ export function PairingGate({
           </button>
         )}
         {error && (
-          <div className="pairing-error" role="alert">
+          <div id={errorId} className="pairing-error" role="alert">
             {error}
           </div>
         )}

@@ -1,0 +1,87 @@
+.collection-card-shell {
+  position: relative;
+}
+.collection-card-shell .record-actions {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  z-index: 2;
+}
+.collection-card-shell .record-actions-trigger {
+  background: transparent;
+  color: inherit;
+}
+.collection-cards > .sortable-row + .sortable-row {
+  margin-top: -110px;
+}
+.collection-cards.expanded > .sortable-row + .sortable-row {
+  margin-top: 16px;
+}
+.collection-cards > .sortable-row {
+  transition: margin-top 240ms ease;
+}
+.collection-cards .sortable-content {
+  min-width: 0;
+}
+.collection-cards .collection-card {
+  cursor: pointer;
+  padding-right: 60px;
+  transition:
+    transform 200ms ease,
+    box-shadow 200ms ease;
+}
+.workspace-app .collection-cards > .sortable-row.is-dragging {
+  z-index: 0;
+  opacity: 1;
+  filter: none;
+}
+.collection-cards .is-dragging .sortable-content {
+  visibility: hidden;
+}
+.collection-cards > .is-dragging::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px dashed var(--muted);
+  border-radius: 30px;
+  background: var(--surface-soft);
+  pointer-events: none;
+}
+.collection-drag-overlay {
+  pointer-events: none;
+  cursor: grabbing;
+}
+.collection-drag-overlay .collection-card {
+  padding-right: 60px;
+  box-shadow: 0 18px 32px #241e3426;
+  cursor: grabbing;
+}
+.collection-cards .whole-card-sort:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 4px;
+  border-radius: 30px;
+}
+@media (hover: hover) {
+  .collection-card-shell:hover .collection-card {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 24px #241e3414;
+  }
+}
+@media (max-width: 760px) {
+  .collection-cards > .sortable-row + .sortable-row {
+    margin-top: -90px;
+  }
+  .collection-cards > .is-dragging::after {
+    border-radius: 24px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .collection-cards > .sortable-row,
+  .collection-cards .collection-card {
+    transition: none;
+  }
+}
+
+.collection-card-shell:has(.collection-tone-3) .record-actions-trigger {
+  color: #fff9ef;
+}

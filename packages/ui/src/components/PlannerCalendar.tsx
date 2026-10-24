@@ -30,8 +30,8 @@ export function PlannerCalendar({
       weekStartsOn={1}
       mode="single"
       required
-      selected={day(value)}
-      defaultMonth={day(value)}
+      selected={value ? day(value) : undefined}
+      defaultMonth={day(value || today)}
       today={day(today)}
       showOutsideDays
       autoFocus
@@ -39,7 +39,7 @@ export function PlannerCalendar({
       aria-label={label}
       role="application"
       onSelect={(selected) => onChange(dayString(selected))}
-      footer={`已选 ${value.replaceAll("-", "/")}`}
+      footer={value ? `已选 ${value.replaceAll("-", "/")}` : "选择一个日期"}
     />
   );
 }

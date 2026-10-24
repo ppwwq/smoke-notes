@@ -8,12 +8,14 @@ export function RecordActions({
   kind,
   onTrash,
   onRename,
+  renameLabel,
   children,
 }: {
   name: string;
   kind: "便签" | "待办" | "便签本";
   onTrash(): Promise<void>;
   onRename?(): void;
+  renameLabel?: string;
   children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -73,7 +75,7 @@ export function RecordActions({
               }}
             >
               <Pencil size={19} />
-              <span>重命名{kind}</span>
+              <span>{renameLabel ?? `重命名${kind}`}</span>
             </button>
           )}
           <button

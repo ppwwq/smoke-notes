@@ -14,11 +14,25 @@ it("lets a visitor skip pairing without submitting a code", () => {
   const onRedeem = vi.fn(async () => {});
   const onSkip = vi.fn();
   render(<PairingGate onRedeem={onRedeem} onSkip={onSkip} />);
-  fireEvent.click(
-    screen.getByRole("button", { name: "暂时跳过，先在本机使用" }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "开始记录" }));
   expect(onSkip).toHaveBeenCalledOnce();
   expect(onRedeem).not.toHaveBeenCalled();
+});
+
+it("reveals pairing on demand and rejects incomplete codes locally", async () => {
+  const onRedeem = vi.fn(async () => {});
+  render(<PairingGate onRedeem={onRedeem} onSkip={vi.fn()} />);
+  expect(screen.queryByRole("textbox", { name: "6 位配对码" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "连接已有设备" }));
+  const input = screen.getByRole("textbox", { name: "6 位配对码" });
+  fireEvent.change(input, { target: { value: "123" } });
+  fireEvent.click(screen.getByRole("button", { name: "配对并同步" }));
+  expect(onRedeem).not.toHaveBeenCalled();
+  expect(screen.getByRole("alert")).toHaveTextContent("完整的 6 位");
+  expect(input).toHaveAttribute("aria-invalid", "true");
+  fireEvent.change(input, { target: { value: "123 456" } });
+  await act(async () => fireEvent.keyDown(input, { key: "Enter" }));
+  expect(onRedeem).toHaveBeenCalledExactlyOnceWith("123456");
 });
 
 it("allows only one redemption while Enter is pressed repeatedly", async () => {

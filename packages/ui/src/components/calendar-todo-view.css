@@ -1,0 +1,309 @@
+.workspace-app[data-web-background] .todo-planner.calendar-view {
+  max-width: 1380px;
+}
+.calendar-view .planner-daily-progress {
+  display: none;
+}
+.calendar-planner-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(280px, 1fr);
+  gap: 32px;
+  align-items: start;
+}
+.calendar-month-panel {
+  min-width: 0;
+}
+.calendar-month-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.calendar-month-selects,
+.calendar-month-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.calendar-month-selects {
+  min-width: 0;
+  gap: 8px;
+}
+.calendar-month-selects .workspace-select-trigger {
+  width: auto;
+  padding-inline: 10px;
+  border-color: transparent;
+  background: transparent;
+  font-weight: 650;
+}
+.calendar-month-controls button {
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink);
+  min-height: 44px;
+  min-width: 36px;
+  padding: 8px;
+  font: inherit;
+  font-size: 13px;
+}
+.calendar-month-controls button:hover {
+  background: var(--surface-soft);
+}
+.calendar-month-controls button:disabled {
+  opacity: 0.35;
+}
+.todo-month-calendar {
+  width: 100%;
+  --rdp-accent-color: var(--ink);
+  --rdp-selected-border: 0;
+  --rdp-today-color: var(--ink);
+}
+.todo-month-calendar .rdp-months,
+.todo-month-calendar .rdp-month {
+  width: 100%;
+  max-width: none;
+}
+.todo-month-calendar .rdp-month_caption {
+  display: none;
+}
+.todo-month-calendar .rdp-month_grid {
+  table-layout: fixed;
+  border-collapse: collapse;
+  width: 100%;
+}
+.todo-month-calendar .rdp-weekday {
+  padding: 10px 0;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.todo-month-calendar .rdp-day {
+  height: 86px;
+  padding: 3px;
+  border-top: 1px solid var(--line);
+  vertical-align: top;
+}
+.todo-month-calendar .rdp-day_button {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 3px;
+  border: 0;
+  border-radius: 12px;
+  width: 100%;
+  height: 80px;
+  padding: 3px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.todo-month-calendar .rdp-selected .rdp-day_button {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+  font-size: inherit;
+}
+.calendar-day-number {
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 500;
+}
+.rdp-selected .calendar-day-number {
+  background: var(--ink);
+  color: var(--surface);
+}
+.rdp-today:not(.rdp-selected) .calendar-day-number {
+  box-shadow: inset 0 0 0 1.5px #7763bd;
+}
+.todo-month-calendar .rdp-outside {
+  opacity: 0.5;
+}
+.calendar-day-previews {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.calendar-task-chip {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--event-bg, var(--lilac));
+  color: var(--event-ink, #211a35);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 1.2;
+}
+.calendar-task-chip.is-done {
+  background: var(--surface-soft);
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.calendar-task-chip svg {
+  vertical-align: middle;
+  margin-right: 2px;
+}
+.calendar-day-more {
+  font-size: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+.calendar-day-dot {
+  display: none;
+  background: #7763bd;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  align-self: center;
+}
+.calendar-day-dot.all-done {
+  background: var(--muted);
+}
+.calendar-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  margin: 14px 0;
+}
+.calendar-legend > span:not(.calendar-today-legend) {
+  width: 5px;
+  height: 5px;
+  background: #7763bd;
+  border-radius: 50%;
+}
+.calendar-legend .legend-done {
+  margin-left: 8px;
+  background: var(--muted) !important;
+}
+.calendar-today-legend {
+  margin-left: auto;
+}
+.calendar-agenda {
+  min-width: 0;
+  border-left: 1px solid var(--line);
+  padding-left: 28px;
+}
+.calendar-agenda-heading time {
+  font-size: 22px;
+  font-weight: 650;
+}
+.calendar-agenda-heading p {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 10px 0 18px;
+}
+.calendar-add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--lime);
+  color: #111;
+  font: inherit;
+  font-size: 13px;
+}
+.calendar-empty {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.8;
+  padding: 12px 0;
+}
+.calendar-agenda .todo-empty {
+  padding: 30px 12px;
+}
+.calendar-planner-layout :is(button, [role="combobox"]):focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.todo-month-calendar .rdp-day_button:hover {
+  background: var(--surface-soft);
+}
+@media (max-width: 1050px) {
+  .calendar-planner-layout {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .calendar-agenda {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding: 24px 0 0;
+  }
+}
+@media (max-width: 760px) {
+  .calendar-planner-layout {
+    gap: 8px;
+  }
+  .calendar-agenda {
+    padding-top: 16px;
+  }
+  .calendar-month-toolbar {
+    gap: 2px;
+    margin-bottom: 8px;
+  }
+  .calendar-month-selects {
+    gap: 0;
+  }
+  .calendar-month-selects .workspace-select-trigger {
+    font-size: 14px;
+    padding-inline: 5px;
+    gap: 4px;
+  }
+  .calendar-month-controls {
+    gap: 0;
+  }
+  .calendar-month-controls button {
+    min-width: 30px;
+    padding: 5px;
+    font-size: 12px;
+  }
+  .todo-month-calendar .rdp-day {
+    height: 46px;
+    padding: 1px;
+    border-top: 0;
+  }
+  .todo-month-calendar .rdp-day_button {
+    height: 44px;
+    min-height: 44px;
+    padding: 3px;
+    gap: 3px;
+  }
+  .calendar-day-previews {
+    display: none;
+  }
+  .calendar-day-dot {
+    display: block;
+  }
+  .calendar-legend {
+    flex-wrap: wrap;
+    font-size: 10px;
+    margin: 10px 0;
+  }
+  .calendar-agenda-heading time {
+    font-size: 20px;
+  }
+  .calendar-agenda-heading {
+    position: relative;
+    padding-right: 0;
+  }
+  .calendar-agenda-heading p {
+    margin-bottom: 12px;
+  }
+}

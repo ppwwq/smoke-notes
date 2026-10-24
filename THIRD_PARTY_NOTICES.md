@@ -71,3 +71,16 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+# rrule
+
+- Source: https://github.com/jkbrzt/rrule ; pinned npm version 2.8.1, BSD-3-Clause.
+- Used for local calendar date recurrence, including interval, weekday, month day, ordinal weekday, month, count and until. Recurrence dates use floating UTC arithmetic in each event's IANA source zone; display conversion uses Temporal. Legacy events default to Asia/Hong_Kong.
+- Complete upstream license is shipped in both apps at `public/licenses/rrule-BSD-3-Clause.txt`. No FullCalendar, Schedule-X, React Big Calendar, or Apple source/assets are copied or installed.
+
+# Calendar import and time zones
+
+- ICAL.js 2.2.1: https://github.com/kewisch/ical.js, MPL-2.0. Used unmodified to parse ICS syntax; original source is available at https://github.com/kewisch/ical.js/tree/v2.2.1. License shipped in both apps as `public/licenses/ical-js-MPL-2.0.txt`.
+- @js-temporal/polyfill 0.5.1: https://github.com/js-temporal/temporal-polyfill, ISC. Used unmodified for IANA zone conversion and daylight-saving validation. License shipped as `public/licenses/temporal-polyfill-ISC.txt`.
+- jsbi 4.3.2: https://github.com/GoogleChromeLabs/jsbi, Apache-2.0, dependency of Temporal. License shipped as `public/licenses/jsbi-Apache-2.0.txt`.
+- Versions are pinned; other locked packages remain unchanged. No Apple code, icons, or calendar assets are included.
