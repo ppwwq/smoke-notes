@@ -110,6 +110,23 @@ class AtomicMutationTests(unittest.TestCase):
             "rank": 1, "deleted_at": None, **overrides,
         }
 
+    def test_extended_colors_round_trip_without_changing_other_records(self):
+        other_before = self.sql(f"select to_jsonb(n) from public.notes n where id='{OTHER_NOTE}';").stdout
+        colors = ('amber', 'rose', 'sage', 'sky', 'violet', 'graphite',
+                  'lavender', 'mauve', 'mist', 'dustyrose', 'peach', 'clay')
+        version = 1
+        for color in colors:
+            with self.subTest(color=color):
+                result = self.call(version=version, row=self.row(color=color))
+                self.assertEqual(result['status'], 'applied')
+                stored = self.sql(f"select color from public.notes where id='{NOTE}';").stdout.strip()
+                self.assertEqual(stored, color)
+                version += 1
+        rejected = self.sql(f"update public.notes set color='not-a-color' where id='{NOTE}';", check=False)
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn('notes_color_check', rejected.stderr)
+        self.assertEqual(self.sql(f"select to_jsonb(n) from public.notes n where id='{OTHER_NOTE}';").stdout, other_before)
+
     def call_sql(self, operation=None, *, entity="note", entity_id=NOTE,
                  version=1, row=None, user=USER):
         row = self.row() if row is None else row

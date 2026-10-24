@@ -1,0 +1,138 @@
+.gooey-format-entry {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 68px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.gooey-format-control {
+  position: relative;
+  isolation: isolate;
+}
+.gooey-filter-definition {
+  position: absolute;
+  pointer-events: none;
+}
+.gooey-format-hint {
+  font-size: 10px;
+  color: var(--muted);
+}
+.gooey-format-bubbles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+}
+.gooey-format-base {
+  position: absolute;
+  inset: 0;
+  background: var(--ink, #171717);
+  border-radius: 28px;
+}
+.gooey-format-bridge {
+  position: absolute;
+  width: 42px;
+  height: 42px;
+  bottom: 0;
+  left: 22px;
+  background: var(--ink, #171717);
+  border-radius: 50%;
+}
+.gooey-format-trigger {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 46px;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 28px;
+  background: transparent;
+  color: var(--surface, #fff);
+  font-size: 12px;
+}
+.workspace-app[data-web-background]
+  .progressive-editor
+  .gooey-format-control
+  .format-toolbar {
+  position: absolute;
+  inset: auto auto 60px 0;
+  width: max-content;
+  max-width: calc(100vw - 64px);
+  gap: 4px;
+  padding: 9px;
+  border: 0;
+  border-radius: 24px;
+  background: var(--ink);
+  color: var(--surface);
+  box-shadow: 0 12px 36px #11111120;
+  flex-wrap: wrap;
+  transform-origin: 50px bottom;
+}
+.workspace-app .gooey-format-control .format-toolbar:not([hidden]) {
+  animation: format-unfurl 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.gooey-format-control[data-open]::before {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  width: min(340px, calc(100vw - 64px));
+  height: 20px;
+}
+.workspace-app[data-web-background]
+  .gooey-format-control
+  .format-toolbar
+  button {
+  color: inherit;
+}
+.workspace-app[data-web-background]
+  .gooey-format-control
+  .format-toolbar
+  button:is(:hover, .active) {
+  background: #ffffff24;
+  color: #fff;
+}
+.workspace-app .gooey-format-control .format-toolbar .glass-surface {
+  display: none;
+}
+.workspace-app[data-web-background]
+  .gooey-format-control
+  .format-toolbar
+  .mark-palette {
+  color: var(--ink);
+  background: var(--surface);
+}
+.workspace-app .gooey-format-control .format-status {
+  display: none;
+}
+@keyframes format-unfurl {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.85);
+    border-radius: 32px;
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    border-radius: 24px;
+  }
+}
+@media (max-width: 430px) {
+  .gooey-format-entry {
+    padding-inline: 16px;
+  }
+  .workspace-app[data-web-background] .gooey-format-control .format-toolbar {
+    width: 244px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-app .gooey-format-control .format-toolbar:not([hidden]) {
+    animation: none;
+  }
+}

@@ -1,0 +1,180 @@
+/* Shared paper/ink palette and React Bits RubberSegment integration. */
+.workspace-app {
+  --navigation-track: #34332e;
+  --navigation-thumb: var(--canvas);
+  --navigation-text: #e5dfd3;
+}
+.workspace-app[data-web-background="default"] {
+  --canvas: #faf3e7;
+  --surface: #fffaf2;
+  --surface-soft: #e9e1d4;
+  --ink: #282722;
+  --muted: #716b60;
+  --line: #ded6c8;
+}
+.workspace-app .todo-planner {
+  /* Palette 01 controls, paired with palette 02's completion card. */
+  --segment-track: #e9e1d4;
+  --segment-thumb: #34332e;
+  --segment-text: #645e53;
+  --segment-active-text: #fff9ef;
+  --completion-surface: #f3eadc;
+  --completion-ink: #44372c;
+  --completion-muted: #786652;
+  --completion-accent: #8c6546;
+}
+.workspace-app .app-segments.rubber-segment,
+.workspace-app[data-web-background] .web-dock.rubber-segment {
+  display: inline-grid;
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 0;
+  padding: var(--rs-inset);
+  background: var(--rs-track);
+  border-radius: var(--rs-radius);
+  isolation: isolate;
+}
+.workspace-app .app-segments.rubber-segment {
+  --rs-h: 50px !important;
+  width: 100%;
+}
+.workspace-app[data-web-background] .web-dock.rubber-segment {
+  --rs-h: 64px !important;
+  width: 368px;
+}
+.workspace-app .app-segments.rubber-segment > .rubber-segment__item,
+.workspace-app .app-segments .rubber-segment__copy,
+.workspace-app[data-web-background]
+  .web-dock.rubber-segment
+  > .rubber-segment__item,
+.workspace-app[data-web-background] .web-dock .rubber-segment__copy {
+  position: relative;
+  z-index: auto;
+  display: inline-flex;
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+  height: calc(var(--rs-h) - var(--rs-inset) * 2);
+  padding: 0 8px;
+  gap: 8px;
+  border: 0;
+  border-radius: var(--rs-thumb-radius);
+  background: none;
+  color: var(--rs-ink);
+  mix-blend-mode: normal;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+}
+.workspace-app .rubber-segment .rubber-segment__thumb {
+  z-index: 1;
+  border-radius: var(--rs-thumb-radius);
+}
+.workspace-app .app-segments .rubber-segment__copy,
+.workspace-app[data-web-background] .web-dock .rubber-segment__copy {
+  color: var(--rs-ink-active);
+  opacity: 1;
+}
+.workspace-app[data-web-background]
+  .web-dock.rubber-segment
+  button:hover:not([aria-current]) {
+  background: none;
+  color: var(--rs-ink);
+}
+.workspace-app .rubber-segment__item:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -3px;
+}
+.workspace-app[data-web-background]
+  .web-dock.rubber-segment
+  button:focus-visible {
+  outline: 2px solid #c4bbfe;
+}
+.workspace-app .planner-daily-progress {
+  background: var(--completion-surface);
+  color: var(--completion-ink);
+}
+.workspace-app .planner-daily-progress > div > span:last-child {
+  color: var(--completion-muted);
+}
+.workspace-app .planner-daily-progress progress,
+.workspace-app .planner-daily-progress progress::-webkit-progress-bar {
+  background: color-mix(
+    in srgb,
+    var(--completion-accent) 18%,
+    var(--completion-surface)
+  );
+}
+.workspace-app .planner-daily-progress progress::-webkit-progress-value {
+  background: var(--completion-accent);
+}
+.workspace-app .planner-daily-progress progress::-moz-progress-bar {
+  background: var(--completion-accent);
+}
+.workspace-app .todo-planner .planner-filter-toggle {
+  background: var(--canvas);
+  border-color: var(--line);
+  color: var(--muted);
+}
+.workspace-app .todo-planner .planner-filter-toggle[aria-expanded="true"] {
+  background: var(--segment-thumb);
+  border-color: var(--segment-thumb);
+  color: var(--segment-active-text);
+}
+.workspace-app .todo-planner .rubber-segment__item:focus-visible {
+  outline-color: var(--segment-thumb);
+  outline-offset: 3px;
+}
+.workspace-app .todo-planner .planner-todo-meta > span {
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+.workspace-app .todo-planner .planner-overdue {
+  background: var(--surface-soft);
+}
+.workspace-app .whole-card-sort {
+  cursor: grab;
+  touch-action: pan-y;
+}
+.workspace-app .whole-card-sort .sticky-card-open {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.workspace-app .whole-card-sort.is-dragging {
+  z-index: 10;
+  cursor: grabbing;
+  filter: drop-shadow(0 12px 18px #24211a25);
+}
+.workspace-app .whole-card-sort.is-dragging .sticky-card-open {
+  cursor: grabbing;
+}
+.workspace-app .whole-card-sort:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 5px;
+  border-radius: 20px;
+}
+.workspace-app .notes-board-scroll {
+  padding-bottom: 100px;
+}
+.workspace-app .create-date-chips button[aria-pressed="true"] {
+  color: var(--surface);
+  background: var(--ink);
+  border-color: var(--ink);
+}
+@media (max-width: 760px) {
+  .workspace-app[data-web-background] .web-dock.rubber-segment {
+    --rs-h: 66px !important;
+  }
+  .workspace-app[data-web-background]
+    .web-dock.rubber-segment
+    > .rubber-segment__item,
+  .workspace-app[data-web-background] .web-dock .rubber-segment__copy {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .workspace-app[data-web-background] .web-dock .rubber-segment__item > span {
+    font-size: 10px;
+  }
+}

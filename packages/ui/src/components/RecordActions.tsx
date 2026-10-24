@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { MoreHorizontal, Pencil, Trash2, X } from "../icons";
 import { WebDialog } from "./glass/WebDialog";
 
@@ -8,11 +8,13 @@ export function RecordActions({
   kind,
   onTrash,
   onRename,
+  children,
 }: {
   name: string;
   kind: "便签" | "待办" | "便签本";
   onTrash(): Promise<void>;
   onRename?(): void;
+  children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -59,6 +61,7 @@ export function RecordActions({
               <X size={20} />
             </button>
           </header>
+          {children}
           {onRename && (
             <button
               type="button"

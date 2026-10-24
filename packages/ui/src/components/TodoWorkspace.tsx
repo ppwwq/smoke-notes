@@ -3,7 +3,6 @@ import {
   RecordValidationError,
   TEXT_LIMITS,
   type Todo,
-  type TodoCreateOptions,
   type TodoRepeat,
   type TodoRuleChanges,
   type TodoStatus,
@@ -13,10 +12,13 @@ import {
   getTodoRule,
   getTodoStatus,
 } from "@smoke-notes/core";
-import { Plus, Trash2 } from "../icons";
+import { SlidersHorizontal, Repeat2, Sun, Plus } from "lucide-react";
+import { RepeatFields, type RepeatChoice } from "./TodoRepeatFields";
 import { SortableStack } from "./SortableStack";
 import { RecordActions } from "./RecordActions";
 import { SegmentedControl } from "./SegmentedControl";
+import { PlannerDatePicker } from "./PlannerDatePicker";
+import SpringCheck from "./spring-check/SpringCheck";
 
 export type TodoFilter = "all" | "open" | "done";
 
@@ -28,7 +30,8 @@ interface TodoWorkspaceProps {
   today?: string;
   syncMessage?: string;
   series?: Todo[];
-  onCreate: (text: string, options?: TodoCreateOptions) => Promise<void>;
+  onCreateRequest?(): void;
+  showAllRequest?: number;
   onSetStatus?: (id: string, status: TodoStatus) => Promise<void>;
   onReschedule?: (id: string, date: string) => Promise<void>;
   onUpdateRule?: (id: string, changes: TodoRuleChanges) => Promise<void>;
@@ -58,7 +61,10 @@ function TodoTextInput({
   const pending = useRef<Promise<void> | null>(null);
   const submitted = useRef<number | null>(null);
   return (
-    <>
+    <span className="todo-editable-label">
+      <span className="todo-label-measure" aria-hidden="true">
+        {edit?.text ?? todo.text}
+      </span>
       <input
         aria-label={`编辑待办：${todo.text}`}
         maxLength={TEXT_LIMITS.todoText}
@@ -112,75 +118,17 @@ function TodoTextInput({
         }}
       />
       {error && <span role="alert">{error}</span>}
-    </>
+    </span>
   );
 }
 
 type TodoView = "today" | "all" | "history";
-type RepeatChoice = "once" | "daily" | "weekdays" | "weekly";
-const weekdayLabels = ["日", "一", "二", "三", "四", "五", "六"];
-
 function repeatLabel(repeat?: TodoRepeat) {
+  const weekdayLabels = ["日", "一", "二", "三", "四", "五", "六"];
   if (!repeat) return "一次性";
   if (repeat.kind === "daily") return "每天";
   if (repeat.kind === "weekdays") return "工作日";
   return `每周${(repeat.weekdays ?? []).map((day) => weekdayLabels[day]).join("、")}`;
-}
-
-function RepeatFields({
-  value,
-  days,
-  onChange,
-  onDaysChange,
-  label,
-  allowOnce = true,
-}: {
-  value: RepeatChoice;
-  days: number[];
-  onChange(value: RepeatChoice): void;
-  onDaysChange(days: number[]): void;
-  label: string;
-  allowOnce?: boolean;
-}) {
-  return (
-    <>
-      <label>
-        重复
-        <select
-          aria-label={label}
-          value={value}
-          onChange={(event) => onChange(event.target.value as RepeatChoice)}
-        >
-          {allowOnce && <option value="once">不重复</option>}
-          <option value="daily">每天</option>
-          <option value="weekdays">工作日（周一至周五）</option>
-          <option value="weekly">指定星期</option>
-        </select>
-      </label>
-      {value === "weekly" && (
-        <fieldset className="planner-weekdays">
-          <legend>每周哪几天</legend>
-          {[1, 2, 3, 4, 5, 6, 0].map((day) => (
-            <label key={day}>
-              <input
-                type="checkbox"
-                checked={days.includes(day)}
-                aria-label={`星期${weekdayLabels[day]}`}
-                onChange={(event) =>
-                  onDaysChange(
-                    event.target.checked
-                      ? [...days, day].sort()
-                      : days.filter((item) => item !== day),
-                  )
-                }
-              />
-              <span>{weekdayLabels[day]}</span>
-            </label>
-          ))}
-        </fieldset>
-      )}
-    </>
-  );
 }
 
 function SeriesEditor({
@@ -290,19 +238,17 @@ function SeriesEditor({
 
 export function TodoWorkspace(props: TodoWorkspaceProps) {
   const today = props.today ?? getTodoDay();
-  const [view, setView] = useState<TodoView>("today");
+  const [view, setView] = useState<TodoView>(
+    props.showAllRequest ? "all" : "today",
+  );
   const [historyDate, setHistoryDate] = useState(addTodoDays(today, -1));
-  const [text, setText] = useState("");
-  const [date, setDate] = useState("");
-  const [notes, setNotes] = useState("");
-  const [repeat, setRepeat] = useState<RepeatChoice>("once");
-  const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [arranging, setArranging] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState("");
-  const createPending = useRef(false);
-  const draftRevision = useRef(0);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [lastShowAllRequest, setLastShowAllRequest] = useState(
+    props.showAllRequest,
+  );
   const [actionError, setActionError] = useState("");
+  const [errorId, setErrorId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
   const pending = useRef(new Set<string>());
   const [busyIds, setBusyIds] = useState<string[]>([]);
@@ -320,6 +266,11 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
     [],
   );
   const [localFilter, setLocalFilter] = useState<TodoFilter>("all");
+  if (props.showAllRequest !== lastShowAllRequest) {
+    setLastShowAllRequest(props.showAllRequest);
+    setView(props.showAllRequest ? "all" : "today");
+    setLocalFilter("all");
+  }
   const filter = props.filter ?? localFilter;
   // Legacy records keep their original Hong Kong date without a writeback.
   const todoDate = getTodoDate;
@@ -351,9 +302,6 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
         ? getTodoStatus(todo) === "completed"
         : getTodoStatus(todo) === "open"),
   );
-  const open = visible.filter((todo) => getTodoStatus(todo) === "open");
-  const done = visible.filter((todo) => getTodoStatus(todo) === "completed");
-  const skipped = visible.filter((todo) => getTodoStatus(todo) === "skipped");
   const overdue = displayTodos.filter(
     (todo) =>
       todoDate(todo) < today &&
@@ -371,6 +319,7 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
       setFeedback(message);
       return true;
     } catch {
+      setErrorId(id);
       setActionError("更新失败，请重试。内容已保留。");
       return false;
     } finally {
@@ -413,50 +362,9 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
             current.filter((item) => item.id !== todo.id),
           );
           timers.current.delete(timer);
-        }, 180);
+        }, 320);
         timers.current.add(timer);
       }
-    }
-  }
-
-  async function addTodo() {
-    if (!text.trim() || createPending.current) return;
-    if (repeat === "weekly" && !days.length) {
-      setCreateError("请至少选择一个星期。");
-      return;
-    }
-    createPending.current = true;
-    const revision = draftRevision.current;
-    setCreating(true);
-    setCreateError("");
-    try {
-      const options: TodoCreateOptions = {
-        date: date || today,
-        notes,
-        ...(repeat !== "once"
-          ? {
-              repeat: {
-                kind: repeat,
-                ...(repeat === "weekly" ? { weekdays: days } : {}),
-              },
-            }
-          : {}),
-      };
-      await props.onCreate(text, options);
-      if (revision === draftRevision.current) {
-        setText("");
-        setNotes("");
-      }
-      setFeedback("已添加，保存在本机。");
-    } catch (error) {
-      setCreateError(
-        error instanceof RecordValidationError
-          ? error.message
-          : "添加失败，请重试",
-      );
-    } finally {
-      createPending.current = false;
-      setCreating(false);
     }
   }
 
@@ -469,23 +377,30 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
       <article
         className={`todo-row planner-todo-row${status === "completed" ? " completed" : ""}${isLeaving ? " is-completing" : ""}`}
       >
-        <button
-          type="button"
-          className={`completion-ring${status === "skipped" ? " skipped" : ""}`}
-          aria-pressed={status === "completed"}
-          aria-label={`${status === "completed" ? "恢复" : "完成"}：${todo.text}`}
+        <SpringCheck
+          className="todo-spring-check"
+          checked={status === "completed" || isLeaving}
+          ariaLabel={`${status === "completed" ? "恢复" : "完成"}：${todo.text}`}
           disabled={busy || isLeaving}
-          onClick={() =>
+          onChange={() =>
             void changeStatus(
               todo,
               status === "completed" ? "open" : "completed",
             )
           }
-        >
-          <span />
-        </button>
+          editableLabel
+          label={<TodoTextInput todo={todo} onUpdate={props.onUpdate} />}
+          color="var(--ink, #2f2b27)"
+          fillColor="var(--ink, #2f2b27)"
+          checkColor="var(--surface, #fbfaf8)"
+          boxSize={24}
+          boxRadius={8}
+          fontSize={14}
+          doneOpacity={0.58}
+          bounce={0.2}
+          strikeLag={0.12}
+        />
         <div className="planner-todo-copy">
-          <TodoTextInput todo={todo} onUpdate={props.onUpdate} />
           <div className="planner-todo-meta">
             {view === "all" && (
               <time dateTime={todoDate(todo)}>
@@ -499,102 +414,90 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
             <p className="planner-todo-note">{todo.planning.notes}</p>
           )}
         </div>
-        {props.web ? (
-          <RecordActions
-            name={todo.text}
-            kind="待办"
-            onTrash={() => props.onTrash(todo.id)}
-          />
-        ) : (
-          <button
-            type="button"
-            className="row-delete"
-            aria-label={`删除：${todo.text}`}
-            onClick={() =>
-              void act(
-                todo.id,
-                () => props.onTrash(todo.id),
-                "已移入最近删除。可以恢复。",
-              )
-            }
-          >
-            <Trash2 size={15} />
-          </button>
-        )}
-        {!past && (props.onReschedule || (recurring && props.onSetStatus)) && (
-          <details className="planner-disclosure planner-row-options">
-            <summary>安排与更多</summary>
-            <div className="planner-row-options-content">
-              {recurring
-                ? props.onSetStatus && (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() =>
-                        void changeStatus(
-                          todo,
-                          status === "skipped" ? "open" : "skipped",
-                        )
-                      }
-                    >
-                      {status === "skipped" ? "恢复今天" : "跳过今天"}
-                    </button>
-                  )
-                : props.onReschedule && (
-                    <>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          void act(
-                            todo.id,
-                            () => props.onReschedule!(todo.id, today),
-                            "已移到今天。",
-                          )
-                        }
-                      >
-                        移到今天
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          void act(
-                            todo.id,
-                            () =>
-                              props.onReschedule!(
-                                todo.id,
-                                addTodoDays(today, 1),
-                              ),
-                            "已移到明天。",
-                          )
-                        }
-                      >
-                        移到明天
-                      </button>
-                      <label>
-                        指定日期
-                        <input
-                          type="date"
-                          aria-label={`安排日期：${todo.text}`}
-                          value={todoDate(todo)}
+        <RecordActions
+          name={todo.text}
+          kind="待办"
+          onTrash={() => props.onTrash(todo.id)}
+        >
+          {errorId === todo.id && actionError && (
+            <p className="action-error" role="alert">
+              {actionError}
+            </p>
+          )}
+          {!past &&
+            (props.onReschedule || (recurring && props.onSetStatus)) && (
+              <section className="planner-row-options" aria-label="安排待办">
+                <div className="planner-row-options-content">
+                  {recurring
+                    ? props.onSetStatus && (
+                        <button
+                          type="button"
                           disabled={busy}
-                          onChange={(event) => {
-                            const next = event.target.value;
-                            if (next)
+                          onClick={() =>
+                            void changeStatus(
+                              todo,
+                              status === "skipped" ? "open" : "skipped",
+                            )
+                          }
+                        >
+                          {status === "skipped" ? "恢复今天" : "跳过今天"}
+                        </button>
+                      )
+                    : props.onReschedule && (
+                        <>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() =>
                               void act(
                                 todo.id,
-                                () => props.onReschedule!(todo.id, next),
-                                "日期已更新。",
-                              );
-                          }}
-                        />
-                      </label>
-                    </>
-                  )}
-            </div>
-          </details>
-        )}
+                                () => props.onReschedule!(todo.id, today),
+                                "已移到今天。",
+                              )
+                            }
+                          >
+                            移到今天
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() =>
+                              void act(
+                                todo.id,
+                                () =>
+                                  props.onReschedule!(
+                                    todo.id,
+                                    addTodoDays(today, 1),
+                                  ),
+                                "已移到明天。",
+                              )
+                            }
+                          >
+                            移到明天
+                          </button>
+                          <label>
+                            指定日期
+                            <PlannerDatePicker
+                              label={`安排日期：${todo.text}`}
+                              today={today}
+                              value={todoDate(todo)}
+                              disabled={busy}
+                              onChange={(next) => {
+                                if (next)
+                                  void act(
+                                    todo.id,
+                                    () => props.onReschedule!(todo.id, next),
+                                    "日期已更新。",
+                                  );
+                              }}
+                            />
+                          </label>
+                        </>
+                      )}
+                </div>
+              </section>
+            )}
+        </RecordActions>
       </article>
     );
   }
@@ -617,114 +520,67 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
     >
       <header className="todo-hero">
         <div>
-          <p className="eyebrow">TODAY · FOCUS</p>
-          <h1>待办</h1>
-          <p>
-            今天完成 {completed} / {currentTodos.length}
-            {currentTodos.length === 0 ? " · 从一件小事开始。" : ""}
+          <p className="eyebrow">ONE THING AT A TIME</p>
+          <h1>
+            {view === "today"
+              ? "今天，慢慢完成"
+              : view === "history"
+                ? "回看每一天"
+                : "所有安排"}
+          </h1>
+          <p className="planner-date">
+            <Sun size={15} aria-hidden="true" />
+            <time dateTime={today}>
+              {new Intl.DateTimeFormat("zh-CN", {
+                month: "long",
+                day: "numeric",
+                weekday: "long",
+                timeZone: "UTC",
+              }).format(new Date(`${today}T12:00:00Z`))}
+            </time>
           </p>
-          {props.syncMessage && (
-            <p
-              className="planner-sync-message"
-              role="status"
-              aria-label="待办同步状态"
-            >
-              {props.syncMessage}
-            </p>
-          )}
-        </div>
-        <div
-          className="planner-today-count"
-          aria-label={`今天完成 ${completed} 项，共 ${currentTodos.length} 项`}
-        >
-          <strong>{completed}</strong>
-          <span>今日完成</span>
         </div>
       </header>
-      <SegmentedControl<TodoView>
-        label="待办视图"
-        value={view}
-        onChange={setView}
-        options={[
-          { value: "today", label: "今天" },
-          { value: "all", label: "全部" },
-          { value: "history", label: "历史" },
-        ]}
-      />
-      {view !== "history" && (
-        <div className="planner-create">
-          <div className="todo-composer">
-            <Plus size={17} />
-            <input
-              aria-label="新待办内容"
-              maxLength={TEXT_LIMITS.todoText}
-              placeholder="添加一件要完成的事"
-              value={text}
-              onChange={(event) => {
-                draftRevision.current += 1;
-                setText(event.target.value);
-                setCreateError("");
-              }}
-              onKeyDown={(event) => {
-                if (event.nativeEvent.isComposing || event.keyCode === 229)
-                  return;
-                if (event.key === "Enter") void addTodo();
-              }}
-            />
-            <button
-              type="button"
-              disabled={creating}
-              onClick={() => void addTodo()}
-            >
-              添加
-            </button>
-          </div>
-          <details className="planner-disclosure planner-create-options">
-            <summary>日期、重复与备注</summary>
-            <div className="planner-fields">
-              <label>
-                日期
-                <input
-                  aria-label="新待办日期"
-                  type="date"
-                  value={date || today}
-                  onChange={(event) => {
-                    draftRevision.current += 1;
-                    setDate(event.target.value);
-                  }}
-                />
-              </label>
-              <RepeatFields
-                value={repeat}
-                days={days}
-                onChange={(value) => {
-                  draftRevision.current += 1;
-                  setRepeat(value);
-                }}
-                onDaysChange={(value) => {
-                  draftRevision.current += 1;
-                  setDays(value);
-                }}
-                label="新待办重复"
-              />
-              <label>
-                备注
-                <textarea
-                  aria-label="新待办备注"
-                  value={notes}
-                  maxLength={4000}
-                  placeholder="可选，写下一点提醒"
-                  onChange={(event) => {
-                    draftRevision.current += 1;
-                    setNotes(event.target.value);
-                  }}
-                />
-              </label>
-            </div>
-          </details>
-          {createError && <p role="alert">{createError}</p>}
+      <section className="planner-daily-progress" aria-label="今日进度">
+        <div>
+          <span>
+            今天完成 <strong>{completed}</strong> / {currentTodos.length}
+          </span>
+          <span>
+            {openToday > 0
+              ? `还剩 ${openToday} 件`
+              : currentTodos.length
+                ? "今天已安排妥当"
+                : "从一件小事开始"}
+          </span>
         </div>
-      )}
+        <progress
+          aria-label="今天完成进度"
+          value={completed}
+          max={currentTodos.length || 1}
+        />
+      </section>
+      <div className="planner-navigation">
+        <SegmentedControl<TodoView>
+          label="待办视图"
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "today", label: "今天" },
+            { value: "all", label: "全部" },
+            { value: "history", label: "历史" },
+          ]}
+        />
+        <button
+          className="planner-filter-toggle"
+          type="button"
+          aria-expanded={filtersOpen}
+          onClick={() => setFiltersOpen(!filtersOpen)}
+        >
+          <SlidersHorizontal size={16} />
+          {filter === "all" ? "筛选" : filter === "open" ? "未完成" : "已完成"}
+        </button>
+      </div>
       {view === "history" && (
         <section className="planner-history-picker" aria-label="按日查看历史">
           <button
@@ -736,14 +592,12 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
           </button>
           <label>
             记录日期
-            <input
-              aria-label="历史日期"
-              type="date"
+            <PlannerDatePicker
+              label="历史日期"
+              today={today}
               max={today}
               value={historyDate}
-              onChange={(event) => {
-                if (event.target.value) setHistoryDate(event.target.value);
-              }}
+              onChange={setHistoryDate}
             />
           </label>
           <button
@@ -756,25 +610,20 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
           </button>
         </section>
       )}
-      <div className="filter-bar planner-filter-bar" aria-label="待办筛选">
-        {(["all", "open", "done"] as const).map((value) => (
-          <button
-            type="button"
-            key={value}
-            className={filter === value ? "active" : ""}
-            aria-pressed={filter === value}
-            onClick={() => {
-              setLocalFilter(value);
-              props.onFilterChange?.(value);
-            }}
-          >
-            {value === "all"
-              ? "全部状态"
-              : value === "open"
-                ? "未完成"
-                : "已完成"}
-          </button>
-        ))}
+      <div className="filter-bar planner-filter-bar" hidden={!filtersOpen}>
+        <SegmentedControl<TodoFilter>
+          label="待办筛选"
+          value={filter}
+          options={[
+            { value: "all", label: "全部状态" },
+            { value: "open", label: "未完成" },
+            { value: "done", label: "已完成" },
+          ]}
+          onChange={(value) => {
+            setLocalFilter(value);
+            props.onFilterChange?.(value);
+          }}
+        />
         {props.web && (
           <button
             type="button"
@@ -822,51 +671,52 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
         )}
       </div>
       <div className="todo-list-scroll">
+        {visible.length > 0 && (
+          <section
+            className="planner-open"
+            aria-label={view === "history" ? "当日事项" : "待办事项"}
+          >
+            <h2>
+              {view === "history"
+                ? "当日事项"
+                : view === "today"
+                  ? "今天的事"
+                  : "全部事项"}{" "}
+              <span>· {visible.length}</span>
+            </h2>
+            {list(visible, view === "history")}
+          </section>
+        )}
         {view === "today" && filter !== "done" && overdue.length > 0 && (
-          <details className="planner-disclosure planner-overdue" open>
+          <details className="planner-disclosure planner-overdue">
             <summary>
               之前未完成 <span>{overdue.length}</span>
             </summary>
             <div>{list(overdue)}</div>
           </details>
         )}
-        {open.length > 0 && (
-          <section
-            className="planner-open"
-            aria-label={view === "history" ? "当日未完成" : "未完成事项"}
-          >
-            {view === "history" && <h2>未完成 · {open.length}</h2>}
-            {list(open, view === "history")}
-          </section>
-        )}
-        {done.length > 0 && (
-          <details
-            className="planner-disclosure planner-completed"
-            open={filter === "done" || view === "history" ? true : undefined}
-          >
-            <summary>
-              已完成 <span>{done.length}</span>
-            </summary>
-            <div>{list(done, view === "history")}</div>
-          </details>
-        )}
-        {skipped.length > 0 && (
-          <details
-            className="planner-disclosure planner-skipped"
-            open={view === "history" ? true : undefined}
-          >
-            <summary>
-              已跳过 <span>{skipped.length}</span>
-            </summary>
-            <div>{list(skipped, view === "history")}</div>
-          </details>
-        )}
         {visible.length === 0 && (
           <div className="todo-empty">
-            <span>○</span>
+            <Sun size={28} aria-hidden="true" />
             <p>
-              {view === "history" ? "这一天没有记录。" : "这一栏现在很安静。"}
+              {view === "history"
+                ? "这一天没有记录。"
+                : filter !== "all"
+                  ? "这个筛选下没有事项。"
+                  : "留一点空白，给今天的小计划。"}
             </p>
+            {view !== "history" &&
+              filter === "all" &&
+              props.onCreateRequest && (
+                <button
+                  type="button"
+                  className="planner-empty-add"
+                  onClick={props.onCreateRequest}
+                >
+                  <Plus size={16} />
+                  添加一件事
+                </button>
+              )}
           </div>
         )}
         {view === "today" && openToday === 0 && currentTodos.length > 0 && (
@@ -874,9 +724,15 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
             今天的事项已安排妥当。休息一下，也很好。
           </p>
         )}
-        {view === "all" && (props.series?.length ?? 0) > 0 && (
-          <section className="planner-series" aria-label="重复计划">
-            <h2>重复计划</h2>
+        {(props.series?.length ?? 0) > 0 && view !== "history" && (
+          <details
+            className="planner-series planner-disclosure"
+            aria-label="重复计划"
+          >
+            <summary>
+              <Repeat2 size={16} />
+              重复计划 <span>{props.series?.length}</span>
+            </summary>
             {props.series?.map((series) => {
               const rule = getTodoRule(series);
               const busy = busyIds.includes(series.id);
@@ -955,9 +811,18 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
                 </details>
               );
             })}
-          </section>
+          </details>
         )}
       </div>
+      {props.syncMessage && (
+        <p
+          className="planner-sync-message"
+          role="status"
+          aria-label="待办同步状态"
+        >
+          {props.syncMessage}
+        </p>
+      )}
     </main>
   );
 }

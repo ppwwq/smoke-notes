@@ -10,6 +10,17 @@ import { PairingGate } from "../src/components/PairingDialog";
 
 afterEach(cleanup);
 
+it("lets a visitor skip pairing without submitting a code", () => {
+  const onRedeem = vi.fn(async () => {});
+  const onSkip = vi.fn();
+  render(<PairingGate onRedeem={onRedeem} onSkip={onSkip} />);
+  fireEvent.click(
+    screen.getByRole("button", { name: "暂时跳过，先在本机使用" }),
+  );
+  expect(onSkip).toHaveBeenCalledOnce();
+  expect(onRedeem).not.toHaveBeenCalled();
+});
+
 it("allows only one redemption while Enter is pressed repeatedly", async () => {
   let finish!: () => void;
   const onRedeem = vi.fn(
@@ -23,7 +34,11 @@ it("allows only one redemption while Enter is pressed repeatedly", async () => {
   fireEvent.keyDown(input, { key: "Enter" });
   fireEvent.keyDown(input, { key: "Enter" });
   expect(onRedeem).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole("button", { name: "连接中…" })).toBeDisabled();
+  expect(document.querySelector(".diamond-grid")).not.toBeNull();
   await act(async () => finish());
+  expect(document.querySelector(".diamond-grid")).toBeNull();
+  expect(screen.getByRole("button", { name: "配对并同步" })).toBeEnabled();
 });
 
 it("does not redeem while confirming IME text", () => {

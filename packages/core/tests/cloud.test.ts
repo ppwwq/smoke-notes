@@ -396,38 +396,43 @@ describe("remote record mapping", () => {
     });
   });
 
-  it("preserves synced rich formatting and the note color", () => {
-    const contentJson = {
-      type: "doc" as const,
-      content: [
-        {
-          type: "paragraph",
-          content: [{ type: "text", text: "重点", marks: [{ type: "bold" }] }],
-        },
-      ],
-    };
-    expect(
-      mapRemoteRecord("note", {
-        id: "note-rich",
-        notebook_id: "book-1",
-        title: "标注",
-        body: "重点",
-        content_json: contentJson,
-        color: "rose",
+  it.each(["rose", "lavender", "mauve", "mist", "dustyrose", "peach", "clay"])(
+    "preserves synced rich formatting and the %s note color",
+    (color) => {
+      const contentJson = {
+        type: "doc" as const,
+        content: [
+          {
+            type: "paragraph",
+            content: [
+              { type: "text", text: "重点", marks: [{ type: "bold" }] },
+            ],
+          },
+        ],
+      };
+      expect(
+        mapRemoteRecord("note", {
+          id: "note-rich",
+          notebook_id: "book-1",
+          title: "标注",
+          body: "重点",
+          content_json: contentJson,
+          color,
+          kind: "todo",
+          rank: 2048,
+          version: 4,
+          conflict_of: null,
+          updated_at: "2026-08-28T13:00:00.000Z",
+          deleted_at: null,
+        }),
+      ).toMatchObject({
+        contentJson,
+        color,
         kind: "todo",
-        rank: 2048,
-        version: 4,
-        conflict_of: null,
-        updated_at: "2026-08-28T13:00:00.000Z",
-        deleted_at: null,
-      }),
-    ).toMatchObject({
-      contentJson,
-      color: "rose",
-      kind: "todo",
-      body: "重点",
-    });
-  });
+        body: "重点",
+      });
+    },
+  );
 
   it("preserves an empty title returned by Supabase", () => {
     expect(

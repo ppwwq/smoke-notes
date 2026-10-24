@@ -11,6 +11,7 @@ import {
 import type {
   LocalRepository,
   Note,
+  NoteKind,
   Notebook,
   Todo,
   TrashRecord,
@@ -30,6 +31,7 @@ import {
   X,
   NoteAppearance as Palette,
 } from "./icons";
+import { WorkspaceCreate } from "./components/WorkspaceCreate";
 import { WorkspaceDock } from "./components/WorkspaceDock";
 import { Sidebar } from "./components/Sidebar";
 import { WebNotebookCollection } from "./components/WebNotebookCollection";
@@ -39,6 +41,8 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { PairingDialog } from "./components/PairingDialog";
 import type { RichNoteEditorHandle } from "./components/RichNoteEditor";
 import { SyncIndicator } from "./components/SyncIndicator";
+import { LoadingStatus } from "./components/LoadingStatus";
+import { DiamondGrid } from "./components/diamond-grid/DiamondGrid";
 import { useMobileSidebar } from "./useMobileSidebar";
 const RichNoteEditor = lazy(() =>
   import("./components/RichNoteEditor").then((module) => ({
@@ -59,6 +63,7 @@ interface SmokeNotesAppProps {
   platform: AppPlatform;
   desktopBridge?: DesktopBridge;
   pairingController?: PairingController;
+  onRedeemPairing?: (code: string) => Promise<void>;
   syncStatus?: SyncStatus;
 }
 
@@ -73,6 +78,7 @@ export function SmokeNotesApp({
   platform,
   desktopBridge,
   pairingController,
+  onRedeemPairing,
   syncStatus,
 }: SmokeNotesAppProps) {
   const {
@@ -139,6 +145,9 @@ export function SmokeNotesApp({
   const [manualSaving, setManualSaving] = useState(false);
   const manualSavePending = useRef(false);
   const creatingRef = useRef(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createMode, setCreateMode] = useState<"note" | "todo">("note");
+  const [showAllTodosRequest, setShowAllTodosRequest] = useState(0);
   const editorRef = useRef<RichNoteEditorHandle>(null);
   const { preparingQuit, quitError } = useDesktopQuit(desktopBridge, editorRef);
   const activeNoteRef = useRef<Note | null>(null);
@@ -374,7 +383,9 @@ export function SmokeNotesApp({
         ?.focus({ preventScroll: true });
     }
   }, [browseKey, webEditing, notesExpanded]);
-  const { style: viewportStyle, compactEditing } = useWebViewport(webEditing);
+  const { style: viewportStyle, compactEditing } = useWebViewport(
+    webEditing || createOpen,
+  );
   useEffect(() => {
     setEditorMenu(null);
     setEditorActionError("");
@@ -413,6 +424,26 @@ export function SmokeNotesApp({
     await refreshAfterMutation(created.id);
     setMobileNavOpen(false);
     setNotesExpanded(true);
+  }
+
+  async function createWorkspaceNote(kind: NoteKind, notebookId: string) {
+    if (creatingRef.current) return;
+    creatingRef.current = true;
+    try {
+      await editorRef.current?.flushSave();
+      const note = await repository.createNote(notebookId, {
+        title: "",
+        body: "",
+        kind,
+      });
+      await refreshAfterMutation(notebookId);
+      setView("notes");
+      setNotebookCollectionOpen(false);
+      setNotesExpanded(true);
+      transitionWorkspace(() => setSelectedNoteId(note.id));
+    } finally {
+      creatingRef.current = false;
+    }
   }
 
   async function saveManually() {
@@ -577,7 +608,13 @@ export function SmokeNotesApp({
                     : "离线记录中"
               }
             >
-              {online ? <Wifi size={13} /> : <WifiOff size={13} />}
+              {syncStatus?.phase === "syncing" ? (
+                <DiamondGrid />
+              ) : online ? (
+                <Wifi size={13} />
+              ) : (
+                <WifiOff size={13} />
+              )}
               <span>
                 {syncStatus
                   ? {
@@ -615,10 +652,11 @@ export function SmokeNotesApp({
               today={todoToday}
               series={todoSeries}
               syncMessage={syncMessage}
-              onCreate={async (text, options) => {
-                await repository.createTodo(text, options ?? {});
-                await refreshAfterMutation(selectedNotebookId);
+              onCreateRequest={() => {
+                setCreateMode("todo");
+                setCreateOpen(true);
               }}
+              showAllRequest={showAllTodosRequest}
               onSetStatus={async (id, status) => {
                 await repository.setTodoStatus(id, status);
                 await refreshAfterMutation(selectedNotebookId);
@@ -846,8 +884,8 @@ export function SmokeNotesApp({
               )}
               <Suspense
                 fallback={
-                  <div role="status" className="rich-editor-loading">
-                    正在打开便签…
+                  <div className="rich-editor-loading">
+                    <LoadingStatus label="正在打开便签…" />
                   </div>
                 }
               >
@@ -927,22 +965,9 @@ export function SmokeNotesApp({
                 lastOpenedNote.current = id;
                 transitionWorkspace(() => setSelectedNoteId(id));
               }}
-              onCreateNote={async (kind) => {
-                if (!selectedNotebookId || creatingRef.current) return;
-                creatingRef.current = true;
-                try {
-                  await editorRef.current?.flushSave();
-                  const note = await repository.createNote(selectedNotebookId, {
-                    title: "",
-                    body: "",
-                    kind,
-                  });
-                  await refreshAfterMutation(selectedNotebookId);
-                  setNotesExpanded(true);
-                  transitionWorkspace(() => setSelectedNoteId(note.id));
-                } finally {
-                  creatingRef.current = false;
-                }
+              onCreateRequest={() => {
+                setCreateMode("note");
+                setCreateOpen(true);
               }}
               onTrashNote={async (id) => {
                 const note = notes.find((item) => item.id === id);
@@ -981,11 +1006,43 @@ export function SmokeNotesApp({
                 }
                 setNotebookCollectionOpen(index === 2);
                 if (index === 0) setView("notes");
-                if (index === 1) void showTodos();
+                if (index === 1) {
+                  setShowAllTodosRequest(0);
+                  void showTodos();
+                }
               }}
             />
           )}
         </div>
+        <WorkspaceCreate
+          hidden={webEditing || settingsOpen || pairingOpen || mobileNavOpen}
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          mode={createMode}
+          onModeChange={setCreateMode}
+          defaultMode={
+            view === "todos" && !notebookCollectionOpen ? "todo" : "note"
+          }
+          notebooks={notebooks}
+          selectedNotebookId={selectedNotebookId}
+          today={todoToday}
+          onCreateNote={createWorkspaceNote}
+          onCreateNotebook={async (name) => {
+            const book = await repository.createNotebook(name);
+            await refreshAfterMutation(book.id);
+            return book.id;
+          }}
+          onCreateTodo={async (text, options) => {
+            await repository.createTodo(text, options ?? {});
+            await refreshAfterMutation(selectedNotebookId);
+          }}
+          onShowTodos={() => {
+            setNotebookCollectionOpen(false);
+            setTodoFilter("all");
+            setShowAllTodosRequest((value) => value + 1);
+            void showTodos();
+          }}
+        />
         {settingsOpen && (
           <SettingsPanel
             bridge={desktopBridge}
@@ -1022,6 +1079,7 @@ export function SmokeNotesApp({
           <PairingDialog
             web
             controller={pairingController}
+            onRedeem={onRedeemPairing}
             onClose={() => setPairingOpen(false)}
           />
         )}

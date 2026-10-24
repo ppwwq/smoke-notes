@@ -152,6 +152,13 @@ class BackendFailureTests(unittest.TestCase):
                 backend.main()
             self.assertEqual(run.call_count, 1)
 
+    def test_missing_prior_planning_migration_is_not_applied_with_color_release(self):
+        with patch.dict('os.environ', self.env), \
+             patch('backend.run', return_value='\n'.join(self.versions[:-2])) as run:
+            with self.assertRaisesRegex(RuntimeError, 'history differs'):
+                backend.main()
+            self.assertEqual(run.call_count, 1)
+
     def test_changed_rows_stop_before_edge_deployment(self):
         with patch.dict('os.environ', self.env), patch('backend.run', return_value='\n'.join(self.versions)) as run, \
              patch('backend.snapshot', side_effect=[[{'hash': 'before'}], [{'hash': 'after'}]]):

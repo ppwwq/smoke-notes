@@ -16,7 +16,18 @@ export interface Notebook extends SyncFields {
 }
 
 export type NoteColor =
-  "amber" | "rose" | "sage" | "sky" | "violet" | "graphite";
+  | "amber"
+  | "rose"
+  | "sage"
+  | "sky"
+  | "violet"
+  | "graphite"
+  | "lavender"
+  | "mauve"
+  | "mist"
+  | "dustyrose"
+  | "peach"
+  | "clay";
 export type NoteKind = "note" | "todo";
 
 export interface RichTextNode {

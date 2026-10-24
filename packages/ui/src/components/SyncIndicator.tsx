@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { SyncStatus } from "@smoke-notes/core";
+import { DiamondGrid } from "./diamond-grid/DiamondGrid";
 
 export function SyncIndicator({ status }: { status?: SyncStatus }) {
   const [slow, setSlow] = useState(false);
@@ -35,12 +36,12 @@ export function SyncIndicator({ status }: { status?: SyncStatus }) {
       title={label}
     >
       <span className="sr-only">{label}</span>
-      {visible && (
-        <span
-          className={`sync-ring${syncing ? " spinning" : ""}`}
-          aria-hidden="true"
-        />
-      )}
+      {visible &&
+        (syncing ? (
+          <DiamondGrid />
+        ) : (
+          <span className="sync-ring" aria-hidden="true" />
+        ))}
     </div>
   );
 }

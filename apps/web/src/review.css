@@ -25,3 +25,30 @@
   color: #111;
   font-family: Arial, sans-serif;
 }
+body:has(.loading-review) {
+  margin: 0;
+}
+.loading-review {
+  min-height: 100dvh;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #faf3e7;
+  color: #34332e;
+  font-family: Arial, "Microsoft YaHei", sans-serif;
+}
+.loading-review p {
+  margin: 24px 0 12px;
+  color: #716b60;
+  font-size: 12px;
+}
+.loading-review a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: inherit;
+  font-size: 13px;
+  text-underline-offset: 5px;
+}

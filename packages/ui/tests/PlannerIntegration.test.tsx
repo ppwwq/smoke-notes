@@ -50,7 +50,7 @@ it("catches up on focus after Hong Kong midnight and retains the prior completed
       { name: "待办" },
     ),
   );
-  await screen.findByRole("heading", { name: "待办" });
+  await screen.findByRole("heading", { name: "今天，慢慢完成" });
   act(() => {
     vi.setSystemTime(new Date("2026-10-20T16:01:00Z"));
     fireEvent(window, new Event("focus"));

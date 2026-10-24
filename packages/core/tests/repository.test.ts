@@ -61,7 +61,20 @@ describe("LocalRepository", () => {
 
   it("allocates unused then least-used colours atomically with stable ties", async () => {
     const book = await repository.createNotebook("配色");
-    const palette = ["amber", "rose", "sage", "sky", "violet", "graphite"];
+    const palette = [
+      "amber",
+      "rose",
+      "sage",
+      "sky",
+      "violet",
+      "graphite",
+      "lavender",
+      "mauve",
+      "mist",
+      "dustyrose",
+      "peach",
+      "clay",
+    ];
     const first = await Promise.all(
       palette.map((title) => repository.createNote(book.id, { title })),
     );
@@ -103,6 +116,29 @@ describe("LocalRepository", () => {
     expect((await repository.getNote(explicit.id))?.color).toBe("sky");
     expect(await repository.getNote(amber.id)).toEqual(amber);
   });
+
+  it.each(["lavender", "mauve", "mist", "dustyrose", "peach", "clay"] as const)(
+    "persists the added %s colour and queues it without altering existing notes",
+    async (color) => {
+      const book = await repository.createNotebook("配色保存");
+      const original = await repository.createNote(book.id, {
+        title: "原有",
+        color: "violet",
+      });
+      const changed = await repository.createNote(book.id, { title: "新配色" });
+      await repository.updateNote(changed.id, { title: changed.title, color });
+      database.close();
+      await database.open();
+
+      expect((await repository.getNote(changed.id))?.color).toBe(color);
+      expect(await repository.getNote(original.id)).toEqual(original);
+      expect(
+        (await repository.listPendingOperations())
+          .filter((operation) => operation.entityId === changed.id)
+          .at(-1)?.payload.color,
+      ).toBe(color);
+    },
+  );
 
   it("rejects creating a note in a deleted or missing notebook", async () => {
     const notebook = await repository.createNotebook("即将删除");

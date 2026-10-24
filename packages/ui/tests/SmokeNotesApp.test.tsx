@@ -220,7 +220,7 @@ describe("SmokeNotesApp", () => {
     );
     await screen.findByText("周会记录");
     fireEvent.click(screen.getByRole("button", { name: "新建便签" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "普通便签" }));
+    fireEvent.click(screen.getByRole("button", { name: /文字便签/ }));
     const title = await screen.findByRole("textbox", { name: "便签标题" });
     fireEvent.change(title, { target: { value: "退出前的主窗口草稿" } });
     await act(async () => prepare());
@@ -732,6 +732,7 @@ describe("SmokeNotesApp", () => {
     await findNote("周会记录");
     expect(container.querySelector(".notes-board-scroll")!.scrollTop).toBe(180);
     fireEvent.click(nav().getByRole("button", { name: "待办" }));
+    fireEvent.click(await screen.findByRole("button", { name: "筛选" }));
     fireEvent.click(await screen.findByRole("button", { name: "未完成" }));
     fireEvent.click(nav().getByRole("button", { name: "浏览便签本" }));
     fireEvent.click(screen.getByRole("button", { name: "展开卡片" }));
@@ -747,8 +748,12 @@ describe("SmokeNotesApp", () => {
     await findNote("周会记录");
     expect(container.querySelector(".notes-board-scroll")!.scrollTop).toBe(180);
     fireEvent.click(nav().getByRole("button", { name: "待办" }));
+    fireEvent.click(await screen.findByRole("button", { name: "未完成" }));
     expect(
-      await screen.findByRole("button", { name: "未完成" }),
+      within(screen.getByRole("group", { name: "待办筛选" })).getByRole(
+        "button",
+        { name: "未完成" },
+      ),
     ).toHaveAttribute("aria-pressed", "true");
   });
 
@@ -781,10 +786,12 @@ describe("SmokeNotesApp", () => {
     expect(await screen.findByText("周会记录")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "待办" }));
 
-    const toggle = await screen.findByRole("button", { name: "完成：交水费" });
+    const toggle = await screen.findByRole("checkbox", {
+      name: "完成：交水费",
+    });
     await user.click(toggle);
     expect(
-      await screen.findByRole("button", { name: "恢复：交水费" }),
+      await screen.findByRole("checkbox", { name: "恢复：交水费" }),
     ).toBeInTheDocument();
   });
 
@@ -823,18 +830,20 @@ describe("SmokeNotesApp", () => {
     );
   });
 
-  it("supports menu arrows and Escape with focus restored to the trigger", async () => {
+  it("supports opening the creation dialog by keyboard, Tab and Escape", async () => {
     const user = userEvent.setup();
     render(<SmokeNotesApp repository={repository} platform="desktop" />);
     await screen.findByText("周会记录");
     const trigger = screen.getByRole("button", { name: "新建便签" });
     trigger.focus();
     await user.keyboard("{ArrowDown}");
-    expect(screen.getByRole("menuitem", { name: "普通便签" })).toHaveFocus();
-    await user.keyboard("{ArrowDown}");
-    expect(screen.getByRole("menuitem", { name: "待办便签" })).toHaveFocus();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /文字便签/ })).toHaveFocus(),
+    );
+    await user.tab();
+    expect(screen.getByRole("button", { name: /清单便签/ })).toHaveFocus();
     await user.keyboard("{Escape}");
-    expect(screen.queryByRole("menu")).toBeNull();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(trigger).toHaveFocus();
   });
 
@@ -860,7 +869,7 @@ describe("SmokeNotesApp", () => {
 
     await screen.findByRole("heading", { name: "灵感" });
     await user.click(screen.getByRole("button", { name: "新建便签" }));
-    await user.click(screen.getByRole("menuitem", { name: "普通便签" }));
+    await user.click(screen.getByRole("button", { name: /文字便签/ }));
     await user.click(
       await screen.findByRole("button", { name: "在桌面打开便签" }),
     );
@@ -897,7 +906,7 @@ describe("SmokeNotesApp", () => {
 
     await screen.findByText("周会记录");
     await user.click(screen.getByRole("button", { name: "新建便签" }));
-    await user.click(screen.getByRole("menuitem", { name: "待办便签" }));
+    await user.click(screen.getByRole("button", { name: /清单便签/ }));
 
     await user.click(
       await screen.findByRole("button", { name: "在桌面打开便签" }),

@@ -457,6 +457,24 @@
 .workspace-app[data-web-background] .note-color-graphite {
   --card-color: #e4e4e1;
 }
+.workspace-app[data-web-background] .note-color-lavender {
+  --card-color: #dbd2f0;
+}
+.workspace-app[data-web-background] .note-color-mauve {
+  --card-color: #e8daec;
+}
+.workspace-app[data-web-background] .note-color-mist {
+  --card-color: #d7e1ed;
+}
+.workspace-app[data-web-background] .note-color-dustyrose {
+  --card-color: #ebd1cc;
+}
+.workspace-app[data-web-background] .note-color-peach {
+  --card-color: #f0dcc4;
+}
+.workspace-app[data-web-background] .note-color-clay {
+  --card-color: #e4d5d0;
+}
 .workspace-app[data-web-background] .sticky-card:hover {
   transform: translateY(-3px);
   box-shadow: 0 8px 18px #1111110a;

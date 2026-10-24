@@ -86,6 +86,6 @@ it("exposes existing restore and pairing paths through settings sections and ret
   await waitFor(() => expect(restore).toHaveBeenCalledTimes(2));
   fireEvent.click(screen.getByRole("button", { name: "返回设置" }));
   fireEvent.click(screen.getByRole("button", { name: /手机与同步/ }));
-  fireEvent.click(screen.getByRole("button", { name: "连接手机" }));
+  fireEvent.click(screen.getByRole("button", { name: "配对设备" }));
   expect(pairing).toHaveBeenCalledOnce();
 });

@@ -368,7 +368,7 @@ export function SettingsPanel({
           className="pairing-action"
           onClick={onOpenPairing}
         >
-          连接手机
+          {web ? "配对设备" : "连接手机"}
         </button>
       </div>
 

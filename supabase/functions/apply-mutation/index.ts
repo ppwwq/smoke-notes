@@ -29,6 +29,12 @@ const noteColors = new Set([
   "sky",
   "violet",
   "graphite",
+  "lavender",
+  "mauve",
+  "mist",
+  "dustyrose",
+  "peach",
+  "clay",
 ]);
 
 function noteColor(value: unknown): string {

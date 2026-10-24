@@ -1,0 +1,51 @@
+.diamond-grid {
+  display: inline-grid;
+  grid-template-columns: repeat(2, var(--diamond-cell-size, 12px));
+  gap: var(--diamond-gap, 8px);
+  transform: rotate(45deg);
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+.diamond-grid__cell {
+  display: block;
+  width: var(--diamond-cell-size, 12px);
+  height: var(--diamond-cell-size, 12px);
+  border-radius: var(--diamond-radius, 2px);
+  background: var(--diamond-color, currentColor);
+}
+.loading-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  padding: 24px;
+  color: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+.rich-editor-loading > .loading-status,
+.pairing-loading > .loading-status {
+  width: 100%;
+  min-height: 160px;
+}
+.sync-indicator .diamond-grid,
+.connection-chip .diamond-grid,
+.pairing-pending .diamond-grid {
+  --diamond-cell-size: 5px;
+  --diamond-gap: 3px;
+  --diamond-radius: 1px;
+}
+.pairing-pending {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .diamond-grid__cell {
+    transform: none !important;
+    opacity: 1 !important;
+  }
+}

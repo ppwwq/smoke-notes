@@ -12,6 +12,12 @@ export const NOTE_COLORS = [
   "sky",
   "violet",
   "graphite",
+  "lavender",
+  "mauve",
+  "mist",
+  "dustyrose",
+  "peach",
+  "clay",
 ] as const;
 export const DEFAULT_NOTE_COLOR: NoteColor = "amber";
 export const DEFAULT_NOTE_KIND: NoteKind = "note";

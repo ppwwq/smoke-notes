@@ -6,6 +6,8 @@ import {
   type NoteColor,
 } from "@smoke-notes/core";
 import { SmokeNotesApp } from "@smoke-notes/ui/app";
+import { PairingGate } from "@smoke-notes/ui/pairing";
+import { LoadingStatus } from "@smoke-notes/ui/loading";
 import "@smoke-notes/ui/workspace.css";
 import "./brand.css";
 import "./review.css";
@@ -97,24 +99,54 @@ async function seedExamples() {
 }
 
 const root = createRoot(document.getElementById("root")!);
-seedExamples()
-  .then(() => {
+function openReview() {
+  if (!localStorage.getItem("smoke-review:skip-pairing")) {
     root.render(
-      <StrictMode>
-        <div className="review-shell">
-          <div className="review-banner">
-            交互预览 · 示例数据 · 修改仅保存在此浏览器
-          </div>
-          <SmokeNotesApp repository={repository} platform="web" />
+      <PairingGate
+        onSkip={() => {
+          localStorage.setItem("smoke-review:skip-pairing", "true");
+          openReview();
+        }}
+        onRedeem={async () => {
+          throw new Error(
+            "此预览使用本机示例记录。请先跳过；实际配对请使用正式网页。",
+          );
+        }}
+      />,
+    );
+    return;
+  }
+  root.render(
+    <StrictMode>
+      <div className="review-shell">
+        <div className="review-banner">
+          交互预览 · 示例数据 · 修改仅保存在此浏览器
         </div>
-      </StrictMode>,
-    );
-  })
-  .catch(() => {
-    root.render(
-      <main className="review-error">
-        <h1>暂时无法打开预览</h1>
-        <p>请允许浏览器使用本地存储后刷新。已有记录不会被清除。</p>
-      </main>,
-    );
-  });
+        <SmokeNotesApp repository={repository} platform="web" />
+      </div>
+    </StrictMode>,
+  );
+}
+if (
+  new URLSearchParams(window.location.search).get("loading") === "diamond-grid"
+) {
+  root.render(
+    <StrictMode>
+      <main className="loading-review" aria-label="Diamond Grid 加载效果预览">
+        <LoadingStatus label="正在打开便签…" />
+        <p>加载效果预览</p>
+        <a href="/review.html">返回便签</a>
+      </main>
+    </StrictMode>,
+  );
+} else
+  seedExamples()
+    .then(openReview)
+    .catch(() => {
+      root.render(
+        <main className="review-error">
+          <h1>暂时无法打开预览</h1>
+          <p>请允许浏览器使用本地存储后刷新。已有记录不会被清除。</p>
+        </main>,
+      );
+    });

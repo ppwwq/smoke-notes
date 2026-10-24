@@ -1,0 +1,812 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>烟笺 · 10 款配色参考</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #eeece7;
+        color: #282824;
+        font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      }
+      button,
+      a {
+        -webkit-tap-highlight-color: transparent;
+      }
+      button {
+        font: inherit;
+        cursor: pointer;
+      }
+      button:focus-visible,
+      a:focus-visible {
+        outline: 3px solid #426b9b;
+        outline-offset: 4px;
+      }
+      .review {
+        max-width: 1320px;
+        margin: auto;
+        padding: 40px 32px 64px;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 24px;
+        margin-bottom: 32px;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: clamp(24px, 4vw, 36px);
+        letter-spacing: -0.04em;
+      }
+      header p {
+        margin: 0;
+        color: #65655e;
+        font-size: 14px;
+        line-height: 1.7;
+      }
+      header a {
+        color: #35352f;
+        white-space: nowrap;
+        font-size: 13px;
+        text-underline-offset: 5px;
+      }
+      .focus {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 250px;
+        background: #f9f8f5;
+        border-radius: 24px;
+        overflow: hidden;
+        margin-bottom: 40px;
+      }
+      .details {
+        padding: 30px 24px;
+      }
+      .details h2 {
+        font-size: 25px;
+        line-height: 1.4;
+        margin: 8px 0 12px;
+      }
+      .details p {
+        font-size: 14px;
+        line-height: 1.8;
+        color: #65655e;
+      }
+      .variant-number {
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+        color: #65655e;
+      }
+      .swatches {
+        display: grid;
+        gap: 14px;
+        margin: 26px 0;
+      }
+      .swatch {
+        display: grid;
+        grid-template-columns: 28px 1fr;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+      }
+      .swatch i {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 1px solid #0002;
+      }
+      .swatch span {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .swatch code {
+        font-size: 11px;
+        color: #65655e;
+      }
+      .detail-controls {
+        display: flex;
+        gap: 10px;
+      }
+      .detail-controls button {
+        padding: 9px 10px;
+        white-space: nowrap;
+        font-size: 12px;
+        background: transparent;
+        border: 1px solid #cfcec8;
+        border-radius: 10px;
+      }
+      .gallery-heading {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-bottom: 18px;
+      }
+      .gallery-heading h2 {
+        margin: 0;
+        font-size: 20px;
+      }
+      .gallery-heading span {
+        color: #65655e;
+        font-size: 13px;
+      }
+      .gallery {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px;
+      }
+      .variant {
+        min-width: 0;
+        border: 2px solid transparent;
+        border-radius: 20px;
+        background: #faf9f6;
+        overflow: hidden;
+      }
+      .variant[data-selected="true"] {
+        border-color: #45453d;
+      }
+      .variant > button {
+        display: flex;
+        width: 100%;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        border: 0;
+        background: none;
+        padding: 16px 20px;
+        color: #282824;
+        text-align: left;
+      }
+      .variant > button strong {
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .variant > button small {
+        display: block;
+        margin-top: 5px;
+        color: #65655e;
+        font-size: 12px;
+      }
+      .variant > button > span:last-child {
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .product {
+        background: var(--page);
+        color: var(--ink);
+        padding: 30px;
+        font-size: 13px;
+        min-width: 0;
+      }
+      .product h3 {
+        font-size: 30px;
+        font-weight: 650;
+        letter-spacing: -0.04em;
+        margin: 0 0 8px;
+      }
+      .date {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 24px;
+      }
+      .progress-card {
+        background: var(--card);
+        color: var(--card-ink);
+        border-radius: 18px;
+        padding: 18px 20px;
+      }
+      .progress-label {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        font-size: 12px;
+      }
+      .progress-label strong {
+        font-size: 22px;
+        margin: 0 5px;
+      }
+      .progress-line {
+        height: 5px;
+        margin-top: 14px;
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--accent) 18%, var(--card));
+        overflow: hidden;
+      }
+      .progress-line span {
+        display: block;
+        width: 33.333%;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--accent);
+      }
+      .view-row {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        margin: 18px 0 24px;
+      }
+      .views {
+        display: flex;
+        min-width: 0;
+        flex: 1;
+        gap: 3px;
+        background: var(--track);
+        padding: 5px;
+        border-radius: 26px;
+      }
+      .views button {
+        flex: 1;
+        min-width: 0;
+        border: 0;
+        border-radius: 22px;
+        padding: 11px 4px;
+        background: transparent;
+        color: var(--track-ink);
+        font-size: 12px;
+      }
+      .views button[aria-pressed="true"] {
+        color: var(--active-ink);
+        background: var(--active);
+      }
+      .filter {
+        border: 1px solid var(--line);
+        background: var(--page);
+        color: var(--muted);
+        padding: 12px;
+        border-radius: 13px;
+        font-size: 12px;
+      }
+      .filter[aria-expanded="true"] {
+        background: var(--active);
+        color: var(--active-ink);
+        border-color: var(--active);
+      }
+      .filter-options {
+        display: flex;
+        gap: 8px;
+        margin: -12px 0 18px;
+      }
+      .filter-options[hidden] {
+        display: none;
+      }
+      .filter-options button {
+        border: 1px solid var(--line);
+        color: var(--ink);
+        background: transparent;
+        border-radius: 18px;
+        font-size: 12px;
+        padding: 8px 14px;
+      }
+      .filter-options button[aria-pressed="true"] {
+        background: var(--active);
+        color: var(--active-ink);
+      }
+      .list-title {
+        font-size: 13px;
+        margin: 0 0 4px;
+      }
+      .list-title small {
+        color: var(--muted);
+        margin-left: 8px;
+        font-weight: 400;
+      }
+      .task {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 17px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .task input {
+        appearance: none;
+        width: 20px;
+        height: 20px;
+        margin: 0;
+        border: 1.5px solid var(--muted);
+        border-radius: 7px;
+        cursor: pointer;
+        flex: 0 0 auto;
+      }
+      .task input:checked {
+        border-color: var(--active);
+        background: var(--active);
+      }
+      .task input:checked::after {
+        content: "";
+        display: block;
+        width: 5px;
+        height: 9px;
+        border: solid var(--active-ink);
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
+        margin: 2px auto;
+      }
+      .task label {
+        cursor: pointer;
+        line-height: 1.5;
+      }
+      .task:has(input:checked) label {
+        text-decoration: line-through;
+        color: var(--muted);
+      }
+      .task small {
+        color: var(--muted);
+        display: block;
+        margin-top: 5px;
+        font-size: 11px;
+      }
+      .task > span:last-child {
+        margin-left: auto;
+        color: var(--muted);
+      }
+      .product-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 26px;
+      }
+      .dock {
+        display: flex;
+        background: var(--dock);
+        color: var(--dock-ink);
+        gap: 3px;
+        border-radius: 30px;
+        padding: 6px;
+      }
+      .dock span {
+        padding: 11px 14px;
+        font-size: 12px;
+        border-radius: 24px;
+        white-space: nowrap;
+      }
+      .dock .current {
+        background: var(--dock-active);
+        color: var(--dock-active-ink);
+      }
+      .add {
+        color: var(--active-ink);
+        background: var(--active);
+        padding: 13px 17px;
+        border-radius: 24px;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .mini {
+        padding: 24px;
+        font-size: 12px;
+      }
+      .mini h3 {
+        font-size: 23px;
+      }
+      .mini .date {
+        margin-bottom: 16px;
+      }
+      .mini .progress-card {
+        padding: 14px 16px;
+      }
+      .mini .view-row {
+        margin-bottom: 18px;
+        gap: 8px;
+      }
+      .mini .task {
+        padding: 12px 0;
+      }
+      .mini .dock span {
+        padding: 9px 10px;
+      }
+      .mini .product-footer {
+        margin-top: 20px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      @media (max-width: 900px) {
+        .focus {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .details {
+          padding: 22px;
+        }
+        .swatches {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      @media (max-width: 650px) {
+        .review {
+          padding: 24px 14px 40px;
+        }
+        header {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 14px;
+        }
+        .gallery {
+          grid-template-columns: 1fr;
+        }
+        .product {
+          padding: 22px 16px;
+        }
+        .dock span {
+          padding: 10px;
+        }
+        .add {
+          padding: 12px;
+        }
+        .gallery-heading span {
+          font-size: 12px;
+        }
+      }
+      @media (max-width: 360px) {
+        .dock span {
+          padding: 9px 7px;
+        }
+        .product-footer {
+          gap: 7px;
+        }
+        .swatches {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="review">
+      <header>
+        <div>
+          <h1>烟笺 · 10 款配色参考</h1>
+          <p>
+            同一套布局，比较配色与明暗比例。点选方案可放大体验；这里的操作仅用于演示。
+          </p>
+        </div>
+        <a href="/review.html">返回实际预览</a>
+      </header>
+      <section class="focus" aria-label="当前配色方案">
+        <div id="stage"></div>
+        <aside class="details" id="details" aria-live="polite"></aside>
+      </section>
+      <div class="gallery-heading">
+        <h2>全部方案</h2>
+        <span>选择编号或名称即可对照</span>
+      </div>
+      <section
+        class="gallery"
+        id="gallery"
+        aria-label="10 款配色方案"
+      ></section>
+    </main>
+    <script>
+      const palettes = [
+        {
+          name: "暖纸石墨",
+          note: "最接近主页。纸白进度卡与浅色轨道，让深色只承担选中状态。",
+          tags: "轻量 · 推荐",
+          page: "#faf3e7",
+          ink: "#282722",
+          muted: "#716b60",
+          card: "#fffaf2",
+          cardInk: "#353129",
+          accent: "#6b624f",
+          track: "#e9e1d4",
+          trackInk: "#645e53",
+          active: "#34332e",
+          activeInk: "#fff9ef",
+          line: "#ded6c8",
+          dock: "#34332e",
+          dockInk: "#e5dfd3",
+          dockActive: "#faf3e7",
+          dockActiveInk: "#34332e",
+        },
+        {
+          name: "燕麦拿铁",
+          note: "低饱和暖棕搭配奶油底色。整页温和，底部导航采用浅底与深棕选中。",
+          tags: "柔和 · 暖棕",
+          page: "#f8f2e8",
+          ink: "#44372c",
+          muted: "#786652",
+          card: "#ede1d0",
+          cardInk: "#44372c",
+          accent: "#8c6546",
+          track: "#efe5d7",
+          trackInk: "#75614c",
+          active: "#79583d",
+          activeInk: "#fff8ee",
+          line: "#dfd0be",
+          dock: "#e9dccb",
+          dockInk: "#68543f",
+          dockActive: "#79583d",
+          dockActiveInk: "#fff8ee",
+        },
+        {
+          name: "鼠尾草",
+          note: "米白纸面与灰绿面板。深绿选中块保持清晰，进度和导航使用同一组绿。",
+          tags: "自然 · 推荐",
+          page: "#f5f4e9",
+          ink: "#303c32",
+          muted: "#64705e",
+          card: "#e1e7d8",
+          cardInk: "#344335",
+          accent: "#536c4f",
+          track: "#e2e7da",
+          trackInk: "#53624e",
+          active: "#405a40",
+          activeInk: "#f7f8ee",
+          line: "#d7dece",
+          dock: "#354b38",
+          dockInk: "#e1e9db",
+          dockActive: "#e6eddb",
+          dockActiveInk: "#344a36",
+        },
+        {
+          name: "雾蓝纸笺",
+          note: "暖纸背景搭配雾蓝灰，降低大块深色的重量。蓝色仅贯穿进度与当前选择。",
+          tags: "清爽 · 蓝灰",
+          page: "#f7f5ef",
+          ink: "#293e4a",
+          muted: "#5f7380",
+          card: "#e5edf0",
+          cardInk: "#304957",
+          accent: "#55788c",
+          track: "#e0e8eb",
+          trackInk: "#526b79",
+          active: "#47697d",
+          activeInk: "#f7fafb",
+          line: "#d7e0e3",
+          dock: "#e0e8eb",
+          dockInk: "#526b79",
+          dockActive: "#47697d",
+          dockActiveInk: "#f7fafb",
+        },
+        {
+          name: "陶土暖阳",
+          note: "杏白纸面与陶土红。温暖而有辨识度，深陶色同时作为选中块和底部导航。",
+          tags: "温暖 · 陶红",
+          page: "#fcf3e9",
+          ink: "#513a30",
+          muted: "#826b5d",
+          card: "#f1dfd0",
+          cardInk: "#654334",
+          accent: "#ad6749",
+          track: "#eeddd0",
+          trackInk: "#795746",
+          active: "#99563c",
+          activeInk: "#fff7ef",
+          line: "#e6d4c5",
+          dock: "#834b37",
+          dockInk: "#f0dcd0",
+          dockActive: "#fff0de",
+          dockActiveInk: "#77422e",
+        },
+        {
+          name: "紫灰暮光",
+          note: "浅紫灰进度卡与偏暖的纸面形成轻微对比。深葡萄灰用于操作焦点。",
+          tags: "安静 · 紫灰",
+          page: "#f6f3f1",
+          ink: "#413b4b",
+          muted: "#726879",
+          card: "#eae3ed",
+          cardInk: "#4e4259",
+          accent: "#897191",
+          track: "#e8e1e9",
+          trackInk: "#6e5f75",
+          active: "#6d5878",
+          activeInk: "#fff8ff",
+          line: "#ded6e1",
+          dock: "#514358",
+          dockInk: "#e7dfeb",
+          dockActive: "#f1e8f3",
+          dockActiveInk: "#514358",
+        },
+        {
+          name: "黄油奶酪",
+          note: "柔和黄油色只铺在功能区域。深橄榄色文字让浅黄色仍然清晰易读。",
+          tags: "明快 · 奶油黄",
+          page: "#fff9e9",
+          ink: "#403e29",
+          muted: "#746e4c",
+          card: "#f4e8b7",
+          cardInk: "#4c482d",
+          accent: "#958338",
+          track: "#eee5bf",
+          trackInk: "#6a613b",
+          active: "#555333",
+          activeInk: "#fff9de",
+          line: "#e5dcbb",
+          dock: "#eee5bf",
+          dockInk: "#625a35",
+          dockActive: "#555333",
+          dockActiveInk: "#fff9de",
+        },
+        {
+          name: "玫瑰豆沙",
+          note: "米粉与灰玫瑰，避免高饱和粉色。轻面板配深豆沙选中，适合柔和的便签感。",
+          tags: "柔软 · 豆沙粉",
+          page: "#fcf3ee",
+          ink: "#513d40",
+          muted: "#82686b",
+          card: "#f0dfe0",
+          cardInk: "#63484f",
+          accent: "#a3727d",
+          track: "#eedee0",
+          trackInk: "#785961",
+          active: "#8f606b",
+          activeInk: "#fff8f5",
+          line: "#e6d3d6",
+          dock: "#78505b",
+          dockInk: "#f0dce0",
+          dockActive: "#fae9e9",
+          dockActiveInk: "#68454e",
+        },
+        {
+          name: "青瓷薄雾",
+          note: "偏暖白底与灰青色，进度面板更轻。底部导航沿用浅青底与深青选中。",
+          tags: "清透 · 青瓷",
+          page: "#f2f6f0",
+          ink: "#2f4541",
+          muted: "#5e756d",
+          card: "#dfebe4",
+          cardInk: "#34564b",
+          accent: "#568173",
+          track: "#dce9e1",
+          trackInk: "#4e6a5f",
+          active: "#416c5e",
+          activeInk: "#f3fbf4",
+          line: "#d2dfd5",
+          dock: "#dce9e1",
+          dockInk: "#4e6a5f",
+          dockActive: "#416c5e",
+          dockActiveInk: "#f3fbf4",
+        },
+        {
+          name: "暖墨夜读",
+          note: "完整深色方向。炭棕背景配杏色进度和选中块，供夜间风格比较。",
+          tags: "深色 · 夜读",
+          page: "#242522",
+          ink: "#eee9df",
+          muted: "#b2b2a5",
+          card: "#34362f",
+          cardInk: "#eee9df",
+          accent: "#d8c39b",
+          track: "#373a32",
+          trackInk: "#c1c3b4",
+          active: "#e0cda8",
+          activeInk: "#302e26",
+          line: "#484c40",
+          dock: "#373a32",
+          dockInk: "#c1c3b4",
+          dockActive: "#e0cda8",
+          dockActiveInk: "#302e26",
+        },
+      ];
+      const vars = (p) =>
+        Object.entries(p)
+          .filter(([k]) => !["name", "note", "tags"].includes(k))
+          .map(
+            ([k, v]) =>
+              `--${k.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase())}:${v}`,
+          )
+          .join(";");
+      const tasks = ["整理这一周的灵感", "读二十页喜欢的书", "给家人打个电话"];
+      function product(p, mini = false, id = "focus") {
+        return `<div class="product ${mini ? "mini" : ""}" style="${vars(p)}" ${mini ? 'inert aria-hidden="true"' : ""}>
+        <h3>所有安排</h3><div class="date">10月24日星期六</div>
+        <section class="progress-card" aria-label="今日进度"><div class="progress-label"><span>今天完成 <strong data-count>1</strong> / 3</span><span data-remaining>还剩 2 件</span></div><div class="progress-line"><span></span></div></section>
+        <div class="view-row"><div class="views" role="group" aria-label="待办视图">${["今天", "全部", "历史"].map((n, i) => `<button type="button" aria-pressed="${i === 1}">${n}</button>`).join("")}</div><button class="filter" type="button" aria-expanded="false">筛选</button></div>
+        <div class="filter-options" hidden>${["全部状态", "未完成", "已完成"].map((n, i) => `<button type="button" aria-pressed="${i === 0}">${n}</button>`).join("")}</div>
+        <h4 class="list-title">全部事项 <small>· 3</small></h4>
+        <div class="tasks">${tasks.map((n, i) => `<div class="task"><input type="checkbox" id="${id}-${i}" ${i === 0 ? "checked" : ""}><div><label for="${id}-${i}">${n}</label><small>今天</small></div><span aria-hidden="true">···</span></div>`).join("")}</div>
+        <div class="product-footer"><div class="dock" aria-label="导航配色示意"><span>便签</span><span class="current">待办</span><span>便签本</span><span>设置</span></div><span class="add">＋ 新建</span></div>
+      </div>`;
+      }
+      const gallery = document.getElementById("gallery");
+      gallery.innerHTML = palettes
+        .map(
+          (p, i) =>
+            `<article class="variant" data-index="${i}" data-selected="${i === 0}">${product(p, true, "mini" + i)}<button type="button" aria-pressed="${i === 0}" aria-label="查看方案 ${i + 1} ${p.name}"><span><strong>${String(i + 1).padStart(2, "0")} · ${p.name}</strong><small>${p.tags}</small></span><span>查看大图 ↗</span></button></article>`,
+        )
+        .join("");
+      let selected = 0;
+      function render(index) {
+        selected = (index + palettes.length) % palettes.length;
+        const p = palettes[selected];
+        document.getElementById("stage").innerHTML = product(p);
+        document.getElementById("details").innerHTML =
+          `<span class="variant-number">方案 ${String(selected + 1).padStart(2, "0")} / 10</span><h2>${p.name}</h2><p>${p.note}</p><div class="swatches">${[
+            ["page", "页面"],
+            ["card", "进度卡"],
+            ["track", "切换轨道"],
+            ["active", "选中块"],
+            ["dock", "底部导航"],
+          ]
+            .map(
+              ([k, n]) =>
+                `<div class="swatch"><i style="background:${p[k]}"></i><span>${n}<code>${p[k].toUpperCase()}</code></span></div>`,
+            )
+            .join(
+              "",
+            )}</div><div class="detail-controls"><button type="button" data-step="-1" aria-label="上一款">← 上一款</button><button type="button" data-step="1" aria-label="下一款">下一款 →</button></div><p>可试点日期切换、勾选待办。确认方案后再应用到实际页面。</p>`;
+        gallery.querySelectorAll(".variant").forEach((el, i) => {
+          el.dataset.selected = String(i === selected);
+          el.querySelector(":scope > button").setAttribute(
+            "aria-pressed",
+            String(i === selected),
+          );
+        });
+      }
+      gallery.addEventListener("click", (e) => {
+        const button = e.target.closest("article > button");
+        if (!button) return;
+        render(Number(button.parentElement.dataset.index));
+        document
+          .querySelector(".focus")
+          .scrollIntoView({ block: "start", behavior: "instant" });
+      });
+      document.getElementById("details").addEventListener("click", (e) => {
+        const b = e.target.closest("[data-step]");
+        if (b) render(selected + Number(b.dataset.step));
+      });
+      const stage = document.getElementById("stage");
+      stage.addEventListener("click", (e) => {
+        const tab = e.target.closest(".views button");
+        if (tab) {
+          stage
+            .querySelectorAll(".views button")
+            .forEach((b) => b.setAttribute("aria-pressed", String(b === tab)));
+          stage.querySelector("h3").textContent =
+            tab.textContent === "全部"
+              ? "所有安排"
+              : tab.textContent === "今天"
+                ? "今天的小事"
+                : "过去的安排";
+        }
+        const filter = e.target.closest(".filter");
+        if (filter) {
+          const open = filter.getAttribute("aria-expanded") !== "true";
+          filter.setAttribute("aria-expanded", String(open));
+          stage.querySelector(".filter-options").hidden = !open;
+        }
+        const option = e.target.closest(".filter-options button");
+        if (option) {
+          stage
+            .querySelectorAll(".filter-options button")
+            .forEach((b) =>
+              b.setAttribute("aria-pressed", String(b === option)),
+            );
+          applyFilter();
+        }
+      });
+      function applyFilter() {
+        const mode = stage.querySelector(
+          '.filter-options [aria-pressed="true"]',
+        ).textContent;
+        stage
+          .querySelectorAll(".task")
+          .forEach(
+            (row) =>
+              (row.hidden =
+                mode === "已完成"
+                  ? !row.querySelector("input").checked
+                  : mode === "未完成"
+                    ? row.querySelector("input").checked
+                    : false),
+          );
+      }
+      stage.addEventListener("change", () => {
+        const count = stage.querySelectorAll("input:checked").length;
+        stage.querySelector("[data-count]").textContent = count;
+        stage.querySelector("[data-remaining]").textContent =
+          count === 3 ? "今天已安排妥当" : `还剩 ${3 - count} 件`;
+        stage.querySelector(".progress-line span").style.width =
+          (count / 3) * 100 + "%";
+        applyFilter();
+      });
+      render(0);
+    </script>
+  </body>
+</html>

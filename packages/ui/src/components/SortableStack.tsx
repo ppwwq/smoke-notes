@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import {
   DndContext,
   KeyboardSensor,
+  MouseSensor,
   PointerSensor,
   TouchSensor,
   closestCenter,
@@ -14,6 +15,7 @@ import {
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
+  rectSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "../icons";
@@ -33,16 +35,19 @@ interface SortableStackProps<T extends RankedItem> {
     nextRank: number | null,
   ) => Promise<void>;
   className?: string;
+  wholeCard?: boolean;
 }
 
 function SortableRow<T extends RankedItem>({
   item,
   label,
   children,
+  wholeCard,
 }: {
   item: T;
   label: string;
   children: ReactNode;
+  wholeCard: boolean;
 }) {
   const {
     attributes,
@@ -57,18 +62,56 @@ function SortableRow<T extends RankedItem>({
   return (
     <div
       ref={setNodeRef}
-      className={`sortable-row${isDragging ? " is-dragging" : ""}`}
+      className={`sortable-row${wholeCard ? " whole-card-sort" : ""}${isDragging ? " is-dragging" : ""}`}
       style={{ transform: CSS.Transform.toString(transform), transition }}
+      {...(wholeCard
+        ? { ...attributes, role: "group", "aria-pressed": undefined }
+        : {})}
+      aria-label={wholeCard ? `移动便签：${label}` : undefined}
+      aria-roledescription={wholeCard ? "可排序便签" : undefined}
+      onMouseDown={
+        wholeCard
+          ? (event) => {
+              const control = (event.target as Element).closest(
+                "button, input, textarea, select, a",
+              );
+              if (!control || control.classList.contains("sticky-card-open"))
+                listeners?.onMouseDown?.(event);
+            }
+          : undefined
+      }
+      onTouchStart={
+        wholeCard
+          ? (event) => {
+              const control = (event.target as Element).closest(
+                "button, input, textarea, select, a",
+              );
+              if (!control || control.classList.contains("sticky-card-open"))
+                listeners?.onTouchStart?.(event);
+            }
+          : undefined
+      }
+      onKeyDown={
+        wholeCard
+          ? (event) => {
+              if (event.target === event.currentTarget)
+                listeners?.onKeyDown?.(event);
+            }
+          : undefined
+      }
+      onContextMenu={wholeCard ? (event) => event.preventDefault() : undefined}
     >
-      <button
-        type="button"
-        className="drag-handle"
-        aria-label={`拖动：${label}`}
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical size={14} strokeWidth={1.8} />
-      </button>
+      {!wholeCard && (
+        <button
+          type="button"
+          className="drag-handle"
+          aria-label={`拖动：${label}`}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical size={14} strokeWidth={1.8} />
+        </button>
+      )}
       <div className="sortable-content">{children}</div>
     </div>
   );
@@ -80,12 +123,24 @@ export function SortableStack<T extends RankedItem>({
   renderItem,
   onMove,
   className = "",
+  wholeCard = false,
 }: SortableStackProps<T>) {
   const [error, setError] = useState("");
-  const sensors = useSensors(
+  const handleSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, {
       activationConstraint: { delay: 260, tolerance: 6 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+  const cardSensors = useSensors(
+    useSensor(MouseSensor, {
+      activationConstraint: { delay: 300, tolerance: 6 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 300, tolerance: 8 },
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
@@ -117,17 +172,29 @@ export function SortableStack<T extends RankedItem>({
 
   return (
     <DndContext
-      sensors={sensors}
+      sensors={wholeCard ? cardSensors : handleSensors}
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
+      accessibility={{
+        screenReaderInstructions: {
+          draggable: wholeCard
+            ? "按空格拾起便签，方向键移动，再按空格放下。Escape 取消。"
+            : "按空格拾起，方向键移动，再按空格放下。Escape 取消。",
+        },
+      }}
     >
       <SortableContext
         items={items.map((item) => item.id)}
-        strategy={verticalListSortingStrategy}
+        strategy={wholeCard ? rectSortingStrategy : verticalListSortingStrategy}
       >
         <div className={className}>
           {items.map((item, index) => (
-            <SortableRow key={item.id} item={item} label={label(item)}>
+            <SortableRow
+              key={item.id}
+              item={item}
+              label={label(item)}
+              wholeCard={wholeCard}
+            >
               {renderItem(item, index)}
             </SortableRow>
           ))}

@@ -1,0 +1,259 @@
+/* Daily planning: one reading column, with controls revealed when needed. */
+.workspace-app[data-web-background] .todo-planner {
+  max-width: 1080px;
+  padding-bottom: 150px;
+}
+.workspace-app .todo-planner .todo-hero {
+  padding: 0 136px 22px 0;
+}
+.workspace-app[data-web-background] .todo-planner .todo-hero h1 {
+  font-size: clamp(30px, 3.6vw, 46px);
+  line-height: 1.18;
+}
+.workspace-app .todo-planner .eyebrow {
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  margin-bottom: 10px;
+}
+.workspace-app .todo-planner .planner-date {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  margin: 12px 0 0;
+}
+.planner-daily-progress {
+  padding: 18px 22px;
+  margin-bottom: 22px;
+  border-radius: 20px;
+  background: #e8ebdb;
+  color: #3e4632;
+}
+.planner-daily-progress > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+.planner-daily-progress strong {
+  padding: 0 3px;
+  font-size: 23px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.planner-daily-progress > div > span:last-child {
+  color: #60684e;
+  font-size: 11px;
+}
+.planner-daily-progress progress {
+  display: block;
+  appearance: none;
+  width: 100%;
+  height: 5px;
+  overflow: hidden;
+  margin-top: 12px;
+  border: 0;
+  border-radius: 10px;
+  background: #ced3bd;
+}
+.planner-daily-progress progress::-webkit-progress-bar {
+  background: #ced3bd;
+  border-radius: 10px;
+}
+.planner-daily-progress progress::-webkit-progress-value {
+  background: #68764d;
+  border-radius: 10px;
+  transition: width 220ms ease;
+}
+.planner-daily-progress progress::-moz-progress-bar {
+  background: #68764d;
+  border-radius: 10px;
+}
+.planner-navigation {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.planner-navigation > .planner-segments {
+  flex: 1;
+}
+.planner-filter-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.planner-filter-toggle[aria-expanded="true"] {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+.workspace-app .todo-planner .planner-filter-bar {
+  margin-top: 10px;
+  padding: 8px 0;
+  border: 0;
+}
+.workspace-app .todo-planner .planner-filter-bar[hidden] {
+  display: none;
+}
+.workspace-app .todo-planner .planner-filter-bar > .planner-segments {
+  flex: 1;
+  max-width: 310px;
+}
+.workspace-app .todo-planner .planner-feedback-row {
+  min-height: 0;
+}
+.workspace-app .todo-planner .todo-feedback:not(:empty) {
+  padding: 12px 0 0;
+}
+.workspace-app .todo-planner .planner-open > h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 26px 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.planner-open > h2 > span {
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 12px;
+}
+.workspace-app[data-web-background] .todo-planner .planner-todo-row {
+  min-height: 68px;
+  padding: 12px 2px;
+  border-color: var(--line);
+}
+.workspace-app
+  .todo-planner
+  .planner-todo-copy:has(.planner-todo-meta:empty):not(
+    :has(.planner-todo-note)
+  ) {
+  display: none;
+}
+.workspace-app .todo-planner .planner-todo-meta {
+  gap: 8px;
+  font-size: 11px;
+}
+.workspace-app .todo-planner .planner-todo-meta > span {
+  padding: 2px 7px;
+  border-radius: 7px;
+  background: #e9ecdf;
+  color: #5b654b;
+}
+.workspace-app .todo-planner .planner-todo-note {
+  margin: 5px 0 0;
+}
+.workspace-app
+  .todo-planner
+  :is(.planner-completed, .planner-skipped, .planner-overdue) {
+  margin-top: 16px;
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+.workspace-app .todo-planner .planner-overdue {
+  background: #f2ecdf;
+}
+.workspace-app .todo-planner .planner-series {
+  margin-top: 26px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+}
+.workspace-app .todo-planner .planner-series > summary {
+  padding-inline: 2px;
+}
+.workspace-app .todo-planner .planner-series > summary > span {
+  margin-left: auto;
+}
+.workspace-app .todo-planner .planner-series-item {
+  margin: 8px 0;
+  border-radius: 16px;
+}
+.workspace-app .todo-planner .planner-sync-message {
+  margin-top: 28px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.workspace-app .todo-planner .todo-empty {
+  min-height: 160px;
+  padding: 30px 16px;
+  gap: 12px;
+  color: var(--muted);
+}
+.workspace-app .todo-planner .todo-empty p {
+  margin: 0;
+  font-size: 13px;
+}
+.workspace-app .planner-empty-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+}
+.workspace-app .actions-panel .planner-row-options-content {
+  padding-bottom: 20px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.workspace-app .actions-panel .planner-row-options-content button {
+  flex: 1;
+  min-height: 44px;
+}
+.workspace-app .actions-panel .planner-row-options-content label {
+  flex-basis: 100%;
+}
+@media (max-width: 760px) {
+  .workspace-app[data-web-background] .todo-planner {
+    padding-top: 28px;
+    padding-bottom: 120px;
+  }
+  .workspace-app .todo-planner .todo-hero {
+    padding: 0 0 18px;
+  }
+  .workspace-app[data-web-background] .todo-planner .todo-hero h1 {
+    font-size: 30px;
+  }
+  .workspace-app .todo-planner .eyebrow {
+    display: none;
+  }
+  .planner-daily-progress {
+    padding: 14px 17px;
+    margin-bottom: 18px;
+    border-radius: 17px;
+  }
+  .planner-navigation {
+    gap: 8px;
+  }
+  .planner-filter-toggle {
+    padding-inline: 10px;
+  }
+  .workspace-app .todo-planner .planner-open > h2 {
+    margin-top: 22px;
+  }
+  .workspace-app[data-web-background] .todo-planner .planner-todo-row {
+    min-height: 64px;
+    padding-block: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .planner-daily-progress progress::-webkit-progress-value {
+    transition: none;
+  }
+}

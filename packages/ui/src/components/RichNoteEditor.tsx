@@ -1,5 +1,7 @@
 import { GlassSurface } from "./glass/GlassSurface";
 import { WebDialog } from "./glass/WebDialog";
+import { GooeyFormatMenu } from "./GooeyFormatMenu";
+import { LoadingStatus } from "./LoadingStatus";
 import {
   forwardRef,
   useCallback,
@@ -37,7 +39,6 @@ import {
   TextColor as Palette,
   Strikethrough,
   Underline as UnderlineIcon,
-  Type,
   X,
 } from "../icons";
 
@@ -149,6 +150,8 @@ export const RichNoteEditor = forwardRef<
   const [draft, setDraft] = useState(() => noteEdit(note));
   const { title, color } = draft;
   const [saveStatus, setSaveStatus] = useState("已自动保存");
+  const [formatHovered, setFormatHovered] = useState(false);
+  const formatVisible = formatOpen || formatHovered;
   const [composing, setComposing] = useState(false);
   const composition = useRef<{
     done: Promise<void>;
@@ -236,11 +239,12 @@ export const RichNoteEditor = forwardRef<
   }, [compact]);
 
   const closeFormat = useCallback(() => {
+    setFormatHovered(false);
     setMarkMenu(null);
     onFormatClose?.();
   }, [onFormatClose]);
   useEffect(() => {
-    if (!(compact || progressive) || !formatOpen) return;
+    if (!(compact || progressive) || !formatVisible) return;
     const outside = (event: PointerEvent) => {
       const target = event.target;
       if (
@@ -261,7 +265,7 @@ export const RichNoteEditor = forwardRef<
       document.removeEventListener("pointerdown", outside);
       document.removeEventListener("keydown", escape);
     };
-  }, [compact, progressive, formatOpen, closeFormat, editor]);
+  }, [compact, progressive, formatVisible, closeFormat, editor]);
 
   const flushSave = useCallback(async () => {
     const session = sessionRef.current;
@@ -476,7 +480,12 @@ export const RichNoteEditor = forwardRef<
     return () => window.clearTimeout(timer);
   }, [draft, editor, flushSave, note.id, composing]);
 
-  if (!editor) return <div className="rich-editor-loading">正在打开便签…</div>;
+  if (!editor)
+    return (
+      <div className="rich-editor-loading">
+        <LoadingStatus label="正在打开便签…" />
+      </div>
+    );
 
   return (
     <section
@@ -559,217 +568,212 @@ export const RichNoteEditor = forwardRef<
         />
         <EditorContent editor={editor} className="rich-note-body" />
       </div>
-      {progressive && !compact && (
-        <div className="editor-tool-entry">
-          <button
-            type="button"
-            data-format-toggle
-            aria-label="格式"
-            aria-expanded={formatOpen}
-            onPointerDown={(event) => event.preventDefault()}
-            onClick={onFormatToggle}
-          >
-            <Type size={19} />
-            <span>文字格式</span>
-          </button>
-          <span>自动保存到本机</span>
-        </div>
-      )}
-      <footer
-        ref={toolbarRef}
-        hidden={(compact || progressive) && !formatOpen}
-        role="toolbar"
-        className={`format-toolbar${compact || progressive ? " floating-format-toolbar" : ""}`}
-        aria-label="文字格式"
-        onClick={(event) => {
-          if (!compact) return;
-          const target = (event.target as Element).closest("button");
-          if (
-            target &&
-            (target.parentElement === toolbarRef.current ||
-              target.closest(".mark-palette"))
-          )
-            closeFormat();
-        }}
-        onPointerDown={(event) => {
-          if (onSaveStatusChange || compact) event.preventDefault();
+      <GooeyFormatMenu
+        enabled={progressive || compact}
+        compact={compact}
+        open={formatVisible}
+        onHoverChange={setFormatHovered}
+        onToggle={() => {
+          if (formatOpen) closeFormat();
+          else onFormatToggle?.();
         }}
       >
-        <GlassSurface />
-        <button
-          type="button"
-          aria-label="粗体"
-          aria-pressed={editor.isActive("bold")}
-          className={editor.isActive("bold") ? "active" : ""}
-          onClick={() =>
-            editor
-              .chain()
-              .focus(undefined, { scrollIntoView: !compact })
-              .toggleBold()
-              .run()
-          }
+        <footer
+          ref={toolbarRef}
+          hidden={(compact || progressive) && !formatVisible}
+          role="toolbar"
+          className={`format-toolbar${compact || progressive ? " floating-format-toolbar" : ""}`}
+          aria-label="文字格式"
+          onClick={(event) => {
+            if (!compact) return;
+            const target = (event.target as Element).closest("button");
+            if (
+              target &&
+              (target.parentElement === toolbarRef.current ||
+                target.closest(".mark-palette"))
+            )
+              closeFormat();
+          }}
+          onPointerDown={(event) => {
+            if (onSaveStatusChange || compact) event.preventDefault();
+          }}
         >
-          <Bold size={17} />
-        </button>
-        <button
-          type="button"
-          aria-label="斜体"
-          aria-pressed={editor.isActive("italic")}
-          className={editor.isActive("italic") ? "active" : ""}
-          onClick={() =>
-            editor
-              .chain()
-              .focus(undefined, { scrollIntoView: !compact })
-              .toggleItalic()
-              .run()
-          }
-        >
-          <Italic size={17} />
-        </button>
-        <button
-          type="button"
-          aria-label="下划线"
-          aria-pressed={editor.isActive("underline")}
-          className={editor.isActive("underline") ? "active" : ""}
-          onClick={() =>
-            editor
-              .chain()
-              .focus(undefined, { scrollIntoView: !compact })
-              .toggleUnderline()
-              .run()
-          }
-        >
-          <UnderlineIcon size={17} />
-        </button>
-        <button
-          type="button"
-          aria-label="删除线"
-          aria-pressed={editor.isActive("strike")}
-          className={editor.isActive("strike") ? "active" : ""}
-          onClick={() =>
-            editor
-              .chain()
-              .focus(undefined, { scrollIntoView: !compact })
-              .toggleStrike()
-              .run()
-          }
-        >
-          <Strikethrough size={17} />
-        </button>
-        <button
-          type="button"
-          aria-label="待办清单"
-          aria-pressed={editor.isActive("taskList")}
-          className={editor.isActive("taskList") ? "active" : ""}
-          onClick={() =>
-            editor
-              .chain()
-              .focus(undefined, { scrollIntoView: !compact })
-              .toggleTaskList()
-              .run()
-          }
-        >
-          <List size={17} />
-        </button>
-        <span className="format-divider" />
-        <div className="mark-control">
+          <GlassSurface />
           <button
             type="button"
-            aria-label="字体颜色"
-            aria-expanded={markMenu === "text"}
-            className={markMenu === "text" ? "active" : ""}
-            onClick={() => setMarkMenu(markMenu === "text" ? null : "text")}
-          >
-            <Palette size={17} />
-          </button>
-          {markMenu === "text" && (
-            <div className="mark-palette" aria-label="选择字体颜色">
-              {TEXT_COLORS.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  aria-label={`字体色 ${item}`}
-                  style={{ "--swatch": item } as CSSProperties}
-                  onClick={() => {
-                    editor
-                      .chain()
-                      .focus(undefined, { scrollIntoView: !compact })
-                      .setColor(item)
-                      .run();
-                    setMarkMenu(null);
-                  }}
-                />
-              ))}
-              <button
-                type="button"
-                className="clear-mark"
-                aria-label="清除字体颜色"
-                onClick={() => {
-                  editor
-                    .chain()
-                    .focus(undefined, { scrollIntoView: !compact })
-                    .unsetColor()
-                    .run();
-                  setMarkMenu(null);
-                }}
-              >
-                ×
-              </button>
-            </div>
-          )}
-        </div>
-        <div className="mark-control">
-          <button
-            type="button"
-            aria-label="荧光标注"
-            aria-expanded={markMenu === "highlight"}
-            className={markMenu === "highlight" ? "active" : ""}
+            aria-label="粗体"
+            aria-pressed={editor.isActive("bold")}
+            className={editor.isActive("bold") ? "active" : ""}
             onClick={() =>
-              setMarkMenu(markMenu === "highlight" ? null : "highlight")
+              editor
+                .chain()
+                .focus(undefined, { scrollIntoView: !compact })
+                .toggleBold()
+                .run()
             }
           >
-            <Highlighter size={17} />
+            <Bold size={17} />
           </button>
-          {markMenu === "highlight" && (
-            <div className="mark-palette" aria-label="选择荧光颜色">
-              {HIGHLIGHT_COLORS.map((item) => (
+          <button
+            type="button"
+            aria-label="斜体"
+            aria-pressed={editor.isActive("italic")}
+            className={editor.isActive("italic") ? "active" : ""}
+            onClick={() =>
+              editor
+                .chain()
+                .focus(undefined, { scrollIntoView: !compact })
+                .toggleItalic()
+                .run()
+            }
+          >
+            <Italic size={17} />
+          </button>
+          <button
+            type="button"
+            aria-label="下划线"
+            aria-pressed={editor.isActive("underline")}
+            className={editor.isActive("underline") ? "active" : ""}
+            onClick={() =>
+              editor
+                .chain()
+                .focus(undefined, { scrollIntoView: !compact })
+                .toggleUnderline()
+                .run()
+            }
+          >
+            <UnderlineIcon size={17} />
+          </button>
+          <button
+            type="button"
+            aria-label="删除线"
+            aria-pressed={editor.isActive("strike")}
+            className={editor.isActive("strike") ? "active" : ""}
+            onClick={() =>
+              editor
+                .chain()
+                .focus(undefined, { scrollIntoView: !compact })
+                .toggleStrike()
+                .run()
+            }
+          >
+            <Strikethrough size={17} />
+          </button>
+          <button
+            type="button"
+            aria-label="待办清单"
+            aria-pressed={editor.isActive("taskList")}
+            className={editor.isActive("taskList") ? "active" : ""}
+            onClick={() =>
+              editor
+                .chain()
+                .focus(undefined, { scrollIntoView: !compact })
+                .toggleTaskList()
+                .run()
+            }
+          >
+            <List size={17} />
+          </button>
+          <span className="format-divider" />
+          <div className="mark-control">
+            <button
+              type="button"
+              aria-label="字体颜色"
+              aria-expanded={markMenu === "text"}
+              className={markMenu === "text" ? "active" : ""}
+              onClick={() => setMarkMenu(markMenu === "text" ? null : "text")}
+            >
+              <Palette size={17} />
+            </button>
+            {markMenu === "text" && (
+              <div className="mark-palette" aria-label="选择字体颜色">
+                {TEXT_COLORS.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    aria-label={`字体色 ${item}`}
+                    style={{ "--swatch": item } as CSSProperties}
+                    onClick={() => {
+                      editor
+                        .chain()
+                        .focus(undefined, { scrollIntoView: !compact })
+                        .setColor(item)
+                        .run();
+                      setMarkMenu(null);
+                    }}
+                  />
+                ))}
                 <button
-                  key={item}
                   type="button"
-                  aria-label={`荧光色 ${item}`}
-                  style={{ "--swatch": item } as CSSProperties}
+                  className="clear-mark"
+                  aria-label="清除字体颜色"
                   onClick={() => {
                     editor
                       .chain()
                       .focus(undefined, { scrollIntoView: !compact })
-                      .setHighlight({ color: item })
+                      .unsetColor()
                       .run();
                     setMarkMenu(null);
                   }}
-                />
-              ))}
-              <button
-                type="button"
-                className="clear-mark"
-                aria-label="清除荧光标注"
-                onClick={() => {
-                  editor
-                    .chain()
-                    .focus(undefined, { scrollIntoView: !compact })
-                    .unsetHighlight()
-                    .run();
-                  setMarkMenu(null);
-                }}
-              >
-                ×
-              </button>
-            </div>
-          )}
-        </div>
-        <span className="format-status" aria-live="polite">
-          {saveStatus}
-        </span>
-      </footer>
+                >
+                  ×
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="mark-control">
+            <button
+              type="button"
+              aria-label="荧光标注"
+              aria-expanded={markMenu === "highlight"}
+              className={markMenu === "highlight" ? "active" : ""}
+              onClick={() =>
+                setMarkMenu(markMenu === "highlight" ? null : "highlight")
+              }
+            >
+              <Highlighter size={17} />
+            </button>
+            {markMenu === "highlight" && (
+              <div className="mark-palette" aria-label="选择荧光颜色">
+                {HIGHLIGHT_COLORS.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    aria-label={`荧光色 ${item}`}
+                    style={{ "--swatch": item } as CSSProperties}
+                    onClick={() => {
+                      editor
+                        .chain()
+                        .focus(undefined, { scrollIntoView: !compact })
+                        .setHighlight({ color: item })
+                        .run();
+                      setMarkMenu(null);
+                    }}
+                  />
+                ))}
+                <button
+                  type="button"
+                  className="clear-mark"
+                  aria-label="清除荧光标注"
+                  onClick={() => {
+                    editor
+                      .chain()
+                      .focus(undefined, { scrollIntoView: !compact })
+                      .unsetHighlight()
+                      .run();
+                    setMarkMenu(null);
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            )}
+          </div>
+          <span className="format-status" aria-live="polite">
+            {saveStatus}
+          </span>
+        </footer>
+      </GooeyFormatMenu>
       {progressive && appearanceOpen && (
         <WebDialog
           web
@@ -821,6 +825,12 @@ export const RichNoteEditor = forwardRef<
                       sky: "晴空",
                       violet: "淡紫",
                       graphite: "雾灰",
+                      lavender: "薰衣草",
+                      mauve: "藕粉",
+                      mist: "雾蓝",
+                      dustyrose: "灰玫瑰",
+                      peach: "杏桃",
+                      clay: "陶土灰",
                     }[item]
                   }
                 </span>

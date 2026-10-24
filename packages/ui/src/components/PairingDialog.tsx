@@ -1,7 +1,9 @@
 import { WebDialog } from "./glass/WebDialog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { Link2, RefreshCw, X } from "../icons";
+import { Link2, X } from "../icons";
+import { LoadingStatus } from "./LoadingStatus";
+import { DiamondGrid } from "./diamond-grid/DiamondGrid";
 import type { PairingDetails } from "@smoke-notes/core";
 import type { PairingController } from "../types";
 
@@ -9,12 +11,14 @@ interface PairingDialogProps {
   web?: boolean;
   controller?: PairingController;
   onClose: () => void;
+  onRedeem?: (code: string) => Promise<void>;
 }
 
 export function PairingDialog({
   controller,
   onClose,
   web = false,
+  onRedeem,
 }: PairingDialogProps) {
   const [details, setDetails] = useState<PairingDetails | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -37,8 +41,36 @@ export function PairingDialog({
   }, [controller]);
 
   useEffect(() => {
+    if (web && !controller) return;
     void create();
-  }, [create]);
+  }, [create, web, controller]);
+
+  if (web && !controller) {
+    return (
+      <WebDialog web kind="pairing" label="配对设备" onClose={onClose}>
+        <button
+          type="button"
+          className="pairing-close"
+          aria-label="关闭设备配对"
+          onClick={onClose}
+        >
+          <X size={18} />
+        </button>
+        <PairingGate
+          embedded
+          onSkip={onClose}
+          onRedeem={
+            onRedeem ??
+            (async () => {
+              throw new Error(
+                "此本地预览未连接云端。请在正式网页的设置中配对；本机记录仍可正常使用。",
+              );
+            })
+          }
+        />
+      </WebDialog>
+    );
+  }
 
   return (
     <WebDialog web={web} kind="pairing" label="连接手机" onClose={onClose}>
@@ -60,8 +92,7 @@ export function PairingDialog({
       </p>
       {loading && (
         <div className="pairing-loading">
-          <RefreshCw size={18} />
-          正在生成安全配对码…
+          <LoadingStatus label="正在生成安全配对码…" />
         </div>
       )}
       {details && (
@@ -98,9 +129,16 @@ export function PairingDialog({
 interface PairingGateProps {
   initialCode?: string | null;
   onRedeem: (code: string) => Promise<void>;
+  onSkip?: () => void;
+  embedded?: boolean;
 }
 
-export function PairingGate({ initialCode, onRedeem }: PairingGateProps) {
+export function PairingGate({
+  initialCode,
+  onRedeem,
+  onSkip,
+  embedded = false,
+}: PairingGateProps) {
   const [code, setCode] = useState(initialCode ?? "");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -124,12 +162,14 @@ export function PairingGate({ initialCode, onRedeem }: PairingGateProps) {
   }
 
   return (
-    <main className="pairing-gate">
+    <section
+      className={`pairing-gate${embedded ? " pairing-gate-embedded" : ""}`}
+    >
       <div className="pairing-gate-card">
         <span className="brand-mark">烟</span>
-        <p className="eyebrow">SMOKE NOTES · MOBILE</p>
         <h1>连接你的烟笺</h1>
         <p>在电脑端打开「设置与同步 → 连接手机」，然后输入出现的 6 位码。</p>
+        <p>也可以先在本机记录，稍后从「设置 → 手机与同步」配对。</p>
         <input
           inputMode="numeric"
           autoComplete="one-time-code"
@@ -146,10 +186,31 @@ export function PairingGate({ initialCode, onRedeem }: PairingGateProps) {
           }}
         />
         <button type="button" disabled={loading} onClick={() => void submit()}>
-          {loading ? "连接中…" : "连接这台手机"}
+          {loading ? (
+            <span className="pairing-pending">
+              <DiamondGrid />
+              连接中…
+            </span>
+          ) : (
+            "配对并同步"
+          )}
         </button>
-        {error && <div className="pairing-error">{error}</div>}
+        {onSkip && (
+          <button
+            type="button"
+            className="pairing-skip"
+            disabled={loading}
+            onClick={onSkip}
+          >
+            {embedded ? "稍后再配对" : "暂时跳过，先在本机使用"}
+          </button>
+        )}
+        {error && (
+          <div className="pairing-error" role="alert">
+            {error}
+          </div>
+        )}
       </div>
-    </main>
+    </section>
   );
 }

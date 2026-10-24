@@ -6,6 +6,22 @@ body:has(.workspace-app),
   height: 100%;
   overflow: hidden;
 }
+body:has(> #root .pairing-gate) {
+  margin: 0;
+}
+.pairing-gate:not(.pairing-gate-embedded) {
+  width: 100%;
+  min-height: 100dvh;
+}
+.workspace-app .pairing-gate-embedded {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 0 0;
+}
+.workspace-app .pairing-gate-embedded .pairing-gate-card {
+  width: 100%;
+  padding: 12px 0;
+}
 /* Main-workspace presentation only. Independent native notes never receive this class. */
 .workspace-app .stack-context {
   margin: -12px 0 26px;
@@ -168,7 +184,8 @@ body:has(.workspace-app),
   transform: translateX(
       calc((var(--dock-index, 0) + var(--dock-offset, 0)) * 100%)
     )
-    scaleX(var(--dock-stretch, 1));
+    scale(var(--dock-stretch, 1), var(--dock-scale, 1));
+  transform-origin: center;
   transition: transform 360ms cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: none;
 }
@@ -428,6 +445,7 @@ html.notebook-transition::view-transition-new(.paper) {
     transition: none;
     --dock-stretch: 1;
     --dock-offset: 0;
+    --dock-scale: 1;
   }
   .workspace-app[data-web-background] .sidebar-shell.mobile-open .sidebar,
   .workspace-app .create-note-menu,

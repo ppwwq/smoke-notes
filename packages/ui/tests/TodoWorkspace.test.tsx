@@ -7,6 +7,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { Todo } from "@smoke-notes/core";
+import { TodoComposer } from "../src/components/TodoComposer";
 import { TodoWorkspace } from "../src/components/TodoWorkspace";
 
 afterEach(cleanup);
@@ -76,7 +77,7 @@ it("keeps an actual user draft through a remote refresh and saves it on blur", a
 
 it("does not create a todo when Enter confirms an IME composition", () => {
   const callbacks = handlers();
-  render(<TodoWorkspace todos={[]} {...callbacks} />);
+  render(<TodoComposer today="2026-10-20" onCreate={callbacks.onCreate} />);
   const input = screen.getByRole("textbox", { name: "新待办内容" });
   fireEvent.change(input, { target: { value: "中文" } });
   fireEvent.keyDown(input, { key: "Enter", isComposing: true });
@@ -93,7 +94,7 @@ it("submits once and preserves text typed while the new todo is saving", async (
         finish = resolve;
       }),
   );
-  render(<TodoWorkspace todos={[]} {...callbacks} />);
+  render(<TodoComposer today="2026-10-20" onCreate={callbacks.onCreate} />);
   const input = screen.getByRole("textbox", { name: "新待办内容" });
   fireEvent.change(input, { target: { value: "第一件事" } });
   fireEvent.keyDown(input, { key: "Enter" });
@@ -110,7 +111,7 @@ it("submits once and preserves text typed while the new todo is saving", async (
 it("keeps the new todo draft and reports create failures", async () => {
   const callbacks = handlers();
   callbacks.onCreate.mockRejectedValueOnce(new Error("storage unavailable"));
-  render(<TodoWorkspace todos={[]} {...callbacks} />);
+  render(<TodoComposer today="2026-10-20" onCreate={callbacks.onCreate} />);
   const input = screen.getByRole("textbox", { name: "新待办内容" });
   fireEvent.change(input, { target: { value: "尚未保存" } });
   fireEvent.keyDown(input, { key: "Enter" });
@@ -151,7 +152,7 @@ it("blocks duplicate completion writes and reports a failed toggle without claim
   render(
     <TodoWorkspace todos={[todo]} {...handlers()} web onToggle={onToggle} />,
   );
-  const button = screen.getByRole("button", {
+  const button = screen.getByRole("checkbox", {
     name: `完成：${todo.text}`,
   });
   fireEvent.click(button);
@@ -160,7 +161,7 @@ it("blocks duplicate completion writes and reports a failed toggle without claim
   expect(button).toBeDisabled();
   reject(new Error("write failed"));
   expect(await screen.findByRole("alert")).toHaveTextContent("更新失败");
-  expect(button).toHaveAttribute("aria-pressed", "false");
+  expect(button).toHaveAttribute("aria-checked", "false");
   expect(
     screen.getByRole("status", { name: "待办操作反馈" }),
   ).not.toHaveTextContent("做得好");
@@ -202,20 +203,21 @@ it("keeps past repeated misses only in history and offers one-time overdue resch
       onReschedule={onReschedule}
     />,
   );
+  fireEvent.click(screen.getByText("之前未完成"));
   expect(
     screen.getByRole("textbox", { name: "编辑待办：旧一次性" }),
   ).toBeVisible();
   expect(
     screen.queryByRole("textbox", { name: "编辑待办：旧重复" }),
   ).not.toBeInTheDocument();
-  const row = screen
-    .getByRole("textbox", { name: "编辑待办：旧一次性" })
-    .closest("article")!;
-  fireEvent.click(row.querySelector("summary")!);
+  fireEvent.click(
+    screen.getByRole("button", { name: "更多待办操作：旧一次性" }),
+  );
   fireEvent.click(screen.getAllByRole("button", { name: "移到明天" })[0]);
   await waitFor(() =>
     expect(onReschedule).toHaveBeenCalledWith("旧一次性", "2026-10-21"),
   );
+  fireEvent.click(screen.getByRole("button", { name: "关闭操作" }));
   fireEvent.click(screen.getByRole("button", { name: "历史" }));
   expect(
     screen.getByRole("textbox", { name: "编辑待办：旧重复" }),
@@ -227,7 +229,7 @@ it("keeps past repeated misses only in history and offers one-time overdue resch
 
 it("quick creates a dated task with one name and progressive options", async () => {
   const callbacks = handlers();
-  render(<TodoWorkspace today={today} todos={[]} {...callbacks} />);
+  render(<TodoComposer today={today} onCreate={callbacks.onCreate} />);
   fireEvent.change(screen.getByRole("textbox", { name: "新待办内容" }), {
     target: { value: "喝水" },
   });
@@ -238,21 +240,20 @@ it("quick creates a dated task with one name and progressive options", async () 
       notes: "",
     }),
   );
-  expect(
-    screen.getByText("日期、重复与备注").closest("details"),
-  ).not.toHaveAttribute("open");
+  expect(screen.getByText("重复与备注").closest("details")).not.toHaveAttribute(
+    "open",
+  );
 });
 
 it("creates specified-weekday repeats with date and notes and validates no-day selection", async () => {
   const callbacks = handlers();
-  render(<TodoWorkspace today={today} todos={[]} {...callbacks} />);
-  fireEvent.click(screen.getByText("日期、重复与备注"));
+  render(<TodoComposer today={today} onCreate={callbacks.onCreate} />);
+  fireEvent.click(screen.getByText("重复与备注"));
   fireEvent.change(screen.getByRole("textbox", { name: "新待办内容" }), {
     target: { value: "读书" },
   });
-  fireEvent.change(screen.getByLabelText("新待办日期"), {
-    target: { value: "2026-10-22" },
-  });
+  fireEvent.click(screen.getByRole("button", { name: "选日期" }));
+  fireEvent.click(screen.getByRole("button", { name: /2026年10月22日/ }));
   fireEvent.change(screen.getByRole("combobox", { name: "新待办重复" }), {
     target: { value: "weekly" },
   });
@@ -290,14 +291,14 @@ it("shows completion, unfinished and skipped records for one selected historical
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "历史" }));
-  expect(screen.getByRole("region", { name: "当日未完成" })).toHaveTextContent(
-    "未完成 · 1",
+  expect(screen.getByRole("region", { name: "当日事项" })).toHaveTextContent(
+    "当日事项 · 3",
   );
   expect(screen.getByRole("textbox", { name: "编辑待办：已做" })).toBeVisible();
   expect(
     screen.getByRole("textbox", { name: "编辑待办：跳过了" }),
   ).toBeVisible();
-  expect(screen.getByLabelText("历史日期")).toHaveValue("2026-10-19");
+  expect(screen.getByLabelText("历史日期")).toHaveTextContent("2026/10/19");
 });
 
 it("separates completion and skipping from deletion, and can undo the saved status", async () => {
@@ -311,12 +312,15 @@ it("separates completion and skipping from deletion, and can undo the saved stat
       onSetStatus={onSetStatus}
     />,
   );
-  fireEvent.click(screen.getByText("安排与更多"));
+  fireEvent.click(
+    screen.getByRole("button", { name: "更多待办操作：今日重复" }),
+  );
   fireEvent.click(screen.getByRole("button", { name: "跳过今天" }));
   await waitFor(() =>
     expect(onSetStatus).toHaveBeenCalledWith("今日重复", "skipped"),
   );
   expect(callbacks.onTrash).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "关闭操作" }));
   fireEvent.click(screen.getByRole("button", { name: "撤销：今日重复" }));
   await waitFor(() =>
     expect(onSetStatus).toHaveBeenLastCalledWith("今日重复", "open"),
@@ -385,6 +389,7 @@ it("requires separate confirmation to stop future repeats and preserves the hist
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "全部" }));
+  fireEvent.click(screen.getByText("重复计划"));
   fireEvent.click(screen.getByText("每天读书"));
   fireEvent.click(screen.getByRole("button", { name: "暂停重复" }));
   await waitFor(() =>
@@ -428,6 +433,7 @@ it("preserves an edited recurrence rule when a remote revision arrives", async (
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "全部" }));
+  fireEvent.click(screen.getByText("重复计划"));
   fireEvent.click(screen.getByText("读书"));
   fireEvent.change(
     screen.getByRole("textbox", { name: "重复事项名称：读书" }),
@@ -502,9 +508,11 @@ it("places legacy unfinished records in overdue and legacy completions on their 
   expect(
     screen.queryByRole("textbox", { name: "编辑待办：旧已完成" }),
   ).not.toBeInTheDocument();
-  expect(screen.getByLabelText("今天完成 0 项，共 0 项")).toBeInTheDocument();
+  expect(
+    screen.getByRole("progressbar", { name: "今天完成进度" }),
+  ).toHaveAttribute("value", "0");
   fireEvent.click(screen.getByRole("button", { name: "历史" }));
-  expect(screen.getByLabelText("历史日期")).toHaveValue("2026-10-19");
+  expect(screen.getByLabelText("历史日期")).toHaveTextContent("2026/10/19");
   expect(
     screen.getByRole("textbox", { name: "编辑待办：旧已完成" }),
   ).toBeVisible();

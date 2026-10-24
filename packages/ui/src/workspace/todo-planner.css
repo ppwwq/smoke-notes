@@ -9,6 +9,8 @@
   border-radius: 999px;
   background: #eeece8;
   isolation: isolate;
+  touch-action: pan-y;
+  user-select: none;
 }
 .workspace-app .planner-segment-selection {
   position: absolute;
@@ -18,7 +20,13 @@
   border-radius: 999px;
   background: #fcfbf9;
   box-shadow: 0 2px 8px #24211a0b;
-  transform: translateX(calc(var(--segment-index) * 100%));
+  transform: translateX(
+      calc(
+        (var(--dock-index, var(--segment-index)) + var(--dock-offset, 0)) * 100%
+      )
+    )
+    scale(var(--dock-stretch, 1), var(--dock-scale, 1));
+  transform-origin: center;
   transition: transform 360ms cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: none;
 }
@@ -34,6 +42,20 @@
   color: #5c5953;
   font-size: 13px;
   font-weight: 500;
+}
+.workspace-app .planner-segments[data-dragging] .planner-segment-selection {
+  transition: transform 90ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.workspace-app .planner-segments[data-pointer-focus] button:focus-visible {
+  outline: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-app .planner-segment-selection {
+    --dock-scale: 1;
+    --dock-stretch: 1;
+    --dock-offset: 0;
+    transition: none;
+  }
 }
 .workspace-app .planner-segments > button[aria-pressed="true"] {
   color: #24211e;
@@ -283,6 +305,13 @@
 .workspace-app .planner-todo-copy {
   min-width: 0;
 }
+.workspace-app[data-web-background] .todo-planner .todo-editable-label input {
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  text-decoration: none;
+}
 .workspace-app .todo-planner .planner-todo-copy > input {
   width: 100%;
   padding: 10px 3px;
@@ -340,8 +369,9 @@
   flex: 1 1 138px;
 }
 .workspace-app .todo-planner .is-completing {
-  opacity: 0;
-  transform: translateX(12px);
+  /* Keep the row visible until SpringCheck finishes, then regroup the record. */
+  opacity: 1;
+  transform: none;
 }
 .workspace-app .planner-completed,
 .workspace-app .planner-skipped,
@@ -491,6 +521,9 @@
   }
   .workspace-app .planner-segments > button {
     min-height: 44px;
+  }
+  .workspace-app .todo-spring-check {
+    font-size: 16px;
   }
   .workspace-app .planner-today-count {
     min-width: 76px;

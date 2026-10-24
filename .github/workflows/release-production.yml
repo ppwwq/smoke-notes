@@ -4,11 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Audit, adopt baseline, verify existing web deployment, or release
+        description: Validate, audit, adopt baseline, verify existing web deployment, or release
         required: true
         default: audit_only
         type: choice
         options:
+          - validate_only
           - audit_only
           - adopt_baseline
           - verify_web
