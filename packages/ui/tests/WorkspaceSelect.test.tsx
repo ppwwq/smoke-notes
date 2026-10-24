@@ -32,8 +32,11 @@ it("previews color choices on hover without saving until a choice is clicked", a
     />,
   );
   const user = userEvent.setup();
-  await user.click(screen.getByRole("combobox", { name: "配色预览" }));
-  const blue = screen.getByRole("option", { name: "天空" });
+  // Open via the keyboard to avoid zero-sized JSDOM pointer geometry closing
+  // the popup on release; real pointer interaction is covered in the browser.
+  screen.getByRole("combobox", { name: "配色预览" }).focus();
+  await user.keyboard("{ArrowDown}");
+  const blue = await screen.findByRole("option", { name: "天空" });
   await user.hover(blue);
   expect(blue).toHaveAttribute("data-color");
   expect(blue.style.getPropertyValue("--option-color")).toBe("#d5e7f4");

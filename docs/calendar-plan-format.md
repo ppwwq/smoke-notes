@@ -38,7 +38,7 @@
 - `id` 建议提供稳定的非空唯一标识。同一工作区内，同类型同标识的再次导入会跳过，不覆盖你修改过的内容。没有 `id` 时，以规范化内容识别重复。导入是一次性批量新增，不是订阅或文件同步。
 - 行程 `title`、`start`、`end` 必填。时间精确到分钟，使用 `YYYY-MM-DDTHH:mm`，不带 `Z` 或偏移量；时区写入 `timeZone`，可按行程覆盖文件默认值。缺省是香港。
 - `allDay: true` 时可用日期字符串。**结束日期不包含在行程内**：10 月 30–31 日，填 `start: "2026-10-30"`、`end: "2026-11-01"`。
-- `color` 为 `purple` / `green` / `blue` / `orange`。`type` 为 1–40 字标签；已有同名标签复用其颜色，没有的自动创建。
+- `color` 支持便签全部颜色：`amber` / `rose` / `sage` / `sky` / `violet` / `graphite` / `lavender` / `mauve` / `mist` / `dustyrose` / `peach` / `clay`，同时保留原来的 `purple` / `green` / `blue` / `orange`。`type` 为 1–40 字标签；已有同名标签复用其颜色，没有的自动创建。
 - 可选行程 `location`、`notes`、`url`（仅 http/https）。
 - 行程 `repeat`：`frequency` 为 `daily` / `weekly` / `monthly` / `yearly`；`interval` 为 1–99。每周用 `weekdays`（周日 0 至周六 6）；每月用 `monthDays` 或 `nthWeekday: {"ordinal": -1, "weekday": 5}`（最后一个周五）；每年可用 `months`。`count` 和 `until` 二选一。优先用具体日期展开计划，便于检查每项安排。
 - 待办 `text` 和 `date` 必填；可选 `time`、`notes`、`type`。`repeat` 支持 `{"kind":"daily"}`、`{"kind":"weekdays"}`、`{"kind":"weekly","weekdays":[1,3,5]}`。待办保持原有香港日期／时间点语义，不随行程查看时区换算。
