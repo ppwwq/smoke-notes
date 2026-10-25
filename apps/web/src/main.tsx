@@ -5,6 +5,8 @@ import {
   SmokeNotesDatabase,
   SupabaseCloud,
   SyncEngine,
+  PlannerSyncEngine,
+  supabasePlannerTransport,
   createSyncRuntime,
   pairingCodeFromUrl,
   type CloudConfig,
@@ -120,14 +122,29 @@ async function bootstrap() {
 
     if (syncEnabled && cloud) {
       const engine = new SyncEngine(database, cloud.syncAdapter, { deviceId });
+      const planner = new PlannerSyncEngine(
+        database,
+        supabasePlannerTransport(cloud.client),
+        activeWorkspaceId,
+      );
       runtime = createSyncRuntime({
         engine: {
           async flush() {
             await cloud.ensureAnonymousSession();
             return engine.flush();
           },
-          pull: (cursor) => engine.pull(cursor),
-          getQueueState: () => engine.getQueueState(),
+          async pull(cursor) {
+            const next = await engine.pull(cursor);
+            await planner.synchronize();
+            return next;
+          },
+          async getQueueState() {
+            const queue = await engine.getQueueState();
+            return {
+              ...queue,
+              pending: queue.pending + (await planner.pendingCount()),
+            };
+          },
         },
         cloud,
         storage: localStorage,

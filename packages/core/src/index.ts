@@ -15,6 +15,7 @@ export * from "./todo-calendar";
 
 export * from "./calendar-events";
 export * from "./planner-types";
+export * from "./planner-sync";
 
 export * from "./calendar-timezone";
 export type {

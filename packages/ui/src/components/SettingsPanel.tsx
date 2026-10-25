@@ -32,6 +32,9 @@ interface SettingsPanelProps {
   todoBoundaryHour?: 0 | 4;
   onTodoBoundaryChange?: (hour: 0 | 4) => Promise<void>;
   syncMessage?: string;
+  plannerConflictCount?: number;
+  plannerDuplicateCount?: number;
+  onExportPlannerConflicts?: () => void;
 }
 
 export function SettingsPanel({
@@ -50,6 +53,9 @@ export function SettingsPanel({
   todoBoundaryHour = 0,
   onTodoBoundaryChange,
   syncMessage,
+  plannerConflictCount = 0,
+  plannerDuplicateCount = 0,
+  onExportPlannerConflicts,
 }: SettingsPanelProps) {
   const [opacity, setOpacity] = useState(0.82);
   const [alwaysOnTop, setAlwaysOnTop] = useState(false);
@@ -382,9 +388,23 @@ export function SettingsPanel({
           手机同步
         </h3>
         {syncMessage && <p role="status">{syncMessage}</p>}
+        {plannerDuplicateCount > 0 && (
+          <p role="status">
+            发现 {plannerDuplicateCount}{" "}
+            项相同来源的导入日程，已保留各设备版本。请在日历核对后删除多余项。
+          </p>
+        )}
+        {plannerConflictCount > 0 && (
+          <p role="status">
+            日历有 {plannerConflictCount} 条冲突记录，原内容已保留。
+            <button type="button" onClick={onExportPlannerConflicts}>
+              下载冲突记录
+            </button>
+          </p>
+        )}
         <p>
           {web
-            ? "连接设备，让便签在手机与电脑之间接续。"
+            ? "连接设备，让日历与便签在手机与电脑之间接续。"
             : "生成一次性二维码和 6 位码，将手机加入你的私人空间。"}
         </p>
         <button

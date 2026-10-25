@@ -1,4 +1,4 @@
-"""Only the reviewed color migration; no reset, history repair or rollback."""
+"""Only the reviewed additive planner migration; no reset, history repair or rollback."""
 import hashlib
 import json
 import os
@@ -10,8 +10,8 @@ import urllib.error
 import urllib.request
 from urllib.parse import urlparse, unquote, parse_qs
 
-MIGRATION = '202610230001_extended_note_colors.sql'
-DIGEST = '913ac02dcb1e5334273502dcf02b1dae16c32e03777ae337522938e153b91b0b'
+MIGRATION = '202610250001_planner_sync.sql'
+DIGEST = '10a742be12f5ffca7fde465cf8f8d9271740a10b0685e0d5742c42ddfb722f6e'
 TABLES = ('workspaces', 'workspace_members', 'notebooks', 'notes', 'todos', 'pairing_codes', 'pairing_attempts', 'applied_operations')
 
 

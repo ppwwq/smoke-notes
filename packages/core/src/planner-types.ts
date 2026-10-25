@@ -7,7 +7,7 @@ export interface PlannerType {
   name: string;
   color: CalendarEventInput["color"];
 }
-/** Type labels are local metadata, separate from the existing todo sync contract. */
+/** Calendar metadata synchronizes through the planner contract, separately from todo bodies. */
 export interface TodoTypeLink {
   id: string;
   workspaceId: string;

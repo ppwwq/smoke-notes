@@ -88,7 +88,7 @@ export class LocalRepository {
     this.createId = context.createId ?? (() => crypto.randomUUID());
   }
 
-  // Calendar events intentionally remain local until a separate sync contract is introduced.
+  // PlannerSyncEngine reconciles durable calendar rows through its own CAS contract.
   async getPlannerPreferences(): Promise<PlannerPreferences> {
     return (
       (await this.database.plannerPreferences.get(
@@ -140,6 +140,12 @@ export class LocalRepository {
   }
   async listPlannerTypes(): Promise<PlannerType[]> {
     return this.database.plannerTypes
+      .where("workspaceId")
+      .equals(this.context.workspaceId)
+      .toArray();
+  }
+  async listPlannerConflicts() {
+    return this.database.plannerConflicts
       .where("workspaceId")
       .equals(this.context.workspaceId)
       .toArray();

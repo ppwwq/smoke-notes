@@ -157,6 +157,8 @@ def main():
         print("Public client configuration validated; no hosted requests sent.")
         return
     verify(Client(origin, key), Client(origin, key))
+    from hosted_planner import verify_planner
+    verify_planner(origin, key)
 
 
 if __name__ == '__main__':

@@ -113,6 +113,8 @@ export function SmokeNotesApp({
   });
   const [todoToday, setTodoToday] = useState(() => getTodoDay(new Date(), 0));
   const [planningError, setPlanningError] = useState("");
+  const [plannerConflictCount, setPlannerConflictCount] = useState(0);
+  const [plannerDuplicateCount, setPlannerDuplicateCount] = useState(0);
   const [trash, setTrash] = useState<TrashRecord[]>([]);
   const [view, setView] = useState<"notes" | "todos">("notes");
   const [selectedNotebookId, setSelectedNotebookId] = useState<string | null>(
@@ -220,6 +222,7 @@ export function SmokeNotesApp({
         nextTypes,
         nextTypeLinks,
         nextPlannerPreferences,
+        nextPlannerConflicts,
       ] = await Promise.all([
         repository.listNotebooks(),
         repository.listTodos(),
@@ -230,6 +233,7 @@ export function SmokeNotesApp({
         repository.listPlannerTypes(),
         repository.listTodoTypeLinks(),
         repository.getPlannerPreferences(),
+        repository.listPlannerConflicts(),
       ]);
       if (revision !== refreshRevision.current) return;
       const requestedId =
@@ -267,6 +271,14 @@ export function SmokeNotesApp({
       setCalendarEvents(nextEvents);
       setPlannerTypes(nextTypes);
       setPlannerPreferences(nextPlannerPreferences);
+      setPlannerConflictCount(nextPlannerConflicts.length);
+      const imported = nextEvents.filter(
+        (event) => event.importKey && !event.deletedAt,
+      );
+      setPlannerDuplicateCount(
+        imported.length -
+          new Set(imported.map((event) => event.importKey)).size,
+      );
       setTodoTimes(
         Object.fromEntries(
           nextTypeLinks
@@ -1300,6 +1312,22 @@ export function SmokeNotesApp({
               await refreshAfterMutation(selectedNotebookId);
             }}
             syncMessage={syncMessage}
+            plannerConflictCount={plannerConflictCount}
+            plannerDuplicateCount={plannerDuplicateCount}
+            onExportPlannerConflicts={() => {
+              void repository.listPlannerConflicts().then((records) => {
+                const url = URL.createObjectURL(
+                  new Blob([JSON.stringify(records, null, 2)], {
+                    type: "application/json",
+                  }),
+                );
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = "jotday-calendar-conflicts.json";
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+              });
+            }}
             trash={trash}
             onClose={() => setSettingsOpen(false)}
             onOpenPairing={() => {

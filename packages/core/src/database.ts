@@ -1,4 +1,5 @@
 import type { CalendarEvent } from "./calendar-events";
+import type { PlannerSyncState, PlannerConflict } from "./planner-sync";
 import type {
   PlannerType,
   TodoTypeLink,
@@ -14,6 +15,8 @@ import {
 } from "./note-content";
 
 export class SmokeNotesDatabase extends Dexie {
+  plannerSync!: Table<PlannerSyncState, string>;
+  plannerConflicts!: Table<PlannerConflict, string>;
   calendarEvents!: Table<CalendarEvent, string, CalendarEvent>;
   plannerPreferences!: Table<PlannerPreferences, string>;
   plannerTypes!: Table<PlannerType, string>;
@@ -87,5 +90,9 @@ export class SmokeNotesDatabase extends Dexie {
       todoTypeLinks: "id, workspaceId, todoId, typeId",
     });
     this.version(7).stores({ plannerPreferences: "workspaceId" });
+    this.version(8).stores({
+      plannerSync: "key, workspaceId",
+      plannerConflicts: "id, workspaceId",
+    });
   }
 }

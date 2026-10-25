@@ -17,10 +17,16 @@ export async function adoptLocalWorkspace(
   if (from === to) return;
   await database.transaction(
     "rw",
-    database.notebooks,
-    database.notes,
-    database.todos,
-    database.operations,
+    [
+      database.notebooks,
+      database.notes,
+      database.todos,
+      database.operations,
+      database.calendarEvents,
+      database.plannerTypes,
+      database.todoTypeLinks,
+      database.plannerPreferences,
+    ],
     async () => {
       const notebooks = await database.notebooks
         .where("workspaceId")
@@ -72,6 +78,34 @@ export async function adoptLocalWorkspace(
           nextAttemptAt: timestamp,
         };
         await database.operations.add(operation);
+      }
+      await database.calendarEvents
+        .where("workspaceId")
+        .equals(from)
+        .modify({ workspaceId: to });
+      await database.plannerTypes
+        .where("workspaceId")
+        .equals(from)
+        .modify({ workspaceId: to });
+      const links = await database.todoTypeLinks
+        .where("workspaceId")
+        .equals(from)
+        .toArray();
+      for (const link of links) {
+        await database.todoTypeLinks.delete(link.id);
+        await database.todoTypeLinks.put({
+          ...link,
+          workspaceId: to,
+          id: `${to}:${link.todoId}`,
+        });
+      }
+      const preferences = await database.plannerPreferences.get(from);
+      if (preferences) {
+        await database.plannerPreferences.put({
+          ...preferences,
+          workspaceId: to,
+        });
+        await database.plannerPreferences.delete(from);
       }
     },
   );

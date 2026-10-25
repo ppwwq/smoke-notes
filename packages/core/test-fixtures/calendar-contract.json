@@ -1,0 +1,10 @@
+[
+  {"name":"daily-count", "from":"2026-10-25","to":"2026-10-31","event":{"start":"2026-10-25T09:00","end":"2026-10-25T10:00","repeat":{"frequency":"daily","interval":2,"count":3}},"starts":["2026-10-25T09:00","2026-10-27T09:00","2026-10-29T09:00"]},
+  {"name":"weekly-monday-boundary", "from":"2026-10-25","to":"2026-11-10","event":{"start":"2026-10-25T09:00","end":"2026-10-25T10:00","repeat":{"frequency":"weekly","interval":2,"weekdays":[0,1]}},"starts":["2026-10-25T09:00","2026-11-02T09:00","2026-11-08T09:00"]},
+  {"name":"monthly-31-skips-short-month", "from":"2026-01-01","to":"2026-04-30","event":{"start":"2026-01-31T09:00","end":"2026-01-31T10:00","repeat":{"frequency":"monthly","interval":1,"count":3}},"starts":["2026-01-31T09:00","2026-03-31T09:00"]},
+  {"name":"last-friday", "from":"2026-10-01","to":"2026-12-31","event":{"start":"2026-10-01T09:00","end":"2026-10-01T10:00","repeat":{"frequency":"monthly","interval":1,"nthWeekday":{"ordinal":-1,"weekday":5}}},"starts":["2026-10-30T09:00","2026-11-27T09:00","2026-12-25T09:00"]},
+  {"name":"yearly-leap", "from":"2028-01-01","to":"2028-12-31","event":{"start":"2024-02-29T09:00","end":"2024-02-29T10:00","repeat":{"frequency":"yearly","interval":1}},"starts":["2028-02-29T09:00"]},
+  {"name":"dst-gap-skips-occurrence", "from":"2026-03-07","to":"2026-03-09","event":{"start":"2026-03-07T02:30","end":"2026-03-07T03:30","timeZone":"America/New_York","repeat":{"frequency":"daily","interval":1,"count":3}},"starts":["2026-03-07T15:30","2026-03-09T14:30"]},
+  {"name":"all-day-exclusive-end", "from":"2026-10-26","to":"2026-10-26","event":{"start":"2026-10-25T00:00","end":"2026-10-26T00:00","allDay":true},"starts":[]},
+  {"name":"exception-moved-outside-rule", "from":"2026-10-25","to":"2026-10-31","event":{"start":"2026-10-25T09:00","end":"2026-10-25T10:00","repeat":{"frequency":"daily","interval":1,"count":2},"exceptions":{"2026-10-25":null,"2026-10-26":{"title":"移动","start":"2026-10-30T11:00","end":"2026-10-30T12:00","allDay":false,"notes":"","location":"","url":"","color":"purple","timeZone":"Asia/Hong_Kong"}}},"starts":["2026-10-30T11:00"]}
+]
