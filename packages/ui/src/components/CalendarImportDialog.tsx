@@ -58,7 +58,7 @@ export function CalendarImportDialog({
     );
     const a = document.createElement("a");
     a.href = url;
-    a.download = "烟笺日程规划模板.json";
+    a.download = "Jotday日程规划模板.json";
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }

@@ -1,8 +1,8 @@
 {
   "name": "@smoke-notes/desktop",
-  "version": "0.1.11-rc.5",
-  "description": "Windows 便笺式烟雾玻璃便签与待办",
-  "author": "Smoke Notes",
+  "version": "0.1.12",
+  "description": "Jotday — 随手记录便签，安排每天日程",
+  "author": "Jotday",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.cjs",
@@ -31,7 +31,7 @@
   },
   "build": {
     "appId": "com.smokenotes.desktop",
-    "productName": "烟笺",
+    "productName": "Jotday",
     "directories": {
       "output": "release"
     },
@@ -45,7 +45,7 @@
         "nsis"
       ],
       "icon": "build/icon.png",
-      "artifactName": "SmokeNotes-Setup-${version}.${ext}"
+      "artifactName": "Jotday-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,

@@ -596,7 +596,7 @@ export function SmokeNotesApp({
         {quitError && <p role="alert">{quitError}</p>}
         {platform === "desktop" && desktopBridge && (
           <header className="main-window-titlebar" aria-label="主窗口控制">
-            <span className="main-window-drag-handle">烟笺</span>
+            <span className="main-window-drag-handle">Jotday</span>
             <button
               type="button"
               aria-label="最小化主窗口"

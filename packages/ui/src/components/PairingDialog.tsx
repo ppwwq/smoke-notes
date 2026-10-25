@@ -175,8 +175,10 @@ export function PairingGate({
       className={`pairing-gate${embedded ? " pairing-gate-embedded" : ""}`}
     >
       <div className="pairing-gate-card">
-        <span className="brand-mark">烟</span>
-        <h1>{connecting ? "连接你的烟笺" : "从一张烟笺开始"}</h1>
+        <span className="brand-mark" aria-hidden="true">
+          J
+        </span>
+        <h1>{connecting ? "连接你的 Jotday" : "从一张便签开始"}</h1>
         {connecting ? (
           <>
             <p>

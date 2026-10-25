@@ -16,22 +16,22 @@ export default defineConfig({
         "icon-512.png",
       ],
       manifest: {
-        name: "烟笺 Smoke Notes",
-        short_name: "烟笺",
-        description: "安静、离线可用的便签与待办。",
+        name: "Jotday",
+        short_name: "Jotday",
+        description: "随手记录便签，安排每天日程。",
         theme_color: "#faf3e7",
         background_color: "#faf3e7",
         display: "standalone",
         start_url: "/",
         icons: [
           {
-            src: "/icon-192.png?v=transparent-20261019",
+            src: "/icon-192.png?v=jotday-white-20261025",
             sizes: "192x192",
             type: "image/png",
             purpose: "any",
           },
           {
-            src: "/icon-512.png?v=transparent-20261019",
+            src: "/icon-512.png?v=jotday-white-20261025",
             sizes: "512x512",
             type: "image/png",
             purpose: "any",

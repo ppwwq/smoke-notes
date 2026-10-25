@@ -1,0 +1,7 @@
+.platform-desktop .brand-mark {
+  overflow: hidden;
+  font-size: 0;
+  border: 0;
+  box-shadow: none;
+  background: url("/icon-32.png") center / contain no-repeat;
+}

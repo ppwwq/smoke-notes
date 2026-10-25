@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 // Exercise the real main-process IPC and window callbacks. Electron invalidates
 // native window properties before emitting `closed`.
 async function startMain(
-  previewMode: boolean | "packaged" | "release-test" = false,
+  previewMode: boolean | "packaged" | "release-test" | "production" = false,
   editorReady = true,
   restoreFailure?: Error,
   quitDuringRestore = false,
@@ -84,9 +84,12 @@ async function startMain(
   let ready: Promise<unknown> | undefined;
   const electron = {
     app: {
-      isPackaged: previewMode === "packaged" || previewMode === "release-test",
+      isPackaged:
+        previewMode === "packaged" ||
+        previewMode === "release-test" ||
+        previewMode === "production",
       getName: () =>
-        previewMode === "packaged" ? "SmokeNotes Clear Preview" : "烟笺",
+        previewMode === "packaged" ? "SmokeNotes Clear Preview" : "Jotday",
       commandLine: {
         getSwitchValue: (name: string) =>
           name === "user-data-dir" && previewMode === "release-test"
@@ -195,6 +198,17 @@ async function startMain(
 }
 
 describe("main-process note window lifecycle", () => {
+  it("keeps the legacy installed profile before acquiring the lock after the Jotday rename", async () => {
+    const { paths, startup, invoke, trayCreated } =
+      await startMain("production");
+    expect(paths.get("userData")).toBe(
+      join("test-user-data", "@smoke-notes", "desktop"),
+    );
+    expect(paths.get("sessionData")).toBe(paths.get("userData"));
+    expect(startup.slice(0, 3)).toEqual(["userData", "sessionData", "lock"]);
+    expect(invoke("app:preview-mode", 1)).toBe(false);
+    expect(trayCreated).toHaveBeenCalledOnce();
+  });
   it.each([false, true])(
     "allows safe quit after restoring a note fails (quit during restore: %s)",
     async (quitDuringRestore) => {

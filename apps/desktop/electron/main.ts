@@ -61,6 +61,12 @@ if (previewMode) {
   mkdirSync(customDataDirectory, { recursive: true });
   app.setPath("userData", customDataDirectory);
   app.setPath("sessionData", customDataDirectory);
+} else if (app.isPackaged) {
+  // Keep the installed application's existing profile when the display name changes.
+  const profile = join(app.getPath("appData"), "@smoke-notes", "desktop");
+  mkdirSync(profile, { recursive: true });
+  app.setPath("userData", profile);
+  app.setPath("sessionData", profile);
 }
 const isolatedProfile = previewMode || Boolean(customDataDirectory);
 
@@ -546,7 +552,7 @@ function createTray() {
     ? nativeImage.createFromPath(iconPath)
     : nativeImage.createEmpty();
   tray = new Tray(icon);
-  tray.setToolTip("烟笺");
+  tray.setToolTip("Jotday");
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "显示便签列表", click: activateMainWindow },

@@ -21,6 +21,6 @@ body[data-web-background="default"]:has(.platform-web) {
   content: "";
   position: absolute;
   inset: 0;
-  background: url("/icon-192.png?v=transparent-20261019") center / contain
+  background: url("/icon-192.png?v=jotday-white-20261025") center / contain
     no-repeat;
 }

@@ -95,10 +95,12 @@ export function Sidebar(props: SidebarProps) {
   return (
     <aside className="sidebar" aria-label="便签导航">
       <div className="brand-block">
-        <span className="brand-mark">烟</span>
+        <span className="brand-mark" aria-hidden="true">
+          J
+        </span>
         <div>
-          <strong>烟笺</strong>
-          <span>SMOKE NOTES</span>
+          <strong>Jotday</strong>
+          <span>NOTES + CALENDAR</span>
         </div>
       </div>
       {props.onClose && (

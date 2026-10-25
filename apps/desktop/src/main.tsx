@@ -13,6 +13,7 @@ import type { PairingController } from "@smoke-notes/ui";
 import "@smoke-notes/ui/styles.css";
 import "./shell.css";
 import "@smoke-notes/ui/workspace.css";
+import "./brand.css";
 
 function persistentId(key: string): string {
   const current = localStorage.getItem(key);
