@@ -10,17 +10,21 @@ body[data-web-background="default"]:has(.platform-web) {
   background: #faf3e7;
 }
 
-.platform-web .brand-mark {
+.platform-web .brand-mark,
+.pairing-gate .brand-mark,
+.workspace-app.platform-web[data-web-background] .brand-mark {
   position: relative;
   overflow: hidden;
   text-indent: -9999px;
   border: 0;
   box-shadow: none;
+  background: transparent;
 }
-.platform-web .brand-mark::before {
+.platform-web .brand-mark::before,
+.pairing-gate .brand-mark::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: url("/icon-192.png?v=jotday-white-20261025") center / contain
-    no-repeat;
+  background: url("/icon-192.png?v=jotday-transparent-20261025") center /
+    contain no-repeat;
 }

@@ -25,13 +25,13 @@ export default defineConfig({
         start_url: "/",
         icons: [
           {
-            src: "/icon-192.png?v=jotday-white-20261025",
+            src: "/icon-192.png?v=jotday-transparent-20261025",
             sizes: "192x192",
             type: "image/png",
             purpose: "any",
           },
           {
-            src: "/icon-512.png?v=jotday-white-20261025",
+            src: "/icon-512.png?v=jotday-transparent-20261025",
             sizes: "512x512",
             type: "image/png",
             purpose: "any",
