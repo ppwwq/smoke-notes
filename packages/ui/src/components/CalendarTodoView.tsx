@@ -700,6 +700,18 @@ export function CalendarTodoView({
             </button>
           )}
         </label>
+        <div className="calendar-entry-filter">
+          <WorkspaceSelect<"all" | "events" | "todos">
+            label="显示安排"
+            value={entryKind}
+            onChange={setEntryKind}
+            options={[
+              { value: "all", label: "全部安排" },
+              { value: "events", label: "只看日程" },
+              { value: "todos", label: "只看待办" },
+            ]}
+          />
+        </div>
       </div>
       <div className="calendar-month-toolbar">
         <div className="calendar-month-selects">
@@ -731,18 +743,6 @@ export function CalendarTodoView({
               }}
             />
           )}
-        </div>
-        <div className="calendar-entry-filter">
-          <WorkspaceSelect<"all" | "events" | "todos">
-            label="显示安排"
-            value={entryKind}
-            onChange={setEntryKind}
-            options={[
-              { value: "all", label: "全部安排" },
-              { value: "events", label: "只看日程" },
-              { value: "todos", label: "只看待办" },
-            ]}
-          />
         </div>
         <div className="calendar-month-controls">
           <button
