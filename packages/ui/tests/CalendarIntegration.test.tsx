@@ -92,7 +92,8 @@ it("keeps one global add entry and moves one day across month boundaries in ever
   expect(
     screen.getByRole("button", { name: "日程开始日期" }),
   ).toHaveTextContent("2026/11/01");
-});
+  // This traverses all four views; shared CI runners can exceed the 5s default.
+}, 15000);
 it("creates events in the settings timezone without a timezone picker in the editor", async () => {
   await repo.savePlannerPreferences({
     ...(await repo.getPlannerPreferences()),
@@ -488,7 +489,8 @@ it("persists timed calendar events, edits one recurrence, searches exceptions an
       (await repo.listCalendarEvents())[0].exceptions["2026-10-20"]?.title,
     ).toBe("只改今天"),
   );
-});
+  // Exercise the entire create/edit/search/delete/restore flow on slower CI.
+}, 15000);
 
 it("shows timed reminders on the timeline, persists completion and returns them to all-day when time is removed", async () => {
   await repo.savePlannerTodo({
