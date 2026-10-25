@@ -13,9 +13,37 @@ afterEach(() => {
   Reflect.deleteProperty(document, "startViewTransition");
   Reflect.deleteProperty(window, "matchMedia");
   document.documentElement.classList.remove("notebook-transition");
+  document.documentElement.classList.remove("note-return-transition");
+  document.documentElement.style.removeProperty("--return-note-color");
 });
 
 describe("workspace motion lifecycle", () => {
+  it("cleans up a note return before starting a queued notebook transition", async () => {
+    vi.resetModules();
+    const first = deferred(),
+      second = deferred();
+    let count = 0;
+    document.startViewTransition = vi.fn((update: () => void) => {
+      update();
+      return {
+        ready: Promise.resolve(),
+        finished: ++count === 1 ? first.promise : second.promise,
+      } as ViewTransition;
+    });
+    const { transitionWorkspace } = await import("../src/workspace-motion");
+    transitionWorkspace(vi.fn(), "note-return");
+    expect(document.documentElement).toHaveClass("note-return-transition");
+    transitionWorkspace(vi.fn(), true);
+    first.resolve();
+    await vi.waitFor(() =>
+      expect(document.documentElement).toHaveClass("notebook-transition"),
+    );
+    expect(document.documentElement).not.toHaveClass("note-return-transition");
+    second.resolve();
+    await vi.waitFor(() =>
+      expect(document.documentElement).not.toHaveClass("notebook-transition"),
+    );
+  });
   it("finishes a snapshot before the latest queued intent, without skipping to an end frame", async () => {
     vi.resetModules();
     const first = deferred();

@@ -14,34 +14,9 @@
   position: relative;
   isolation: isolate;
 }
-.gooey-filter-definition {
-  position: absolute;
-  pointer-events: none;
-}
 .gooey-format-hint {
   font-size: 10px;
   color: var(--muted);
-}
-.gooey-format-bubbles {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: -1;
-}
-.gooey-format-base {
-  position: absolute;
-  inset: 0;
-  background: var(--ink, #171717);
-  border-radius: 28px;
-}
-.gooey-format-bridge {
-  position: absolute;
-  width: 42px;
-  height: 42px;
-  bottom: 0;
-  left: 22px;
-  background: var(--ink, #171717);
-  border-radius: 50%;
 }
 .gooey-format-trigger {
   position: relative;
@@ -52,7 +27,7 @@
   padding: 12px 18px;
   border: 0;
   border-radius: 28px;
-  background: transparent;
+  background: var(--ink, #171717);
   color: var(--surface, #fff);
   font-size: 12px;
 }

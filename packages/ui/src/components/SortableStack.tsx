@@ -1,4 +1,10 @@
-import { useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useReducedMotion } from "motion/react";
 import { stackedCardCollision } from "./stacked-card-collision";
 import {
@@ -42,6 +48,7 @@ interface SortableStackProps<T extends RankedItem> {
   itemKind?: string;
   layout?: "grid" | "stack";
   renderDragOverlay?: (item: T, index: number) => ReactNode;
+  animateChanges?: boolean;
 }
 
 function SortableRow<T extends RankedItem>({
@@ -73,6 +80,7 @@ function SortableRow<T extends RankedItem>({
   return (
     <div
       ref={setNodeRef}
+      data-sortable-id={item.id}
       className={`sortable-row${wholeCard ? " whole-card-sort" : ""}${isDragging ? " is-dragging" : ""}`}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       {...(wholeCard
@@ -144,6 +152,7 @@ export function SortableStack<T extends RankedItem>({
   itemKind = "便签",
   layout = "grid",
   renderDragOverlay,
+  animateChanges = false,
 }: SortableStackProps<T>) {
   const [error, setError] = useState("");
   const reducedMotion = useReducedMotion();
@@ -156,6 +165,59 @@ export function SortableStack<T extends RankedItem>({
         (a, b) => previewOrder.indexOf(a.id) - previewOrder.indexOf(b.id),
       )
     : items;
+  const grid = useRef<HTMLDivElement>(null);
+  const previousPositions = useRef(new Map<string, { x: number; y: number }>());
+  const reflowAnimations = useRef<Animation[]>([]);
+  useLayoutEffect(() => {
+    if (!animateChanges || !grid.current) return;
+    const reduce =
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ??
+      reducedMotion;
+    const previous = previousPositions.current;
+    const rows = Array.from(grid.current.children) as HTMLElement[];
+    const membershipChanged =
+      previous.size !== rows.length ||
+      rows.some((row) => !previous.has(row.dataset.sortableId!));
+    if (membershipChanged || draggedId || reduce) {
+      reflowAnimations.current.forEach((animation) => animation.cancel());
+      reflowAnimations.current = [];
+    }
+    const next = new Map<string, { x: number; y: number }>();
+    for (const row of rows) {
+      // Offsets ignore scrolling and any in-flight transform from the last reflow.
+      const position = { x: row.offsetLeft, y: row.offsetTop };
+      const before = previous.get(row.dataset.sortableId!);
+      next.set(row.dataset.sortableId!, position);
+      if (
+        membershipChanged &&
+        !reduce &&
+        !draggedId &&
+        !previewOrder &&
+        before &&
+        row.animate
+      ) {
+        const x = before.x - position.x,
+          y = before.y - position.y;
+        if (x || y)
+          reflowAnimations.current.push(
+            row.animate(
+              [
+                { transform: `translate(${x}px, ${y}px)` },
+                { transform: "translate(0, 0)" },
+              ],
+              { duration: 280, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
+            ),
+          );
+      }
+    }
+    previousPositions.current = next;
+  });
+  useEffect(
+    () => () => {
+      reflowAnimations.current.forEach((animation) => animation.cancel());
+    },
+    [],
+  );
   const handleSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, {
@@ -234,7 +296,7 @@ export function SortableStack<T extends RankedItem>({
             : verticalListSortingStrategy
         }
       >
-        <div className={className} aria-busy={previewOrder !== null}>
+        <div ref={grid} className={className} aria-busy={previewOrder !== null}>
           {displayedItems.map((item, index) => (
             <SortableRow
               key={item.id}

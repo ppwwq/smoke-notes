@@ -1644,24 +1644,6 @@
   background: #d4e73e;
   color: #111;
 }
-.collection-expand {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 40px;
-  padding: 8px 14px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  color: var(--ink);
-  background: var(--surface);
-  font-size: 11px;
-}
-.collection-expand svg:last-child {
-  transition: transform 200ms ease;
-}
-.collection-expand[aria-expanded="true"] svg:last-child {
-  transform: rotate(180deg);
-}
 .collection-cards {
   display: flex;
   flex-direction: column;
@@ -1792,9 +1774,6 @@
     .web-notebook-collection
     .web-section-heading {
     margin-top: 8px;
-  }
-  .collection-expand {
-    min-height: 44px;
   }
   .collection-card {
     height: 170px;
@@ -2160,8 +2139,7 @@
   color: var(--muted);
   font-size: 12px;
 }
-.workspace-app .list-context-bar button,
-.workspace-app .collection-manage {
+.workspace-app .list-context-bar button {
   min-height: 44px;
   padding: 8px 16px;
   border: 1px solid var(--line);
@@ -2174,9 +2152,6 @@
 .workspace-app .list-context-bar button[aria-pressed="true"] {
   background: var(--lime);
   border-color: var(--lime);
-}
-.workspace-app .collection-manage {
-  display: block;
 }
 .workspace-app .filter-bar .arrange-todos {
   margin-left: auto;
@@ -2484,18 +2459,9 @@
     padding-inline: 10px;
     font-size: 11px;
   }
-  .workspace-app .collection-manage {
-    display: block;
-    margin-left: auto;
-    padding-inline: 12px;
-    font-size: 11px;
-  }
   .workspace-app .web-notebook-collection .web-section-heading {
     flex-wrap: wrap;
     gap: 8px;
-  }
-  .workspace-app .web-notebook-collection .collection-expand {
-    padding-inline: 12px;
   }
   .workspace-app .sidebar .brand-block {
     padding-top: 8px;

@@ -1,5 +1,5 @@
-import { useRef, useState, type RefObject } from "react";
-import { ChevronDown, Layers, X } from "../icons";
+import { useRef, useState } from "react";
+import { Layers, X } from "../icons";
 import {
   RecordValidationError,
   TEXT_LIMITS,
@@ -13,10 +13,6 @@ import "./notebook-collection.css";
 
 interface Props {
   notebooks: Notebook[];
-  expanded?: boolean;
-  onExpandedChange?(expanded: boolean): void;
-  onManage?(): void;
-  manageRef?: RefObject<HTMLButtonElement | null>;
   onSelect(id: string): void;
   onRename(id: string, name: string): Promise<void>;
   onTrash(id: string): Promise<void>;
@@ -28,17 +24,11 @@ interface Props {
 }
 export function WebNotebookCollection({
   notebooks,
-  expanded: controlledExpanded,
-  onExpandedChange,
-  onManage,
-  manageRef,
   onSelect,
   onRename,
   onTrash,
   onMove,
 }: Props) {
-  const [localExpanded, setLocalExpanded] = useState(false);
-  const expanded = controlledExpanded ?? localExpanded;
   const [editing, setEditing] = useState<Notebook | null>(null);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -55,31 +45,7 @@ export function WebNotebookCollection({
         </div>
       </header>
       <div className="web-section-heading">
-        <h2>我的收藏</h2>
-        {onManage && (
-          <button
-            type="button"
-            className="collection-manage"
-            ref={manageRef}
-            onClick={onManage}
-          >
-            管理便签本
-          </button>
-        )}
-        <button
-          type="button"
-          className="collection-expand"
-          aria-expanded={expanded}
-          aria-controls="notebook-collection-cards"
-          onClick={() => {
-            setLocalExpanded(!expanded);
-            onExpandedChange?.(!expanded);
-          }}
-        >
-          <Layers size={15} />
-          {expanded ? "收起卡片" : "展开卡片"}
-          <ChevronDown size={14} />
-        </button>
+        <h2>全部便签本</h2>
       </div>
       <p className="collection-hint">点击进入 · 长按任意位置拖动排序</p>
       <div id="notebook-collection-cards">
@@ -105,7 +71,7 @@ export function WebNotebookCollection({
               </div>
             </div>
           )}
-          className={`collection-cards${expanded ? " expanded" : ""}`}
+          className="collection-cards"
           renderItem={(notebook, index) => (
             <div className="collection-card-shell">
               <button

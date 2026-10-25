@@ -283,6 +283,58 @@ body:has(> #root .pairing-gate) {
 ::view-transition-new(root) {
   animation-duration: 140ms;
 }
+/* Return the paper shell to its card without squeezing the whole editor UI or
+   crossfading two different text layouts. The card face keeps its natural size. */
+html.note-return-transition .sticky-card:not([data-note-return-snapshot]) {
+  /* Keep the rest of the list in its normal layer with the floating controls.
+     Individual card snapshots would otherwise paint above the New button. */
+  view-transition-name: none !important;
+}
+html.note-return-transition
+  .workspace-app
+  .sticky-card[data-note-return-snapshot] {
+  background: transparent;
+  border-color: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  transition: none;
+}
+html.note-return-transition::view-transition-group(.returning-card) {
+  z-index: 10;
+  /* The editor's empty viewport is not part of the returning card. Keep the
+     card's natural height while its position and width return to the list. */
+  max-height: var(--return-note-height);
+  border-radius: var(--return-note-radius, 24px);
+  box-shadow: var(--return-note-shadow, none);
+  animation-duration: 300ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+html.note-return-transition::view-transition-image-pair(.returning-card) {
+  overflow: hidden;
+  border-radius: var(--return-note-radius, 24px);
+  background: var(--return-note-color, transparent);
+}
+html.note-return-transition::view-transition-old(.returning-card) {
+  animation: none;
+  opacity: 0;
+}
+html.note-return-transition::view-transition-new(.returning-card) {
+  animation: none;
+  height: 100%;
+  object-fit: none;
+  object-position: top left;
+  mix-blend-mode: normal;
+}
+html.note-return-transition::view-transition-old(root) {
+  animation: none;
+  opacity: 0;
+}
+html.note-return-transition::view-transition-new(root) {
+  animation: none;
+}
+html.note-return-transition::view-transition-new(*):only-child {
+  animation: none;
+}
 /* A soft, short follow while held; release uses the longer settling curve. */
 .workspace-app .web-dock[data-dragging] .dock-selection {
   transition: transform 90ms cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -456,6 +508,11 @@ html.notebook-transition::view-transition-new(.paper) {
   html.notebook-transition::view-transition-group(*),
   html.notebook-transition::view-transition-old(*),
   html.notebook-transition::view-transition-new(*) {
+    animation: none;
+  }
+  html.note-return-transition::view-transition-group(*),
+  html.note-return-transition::view-transition-old(*),
+  html.note-return-transition::view-transition-new(*) {
     animation: none;
   }
 }

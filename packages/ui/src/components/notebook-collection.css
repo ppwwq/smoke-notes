@@ -14,12 +14,6 @@
 .collection-cards > .sortable-row + .sortable-row {
   margin-top: -110px;
 }
-.collection-cards.expanded > .sortable-row + .sortable-row {
-  margin-top: 16px;
-}
-.collection-cards > .sortable-row {
-  transition: margin-top 240ms ease;
-}
 .collection-cards .sortable-content {
   min-width: 0;
 }
@@ -76,7 +70,6 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .collection-cards > .sortable-row,
   .collection-cards .collection-card {
     transition: none;
   }

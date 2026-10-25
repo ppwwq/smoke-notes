@@ -1,11 +1,19 @@
 /**
  * Adapted from Cult UI Family Button, MIT, Copyright (c) 2023 Jordan-Gilliam.
  * Source: https://www.cult-ui.com/r/family-button.json — see LICENSE.md.
- * Retains the expanding rounded shell, Motion layout spring and rotating toggle.
+ * Retains the spring-driven expanding shell and rotating toggle. Animate actual
+ * dimensions on the shell so the button's text never stretches. The open popup
+ * keeps the original layout spring when switching between note and todo forms.
  * Local additions: controlled state, native buttons, Base UI focus management,
  * persistent children, responsive sizing and reduced-motion support.
  */
-import { useId, useRef, useState, type ReactNode } from "react";
+import {
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { motion, useReducedMotion } from "motion/react";
 import { PlusIcon, XIcon } from "lucide-react";
@@ -33,6 +41,25 @@ export default function FamilyButton({
   const trigger = useRef<HTMLButtonElement>(null);
   const popup = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  const [size, setSize] = useState({ width: 112, height: 54 });
+  useLayoutEffect(() => {
+    const target = open ? popup.current : trigger.current;
+    if (!target) return;
+    const measure = () => {
+      // Read layout dimensions, not the popup's animated projection bounds.
+      const { offsetWidth: width, offsetHeight: height } = target;
+      if (!width || !height) return;
+      setSize((previous) =>
+        previous.width === width + 2 && previous.height === height + 2
+          ? previous
+          : { width: width + 2, height: height + 2 },
+      );
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [open]);
   function changeOpen(next: boolean) {
     setLocalOpen(next);
     onOpenChange?.(next);
@@ -43,16 +70,32 @@ export default function FamilyButton({
       <motion.div
         className="family-frame"
         data-expanded={open || undefined}
-        layout={!reduced}
         initial={false}
+        animate={{
+          width: size.width,
+          height: size.height,
+          borderRadius: open ? 28 : 24,
+          backgroundColor: open ? "var(--canvas, #fbfaf8)" : "#24241f",
+        }}
         transition={
           reduced
             ? { duration: 0 }
-            : open
-              ? { type: "spring", damping: 25, stiffness: 400 }
-              : { type: "spring", damping: 36, stiffness: 420, mass: 0.9 }
+            : {
+                width: {
+                  type: "spring",
+                  stiffness: 400,
+                  damping: 34,
+                  mass: 0.9,
+                },
+                height: {
+                  type: "spring",
+                  stiffness: 400,
+                  damping: open ? 28 : 34,
+                  mass: open ? 1 : 0.9,
+                },
+                default: { duration: 0.18 },
+              }
         }
-        style={{ borderRadius: open ? 28 : 24 }}
       >
         <Dialog.Trigger
           ref={trigger}
@@ -72,6 +115,16 @@ export default function FamilyButton({
         <div ref={portalHost} style={{ display: "contents" }} />
         <Dialog.Portal container={portalHost} keepMounted>
           <Dialog.Popup
+            render={
+              <motion.div
+                layout={open && !reduced}
+                transition={
+                  reduced
+                    ? { duration: 0 }
+                    : { type: "spring", stiffness: 400, damping: 28 }
+                }
+              />
+            }
             ref={popup}
             className="family-popup"
             aria-labelledby={titleId}
@@ -95,8 +148,8 @@ export default function FamilyButton({
               <Dialog.Close className="family-close" aria-label="收起新建面板">
                 <motion.span
                   initial={false}
-                  animate={{ rotate: open && !reduced ? 90 : 0 }}
-                  transition={{ duration: reduced ? 0 : 0.3 }}
+                  animate={{ rotate: open || reduced ? 0 : -45 }}
+                  transition={{ duration: reduced ? 0 : 0.22 }}
                 >
                   <XIcon size={20} aria-hidden="true" />
                 </motion.span>

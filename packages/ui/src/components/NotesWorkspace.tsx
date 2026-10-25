@@ -20,6 +20,7 @@ interface NotesWorkspaceProps {
   onExpandNotebook?(id: string): void;
   onCollapse?(): void;
   openOnSingleClick: boolean;
+  returnNoteId?: string | null;
   onOpenNote(id: string, notebookId?: string): void;
   query?: string;
   onQueryChange?(value: string): void;
@@ -128,6 +129,7 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
               </button>
             ) : (
               <SortableStack
+                animateChanges
                 wholeCard
                 items={props.notes}
                 label={(note) => note.title || "无标题便签"}
@@ -142,7 +144,7 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
                         data-note-id={note.id}
                         style={{
                           viewTransitionName: `note-${note.id}`,
-                          viewTransitionClass: `paper paper-depth-${Math.min(index, 3)}`,
+                          viewTransitionClass: `paper paper-depth-${Math.min(index, 3)}${note.id === props.returnNoteId ? " returning-card" : ""}`,
                         }}
                       >
                         <button

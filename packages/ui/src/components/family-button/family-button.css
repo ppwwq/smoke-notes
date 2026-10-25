@@ -1,15 +1,18 @@
 /* Cult UI Family Button, adapted to Smoke Notes' existing paper palette. */
 .workspace-app .workspace-create {
   --family-width: 352px;
+  --family-trigger-width: 110px;
   position: fixed;
   z-index: 70;
   bottom: max(28px, env(safe-area-inset-bottom, 0px));
   right: 28px;
 }
 .workspace-app .workspace-create[hidden],
-.family-popup[data-closed],
-.family-trigger[hidden] {
+.family-popup[data-closed] {
   display: none;
+}
+.family-trigger[hidden] {
+  visibility: hidden;
 }
 .family-backdrop {
   position: fixed;
@@ -20,6 +23,9 @@
 .family-frame {
   position: relative;
   width: 112px;
+  height: 54px;
+  overflow: hidden;
+  border-radius: 24px;
   border: 1px solid #ffffff30;
   background: #24241f;
   color: #fcfbf7;
@@ -29,9 +35,7 @@
     inset 0 1px 0 #ffffff25;
 }
 .family-frame[data-expanded] {
-  width: min(var(--family-width), calc(100vw - 32px));
   border-color: #e1ded4;
-  background: var(--canvas, #fbfaf8);
   color: var(--ink, #24241f);
   box-shadow:
     0 3px 0 #ddd8cc,
@@ -39,11 +43,14 @@
     inset 0 1px 0 #fff;
 }
 .family-trigger {
+  position: absolute;
+  right: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 9px;
-  width: 100%;
+  width: var(--family-trigger-width);
   min-height: 52px;
   padding: 12px 17px;
   border: 0;
@@ -57,10 +64,13 @@
   background: #ffffff12;
 }
 .family-popup {
-  position: relative;
+  position: absolute;
+  width: min(calc(var(--family-width) - 2px), calc(100vw - 34px));
+  right: 0;
+  top: 0;
   z-index: 1;
   padding: 22px;
-  border-radius: inherit;
+  border-radius: 28px;
   overflow-y: auto;
   max-height: calc(var(--web-viewport-height, 100dvh) - 150px);
   overscroll-behavior: contain;
@@ -270,6 +280,7 @@
 @media (max-width: 760px) {
   .workspace-app .workspace-create,
   .workspace-app.platform-desktop .workspace-create {
+    --family-trigger-width: 100px;
     position: fixed;
     top: auto;
     right: 18px;

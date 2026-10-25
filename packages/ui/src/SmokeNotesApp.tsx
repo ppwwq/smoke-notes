@@ -103,6 +103,7 @@ export function SmokeNotesApp({
     {},
   );
   const [notesExpanded, setNotesExpanded] = useState(false);
+  const [returnNoteId, setReturnNoteId] = useState<string | null>(null);
   const [noteQuery, setNoteQuery] = useState("");
   const [todos, setTodos] = useState<Todo[]>([]);
   const [todoSeries, setTodoSeries] = useState<Todo[]>([]);
@@ -120,7 +121,6 @@ export function SmokeNotesApp({
   const selectedNotebookIdRef = useRef<string | null>(null);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [notebookCollectionOpen, setNotebookCollectionOpen] = useState(false);
-  const [notebookCardsExpanded, setNotebookCardsExpanded] = useState(false);
   const [todoFilter, setTodoFilter] = useState<TodoFilter>("all");
   const workspaceRef = useRef<HTMLDivElement>(null);
   const lastOpenedNote = useRef<string | null>(null);
@@ -129,7 +129,7 @@ export function SmokeNotesApp({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
-  const { mobile, panelRef, triggerRef } = useMobileSidebar(
+  const { mobile, panelRef } = useMobileSidebar(
     mobileNavOpen,
     closeMobileNav,
     true,
@@ -464,7 +464,12 @@ export function SmokeNotesApp({
   useEffect(() => {
     setEditorMenu(null);
     setEditorActionError("");
-  }, [compactEditing, selectedNoteId]);
+  }, [selectedNoteId]);
+  useEffect(() => {
+    // Keyboard dismissal and modal focus can change the compact layout on iPad.
+    // Only the format toolbar moves between layouts; keep other menus open.
+    setEditorMenu((current) => (current === "format" ? null : current));
+  }, [compactEditing]);
   useEffect(() => {
     if (editorMenu !== "more") return;
     moreButtonRef.current?.parentElement
@@ -740,10 +745,6 @@ export function SmokeNotesApp({
           {notebookCollectionOpen ? (
             <WebNotebookCollection
               notebooks={notebooks}
-              expanded={notebookCardsExpanded}
-              onExpandedChange={setNotebookCardsExpanded}
-              onManage={() => setMobileNavOpen(true)}
-              manageRef={triggerRef}
               onSelect={(id) => {
                 setNotebookCollectionOpen(false);
                 void selectNotebook(id);
@@ -876,7 +877,10 @@ export function SmokeNotesApp({
             />
           ) : selectedNote ? (
             <main
-              style={{ viewTransitionName: `note-${selectedNote.id}` }}
+              style={{
+                viewTransitionName: `note-${selectedNote.id}`,
+                viewTransitionClass: "returning-card",
+              }}
               className={`mobile-note-screen${compactEditing ? " compact-editing" : ""}`}
             >
               <header className="mobile-note-header">
@@ -886,7 +890,10 @@ export function SmokeNotesApp({
                   aria-label="返回便签列表"
                   onClick={async () => {
                     if (await saveBeforeLeaving())
-                      transitionWorkspace(() => setSelectedNoteId(null));
+                      transitionWorkspace(() => {
+                        setReturnNoteId(selectedNote.id);
+                        setSelectedNoteId(null);
+                      }, "note-return");
                   }}
                 >
                   <ArrowLeft size={18} />
@@ -1158,6 +1165,7 @@ export function SmokeNotesApp({
               }
               notes={notes}
               openOnSingleClick
+              returnNoteId={returnNoteId}
               onOpenNote={(id, notebookId) => {
                 lastOpenedNote.current = id;
                 transitionWorkspace(() => {

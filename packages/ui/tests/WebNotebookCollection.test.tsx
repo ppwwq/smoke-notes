@@ -22,7 +22,7 @@ const notebooks: Notebook[] = [
   },
 ];
 
-it("expands the same notebooks and opens the original notebook identity", () => {
+it("shows all notebooks without management or expansion controls and opens the original identity", () => {
   const select = vi.fn();
   render(
     <WebNotebookCollection
@@ -33,13 +33,18 @@ it("expands the same notebooks and opens the original notebook identity", () => 
       onMove={vi.fn()}
     />,
   );
-  const expand = screen.getByRole("button", { name: "展开卡片" });
-  fireEvent.click(expand);
-  expect(expand).toHaveAttribute("aria-expanded", "true");
+  expect(
+    screen.getByRole("heading", { name: "全部便签本" }),
+  ).toBeInTheDocument();
+  expect(screen.queryByText("我的收藏")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "管理便签本" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "展开卡片" }),
+  ).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "进入便签本：工作" }));
   expect(select).toHaveBeenCalledWith("one");
-  fireEvent.click(expand);
-  expect(expand).toHaveAttribute("aria-expanded", "false");
 });
 
 it("edits from the card menu without opening the notebook and retains failed input", async () => {

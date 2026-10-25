@@ -79,9 +79,9 @@ describe("SmokeNotesApp", () => {
     }
     return screen.findByRole("button", { name: `打开便签：${title}` });
   }
-  async function openManagement() {
+  async function openNotebookCreation() {
     fireEvent.click(await screen.findByRole("button", { name: "浏览便签本" }));
-    fireEvent.click(await screen.findByRole("button", { name: "管理便签本" }));
+    fireEvent.click(await screen.findByRole("button", { name: "新增" }));
   }
 
   function trackRead<Args extends unknown[], Result>(
@@ -315,13 +315,13 @@ describe("SmokeNotesApp", () => {
       const earlier = await repository.listNotes(notebook.id);
       const delayed = deferred<typeof earlier>();
       const readDelayedSnapshot = vi.fn(() => delayed.promise);
-      vi.mocked(repository.listNotes).mockImplementationOnce(readDelayedSnapshot);
+      vi.mocked(repository.listNotes).mockImplementationOnce(
+        readDelayedSnapshot,
+      );
       act(() => {
         window.dispatchEvent(new CustomEvent("smoke-notes:data-changed"));
       });
-      await waitFor(() =>
-        expect(readDelayedSnapshot).toHaveBeenCalledOnce(),
-      );
+      await waitFor(() => expect(readDelayedSnapshot).toHaveBeenCalledOnce());
       act(() => {
         editor.commands.splitBlock();
         editor.commands.insertContent("第二次编辑");
@@ -592,6 +592,46 @@ describe("SmokeNotesApp", () => {
     ).toHaveTextContent("本次有效");
   });
 
+  it("keeps appearance open when iPad keyboard focus changes the editor layout", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("innerWidth", 1194);
+    vi.stubGlobal("innerHeight", 834);
+    Object.defineProperty(navigator, "maxTouchPoints", {
+      configurable: true,
+      value: 5,
+    });
+    const viewport = Object.assign(new EventTarget(), {
+      height: 834,
+      offsetTop: 0,
+      scale: 1,
+    });
+    vi.stubGlobal("visualViewport", viewport);
+    render(<SmokeNotesApp repository={repository} platform="web" />);
+    await user.click(await findNote("周会记录"));
+    const body = await screen.findByRole("textbox", { name: "便签正文" });
+    act(() => {
+      body.focus();
+      viewport.height = 350;
+      viewport.dispatchEvent(new Event("resize"));
+    });
+    expect(body.closest(".mobile-note-screen")).toHaveClass("compact-editing");
+    await user.click(screen.getByRole("button", { name: "更多操作" }));
+    await user.click(screen.getByRole("menuitem", { name: "便签外观" }));
+    expect(
+      await screen.findByRole("dialog", { name: "便签外观" }),
+    ).toBeInTheDocument();
+    act(() => {
+      viewport.height = 834;
+      viewport.dispatchEvent(new Event("resize"));
+    });
+    await user.click(screen.getByRole("button", { name: "便签颜色：sky" }));
+    await user.click(screen.getByRole("button", { name: "完成" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "便签外观" })).toBeNull(),
+    );
+    expect(screen.getByRole("textbox", { name: "便签正文" })).toBe(body);
+  });
+
   it("automatically uses a compact header and restores tools without replacing the editor", async () => {
     vi.stubGlobal("innerWidth", 1194);
     vi.stubGlobal("innerHeight", 834);
@@ -764,7 +804,7 @@ describe("SmokeNotesApp", () => {
     ).toBeInTheDocument();
   });
 
-  it("retains web browsing positions, todo filters and notebook expansion across navigation", async () => {
+  it("retains web browsing positions and todo filters across notebook navigation", async () => {
     const { container } = render(
       <SmokeNotesApp repository={repository} platform="web" />,
     );
@@ -783,15 +823,13 @@ describe("SmokeNotesApp", () => {
     fireEvent.click(await screen.findByRole("button", { name: "筛选" }));
     fireEvent.click(await screen.findByRole("button", { name: "未完成" }));
     fireEvent.click(nav().getByRole("button", { name: "浏览便签本" }));
-    fireEvent.click(screen.getByRole("button", { name: "展开卡片" }));
     fireEvent.click(screen.getByRole("button", { name: "进入便签本：生活" }));
     await screen.findByRole("heading", { name: "生活" });
     expect(container.querySelector(".notes-board-scroll")!.scrollTop).toBe(0);
     fireEvent.click(nav().getByRole("button", { name: "浏览便签本" }));
-    expect(screen.getByRole("button", { name: "收起卡片" })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
+    expect(
+      screen.getByRole("heading", { name: "全部便签本" }),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "进入便签本：工作" }));
     await findNote("周会记录");
     expect(container.querySelector(".notes-board-scroll")!.scrollTop).toBe(180);
@@ -859,16 +897,16 @@ describe("SmokeNotesApp", () => {
   });
 
   it("does not submit a notebook name while confirming an IME candidate", async () => {
+    const user = userEvent.setup();
     render(<SmokeNotesApp repository={repository} platform="desktop" />);
-    await openManagement();
-    await screen.findByRole("button", { name: "工作" });
-    fireEvent.click(screen.getByRole("button", { name: "新建便签本" }));
-    const input = screen.getByRole("textbox", { name: "便签本名称" });
+    await openNotebookCreation();
+    const input = screen.getByRole("textbox", { name: "新便签本名称" });
     fireEvent.change(input, { target: { value: "选字中" } });
     fireEvent.keyDown(input, { key: "Enter", isComposing: true });
     expect(input).toBeInTheDocument();
     expect(await repository.listNotebooks()).toHaveLength(2);
-    fireEvent.keyDown(input, { key: "Enter" });
+    await user.click(input);
+    await user.keyboard("{Enter}");
     await waitFor(async () =>
       expect(
         (await repository.listNotebooks()).some(
@@ -917,15 +955,16 @@ describe("SmokeNotesApp", () => {
       />,
     );
 
-    await openManagement();
-    await screen.findByRole("button", { name: "工作" });
-    await user.click(screen.getByRole("button", { name: "新建便签本" }));
+    await openNotebookCreation();
     await user.type(
-      screen.getByRole("textbox", { name: "便签本名称" }),
+      screen.getByRole("textbox", { name: "新便签本名称" }),
       "灵感",
     );
     await user.keyboard("{Enter}");
 
+    await user.click(
+      await screen.findByRole("button", { name: "进入便签本：灵感" }),
+    );
     await screen.findByRole("heading", { name: "灵感" });
     await user.click(screen.getByRole("button", { name: "新建便签" }));
     await user.click(screen.getByRole("button", { name: /文字便签/ }));
