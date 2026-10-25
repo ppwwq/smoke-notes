@@ -30,7 +30,6 @@
   background: #24241f;
   color: #fcfbf7;
   box-shadow:
-    0 3px 0 #161610,
     0 8px 20px #29251c18,
     inset 0 1px 0 #ffffff25;
 }
@@ -38,7 +37,6 @@
   border-color: #e1ded4;
   color: var(--ink, #24241f);
   box-shadow:
-    0 3px 0 #ddd8cc,
     0 22px 70px #29251c25,
     inset 0 1px 0 #fff;
 }
