@@ -1,5 +1,8 @@
 # 烟笺部署说明
 
+现有生产项目的 GitHub Actions 部署、凭据范围和迁移历史核对步骤见
+[云端部署说明](docs/CLOUD_DEPLOYMENT.md)。现有生产库缺少迁移历史，必须先完成该核对，不能直接运行下方的新项目 `db push` 步骤。
+
 ## 1. 创建 Supabase 项目
 
 1. 在 Supabase 创建项目，记录 Project URL、Publishable Key 和 Project Ref。
