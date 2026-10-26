@@ -1,0 +1,285 @@
+/* Calendar creation is a compact upper-right sheet; other dialogs keep their layout. */
+.workspace-app .actions-backdrop.calendar-composer-backdrop {
+  position: fixed;
+  inset: var(--web-viewport-top, 0px) 0 auto;
+  height: var(--web-viewport-height, 100dvh);
+  box-sizing: border-box;
+  place-items: start end;
+  padding: max(20px, env(safe-area-inset-top, 0px))
+    max(20px, env(safe-area-inset-right, 0px))
+    max(20px, env(safe-area-inset-bottom, 0px))
+    max(20px, env(safe-area-inset-left, 0px));
+  background: transparent;
+}
+.workspace-app .actions-panel.calendar-composer-panel {
+  width: min(400px, 100%);
+  max-height: calc(
+    var(--web-viewport-height, 100dvh) - 40px - env(safe-area-inset-top, 0px) -
+      env(safe-area-inset-bottom, 0px)
+  );
+  padding: 0;
+  overflow: hidden;
+  border-radius: 28px;
+  background: var(--canvas);
+  border-color: color-mix(in srgb, var(--line-strong) 60%, transparent);
+  box-shadow:
+    0 20px 60px #30274720,
+    0 3px 12px #30274710;
+  transform-origin: top right;
+  animation: calendar-composer-enter 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes calendar-composer-enter {
+  from {
+    opacity: 0;
+    transform: translate(8px, -8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+.calendar-event-editor.calendar-composer {
+  max-height: min(
+    780px,
+    calc(
+      var(--web-viewport-height, 100dvh) - 40px -
+        env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+    )
+  );
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+.calendar-event-editor.calendar-composer > header {
+  padding: 14px 14px 12px;
+  gap: 8px;
+}
+.calendar-composer .calendar-composer-heading {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.calendar-event-editor.calendar-composer > header > button {
+  flex: 0 0 40px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--surface-soft);
+  cursor: pointer;
+}
+.calendar-event-editor.calendar-composer > header > .calendar-composer-save {
+  background: var(--ink);
+  color: var(--canvas);
+}
+.calendar-event-editor.calendar-composer
+  > header
+  > .calendar-composer-save:disabled {
+  background: var(--surface-soft);
+  color: var(--muted);
+  opacity: 0.5;
+  cursor: default;
+}
+.calendar-composer .calendar-composer-kind {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+}
+.calendar-composer-kind > span {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+}
+.calendar-composer-kind .app-segments {
+  width: 100%;
+  min-width: 0;
+  --segment-thumb: var(--canvas);
+}
+.calendar-event-editor.calendar-composer > fieldset {
+  padding: 0 18px 20px;
+  gap: 16px;
+}
+.calendar-event-editor.calendar-composer > fieldset > label {
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.calendar-event-editor.calendar-composer
+  > fieldset
+  > label
+  > :is(input, textarea) {
+  border: 0;
+  background: var(--surface-soft);
+  border-radius: 16px;
+  padding: 12px 14px;
+  color: var(--ink);
+  font-size: 14px;
+}
+.calendar-event-editor.calendar-composer > fieldset > .calendar-composer-title {
+  font-size: 0;
+  gap: 0;
+  margin-top: 2px;
+}
+.calendar-event-editor.calendar-composer
+  > fieldset
+  > .calendar-composer-title
+  input {
+  font-size: 18px;
+  font-weight: 550;
+  min-height: 50px;
+}
+.calendar-schedule {
+  min-width: 0;
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+.calendar-composer .calendar-schedule {
+  margin-top: -6px;
+}
+.calendar-schedule-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 72px;
+  padding: 13px 15px;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.calendar-schedule-summary > span {
+  display: grid;
+  gap: 5px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.calendar-schedule-summary strong {
+  font-size: 14px;
+  font-weight: 550;
+}
+.calendar-schedule-summary > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform 200ms;
+}
+.calendar-schedule[data-expanded="true"] .calendar-schedule-summary > svg {
+  transform: rotate(180deg);
+}
+.calendar-schedule-expansion {
+  overflow: hidden;
+}
+.calendar-schedule-fields {
+  display: grid;
+  gap: 14px;
+  padding: 0 14px 16px;
+}
+.calendar-schedule-fields .calendar-form-dates {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+.calendar-schedule-fields .calendar-form-dates > label {
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+}
+.calendar-schedule-fields .calendar-time-picker {
+  grid-column: 2;
+}
+.calendar-schedule-fields .planner-date-trigger {
+  width: 100%;
+}
+.calendar-schedule-fields .calendar-toggle {
+  min-height: 38px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.calendar-event-editor .calendar-schedule-fields .calendar-toggle input {
+  appearance: none;
+  position: relative;
+  width: 42px;
+  height: 26px;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--muted) 40%, var(--surface));
+  transition: background 180ms;
+  cursor: pointer;
+}
+.calendar-event-editor .calendar-schedule-fields .calendar-toggle input::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--canvas);
+  box-shadow: 0 1px 3px #0002;
+  transition: transform 180ms;
+}
+.calendar-event-editor
+  .calendar-schedule-fields
+  .calendar-toggle
+  input:checked {
+  background: #8873cf;
+}
+.calendar-event-editor
+  .calendar-schedule-fields
+  .calendar-toggle
+  input:checked::after {
+  transform: translateX(16px);
+}
+.calendar-schedule-fields .calendar-local-hint {
+  margin: 0;
+}
+.calendar-composer :is(button, input):focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+@media (max-width: 520px) {
+  .workspace-app .actions-backdrop.calendar-composer-backdrop {
+    padding: max(10px, env(safe-area-inset-top, 0px)) 10px
+      max(10px, env(safe-area-inset-bottom, 0px));
+  }
+  .workspace-app .actions-panel.calendar-composer-panel,
+  .calendar-event-editor.calendar-composer {
+    max-height: calc(
+      var(--web-viewport-height, 100dvh) - 20px -
+        env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+    );
+  }
+  .calendar-event-editor.calendar-composer
+    > fieldset
+    > label
+    > :is(input, textarea) {
+    font-size: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-app .actions-panel.calendar-composer-panel {
+    animation: none;
+  }
+  .calendar-schedule-summary > svg,
+  .calendar-event-editor .calendar-schedule-fields .calendar-toggle input,
+  .calendar-event-editor
+    .calendar-schedule-fields
+    .calendar-toggle
+    input::after {
+    transition: none;
+  }
+}

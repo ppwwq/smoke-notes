@@ -1,0 +1,24 @@
+{
+  "name": "jotday-web-preview",
+  "version": "1.0.0",
+  "description": "Jotday desktop and mobile web preview",
+  "author": "Jotday",
+  "private": true,
+  "main": "main.cjs",
+  "build": {
+    "appId": "com.smokenotes.webpreview",
+    "productName": "Jotday-Web-Preview",
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "index.html",
+      "renderer.js",
+      "style.css",
+      "dist/**/*"
+    ],
+    "win": {
+      "icon": "../../apps/desktop/build/icon.png",
+      "signExecutable": false
+    }
+  }
+}

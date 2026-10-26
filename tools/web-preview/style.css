@@ -1,0 +1,149 @@
+:root {
+  color-scheme: light;
+  font-family: "Microsoft YaHei UI", sans-serif;
+  color: #273a35;
+  background: #e9e8e2;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+header {
+  height: 86px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 28px;
+  border-bottom: 1px solid #d4d6ce;
+  background: #f9f9f5;
+}
+.identity,
+.source,
+.metrics,
+.modes {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.mark {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+}
+h1 {
+  font-size: 19px;
+  font-weight: 500;
+  margin: 0 0 4px;
+  letter-spacing: 0.08em;
+}
+p {
+  margin: 0;
+  font:
+    9px "Consolas",
+    monospace;
+  letter-spacing: 0.12em;
+  color: #748078;
+}
+label {
+  font-size: 11px;
+  color: #717d75;
+}
+button,
+select {
+  font: inherit;
+  font-size: 12px;
+  border: 1px solid #cbd0c8;
+  border-radius: 7px;
+  background: #fffefa;
+  color: #31483d;
+  padding: 9px 13px;
+  cursor: pointer;
+}
+button:hover {
+  background: #e2e9df;
+}
+button:focus-visible,
+select:focus-visible {
+  outline: 2px solid #57755e;
+  outline-offset: 3px;
+}
+nav {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  background: #f4f4ed;
+  border-bottom: 1px solid #d4d6ce;
+}
+.modes {
+  gap: 4px;
+}
+.modes button {
+  border-color: transparent;
+  background: transparent;
+}
+.modes button[aria-pressed="true"] {
+  background: #344e43;
+  color: #fff;
+}
+.metrics {
+  font:
+    12px "Consolas",
+    "Microsoft YaHei UI",
+    monospace;
+}
+.separator {
+  color: #a3aaa0;
+}
+main {
+  height: calc(100vh - 186px);
+  background-image: radial-gradient(#bcc4b6 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+.stage-label {
+  position: absolute;
+  left: 28px;
+  bottom: 60px;
+  font:
+    9px "Consolas",
+    monospace;
+  letter-spacing: 0.16em;
+  color: #727e72;
+}
+footer {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 28px;
+  background: #f9f9f5;
+  border-top: 1px solid #d4d6ce;
+  font-size: 10px;
+  color: #738075;
+}
+#status {
+  color: #344e43;
+}
+@media (max-width: 950px) {
+  footer span:last-child {
+    display: none;
+  }
+  .source label {
+    display: none;
+  }
+  header,
+  nav,
+  footer {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}

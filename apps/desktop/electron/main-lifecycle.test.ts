@@ -89,7 +89,7 @@ async function startMain(
         previewMode === "release-test" ||
         previewMode === "production",
       getName: () =>
-        previewMode === "packaged" ? "SmokeNotes Clear Preview" : "Jotday",
+        previewMode === "packaged" ? "Jotday Clear Preview" : "Jotday",
       commandLine: {
         getSwitchValue: (name: string) =>
           name === "user-data-dir" && previewMode === "release-test"

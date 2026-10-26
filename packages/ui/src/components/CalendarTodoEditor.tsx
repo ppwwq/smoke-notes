@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { X } from "lucide-react";
+import { X, Check } from "lucide-react";
 import {
   getTodoDate,
   plannerTodoValue,
@@ -11,6 +11,7 @@ import { WebDialog } from "./glass/WebDialog";
 import { SegmentedControl } from "./SegmentedControl";
 import { PlannerDatePicker } from "./PlannerDatePicker";
 import { CalendarTimePicker } from "./CalendarTimePicker";
+import { CalendarScheduleDisclosure } from "./CalendarScheduleDisclosure";
 import { RepeatFields } from "./TodoRepeatFields";
 import { PlannerTypeField, type PlannerTypeActions } from "./PlannerTypeField";
 
@@ -83,20 +84,23 @@ export function CalendarTodoEditor({
     <WebDialog
       web
       kind="actions"
+      placement={todo ? "center" : "top-end"}
       label={todo ? "编辑每日待办" : "新增每日待办"}
       onClose={() => {
         if (!pending.current) onClose();
       }}
     >
       <form
-        className="calendar-event-editor"
+        className={`calendar-event-editor${todo ? "" : " calendar-composer"}`}
         onSubmit={(e) => {
           e.preventDefault();
           void save();
         }}
       >
         <header>
-          <h2>{todo ? "编辑待办" : "新增安排"}</h2>
+          <h2 className={!todo ? "calendar-composer-heading" : undefined}>
+            {todo ? "编辑待办" : "新增安排"}
+          </h2>
           <button
             type="button"
             aria-label="关闭待办编辑"
@@ -105,22 +109,38 @@ export function CalendarTodoEditor({
           >
             <X size={20} />
           </button>
+          {!todo && (
+            <fieldset className="calendar-composer-kind" disabled={busy}>
+              {!onSwitchToEvent && <span>新增每日待办</span>}
+              {onSwitchToEvent && (
+                <SegmentedControl
+                  label="新增安排类型"
+                  value="todo"
+                  options={[
+                    { value: "event", label: "行程" },
+                    { value: "todo", label: "每日待办" },
+                  ]}
+                  onChange={(value) => {
+                    if (value === "event") onSwitchToEvent();
+                  }}
+                />
+              )}
+            </fieldset>
+          )}
+          {!todo && (
+            <button
+              className="calendar-composer-save"
+              aria-label="保存待办"
+              title={busy ? "保存中…" : "保存待办"}
+              aria-busy={busy}
+              disabled={busy || !draft.text.trim()}
+            >
+              {busy ? <span>…</span> : <Check size={21} />}
+            </button>
+          )}
         </header>
         <fieldset disabled={busy}>
-          {onSwitchToEvent && (
-            <SegmentedControl
-              label="新增安排类型"
-              value="todo"
-              options={[
-                { value: "event", label: "行程" },
-                { value: "todo", label: "每日待办" },
-              ]}
-              onChange={(value) => {
-                if (value === "event") onSwitchToEvent();
-              }}
-            />
-          )}
-          <label>
+          <label className="calendar-composer-title">
             内容
             <input
               autoFocus
@@ -138,61 +158,66 @@ export function CalendarTodoEditor({
               }}
             />
           </label>
-          <label>
-            {recurring ? "本次日期" : "开始日期"}
-            <PlannerDatePicker
-              label="每日待办日期"
-              value={draft.date}
-              today={today}
-              disabled={recurring}
-              onChange={(date) => change({ date })}
-            />
-          </label>
-          <label className="calendar-toggle">
-            <input
-              type="checkbox"
-              checked={!!draft.time}
-              onChange={(e) =>
-                change({ time: e.target.checked ? "09:00" : null })
-              }
-            />
-            指定待办时间
-          </label>
-          {draft.time && (
-            <CalendarTimePicker
-              label="待办时间"
-              value={draft.time}
-              onChange={(time) => change({ time })}
-            />
-          )}
-          {!todo && (
-            <RepeatFields
-              label="每日待办重复"
-              value={draft.repeat?.kind ?? "once"}
-              days={draft.repeat?.weekdays ?? [1, 2, 3, 4, 5]}
-              onChange={(kind) =>
-                change({
-                  repeat:
-                    kind === "once"
-                      ? undefined
-                      : {
-                          kind,
-                          ...(kind === "weekly"
-                            ? { weekdays: [1, 2, 3, 4, 5] }
-                            : {}),
-                        },
-                })
-              }
-              onDaysChange={(weekdays) =>
-                change({ repeat: { kind: "weekly", weekdays } })
-              }
-            />
-          )}
-          {recurring && (
-            <p className="calendar-local-hint">
-              修改仅影响这一次。其他日期继续按原规则重复。
-            </p>
-          )}
+          <CalendarScheduleDisclosure
+            date={draft.date}
+            detail={draft.time ?? "未指定时间"}
+          >
+            <label>
+              {recurring ? "本次日期" : "开始日期"}
+              <PlannerDatePicker
+                label="每日待办日期"
+                value={draft.date}
+                today={today}
+                disabled={recurring}
+                onChange={(date) => change({ date })}
+              />
+            </label>
+            <label className="calendar-toggle">
+              <input
+                type="checkbox"
+                checked={!!draft.time}
+                onChange={(e) =>
+                  change({ time: e.target.checked ? "09:00" : null })
+                }
+              />
+              指定待办时间
+            </label>
+            {draft.time && (
+              <CalendarTimePicker
+                label="待办时间"
+                value={draft.time}
+                onChange={(time) => change({ time })}
+              />
+            )}
+            {!todo && (
+              <RepeatFields
+                label="每日待办重复"
+                value={draft.repeat?.kind ?? "once"}
+                days={draft.repeat?.weekdays ?? [1, 2, 3, 4, 5]}
+                onChange={(kind) =>
+                  change({
+                    repeat:
+                      kind === "once"
+                        ? undefined
+                        : {
+                            kind,
+                            ...(kind === "weekly"
+                              ? { weekdays: [1, 2, 3, 4, 5] }
+                              : {}),
+                          },
+                  })
+                }
+                onDaysChange={(weekdays) =>
+                  change({ repeat: { kind: "weekly", weekdays } })
+                }
+              />
+            )}
+            {recurring && (
+              <p className="calendar-local-hint">
+                修改仅影响这一次。其他日期继续按原规则重复。
+              </p>
+            )}
+          </CalendarScheduleDisclosure>
           <PlannerTypeField
             {...actions}
             value={draft.typeId}
@@ -210,14 +235,16 @@ export function CalendarTodoEditor({
           </label>
         </fieldset>
         {error && <p role="alert">{error}</p>}
-        <footer>
-          <button
-            className="planner-save"
-            disabled={busy || !draft.text.trim()}
-          >
-            {busy ? "保存中…" : "保存待办"}
-          </button>
-        </footer>
+        {todo && (
+          <footer>
+            <button
+              className="planner-save"
+              disabled={busy || !draft.text.trim()}
+            >
+              {busy ? "保存中…" : "保存待办"}
+            </button>
+          </footer>
+        )}
       </form>
     </WebDialog>
   );

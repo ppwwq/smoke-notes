@@ -31,6 +31,19 @@
   --completion-muted: var(--muted);
   --completion-accent: var(--paper-lime, #d4e73e);
 }
+/* Selected palette 05: only the daily progress card and view switcher. */
+.workspace-app .planner-daily-progress {
+  --completion-surface: #ffffff;
+  --completion-ink: #373342;
+  --completion-muted: #696173;
+  --completion-accent: #766397;
+}
+.workspace-app .planner-navigation > .planner-segments {
+  --segment-track: #ece9f4;
+  --segment-thumb: #d5cdee;
+  --segment-text: #696173;
+  --segment-active-text: #3e3458;
+}
 .workspace-app .app-segments.rubber-segment,
 .workspace-app[data-web-background] .web-dock.rubber-segment {
   display: inline-grid;
@@ -108,11 +121,7 @@
 }
 .workspace-app .planner-daily-progress progress,
 .workspace-app .planner-daily-progress progress::-webkit-progress-bar {
-  background: color-mix(
-    in srgb,
-    var(--completion-accent) 18%,
-    var(--completion-surface)
-  );
+  background: #e1daec;
 }
 .workspace-app .planner-daily-progress progress::-webkit-progress-value {
   background: var(--completion-accent);

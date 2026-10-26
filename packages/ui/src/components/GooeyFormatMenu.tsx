@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { Type } from "../icons";
 import "./gooey-format-menu.css";
 
-/** Original Smoke Notes interaction; no Skiper Pro source is included. */
+/** Original Jotday interaction; no Skiper Pro source is included. */
 export function GooeyFormatMenu({
   children,
   open,

@@ -1,6 +1,6 @@
 {
   "name": "@smoke-notes/desktop",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "Jotday — 随手记录便签，安排每天日程",
   "author": "Jotday",
   "private": true,
@@ -48,6 +48,7 @@
       "artifactName": "Jotday-Setup-${version}.${ext}"
     },
     "nsis": {
+      "include": "build/installer.nsh",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,

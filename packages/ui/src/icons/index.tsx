@@ -1,6 +1,6 @@
 import type { ReactNode, SVGProps } from "react";
 
-/** SmokeNotes UI glyphs: a 24-unit grid, 1.8-unit strokes and round terminals.
+/** Jotday UI glyphs: a 24-unit grid, 1.8-unit strokes and round terminals.
  * Icons are decorative; the owning control supplies its existing accessible name.
  * Keep geometry in this module so shared web/native controls use the same language.
  */

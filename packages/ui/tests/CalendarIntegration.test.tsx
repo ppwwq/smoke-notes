@@ -89,6 +89,7 @@ it("keeps one global add entry and moves one day across month boundaries in ever
     "11月",
   );
   fireEvent.click(screen.getByRole("button", { name: "新增安排" }));
+  fireEvent.click(screen.getByRole("button", { name: "日期与时间" }));
   expect(
     screen.getByRole("button", { name: "日程开始日期" }),
   ).toHaveTextContent("2026/11/01");
@@ -329,6 +330,7 @@ it("creates a one-off task on the selected date through the unified editor and k
   fireEvent.change(screen.getByRole("textbox", { name: "每日待办内容" }), {
     target: { value: "周五交材料" },
   });
+  await userEvent.click(screen.getByRole("button", { name: "日期与时间" }));
   await userEvent.click(screen.getByRole("combobox", { name: "每日待办重复" }));
   await userEvent.click(screen.getByRole("option", { name: "不重复" }));
   fireEvent.click(screen.getByRole("button", { name: "保存待办" }));
@@ -337,7 +339,7 @@ it("creates a one-off task on the selected date through the unified editor and k
       (await repo.listTodos()).map((todo) => [todo.text, getTodoDate(todo)]),
     ).toEqual([["周五交材料", "2026-10-23"]]),
   );
-  expect(screen.getByRole("button", { name: "日历" })).toHaveAttribute(
+  expect(await screen.findByRole("button", { name: "日历" })).toHaveAttribute(
     "aria-pressed",
     "true",
   );
@@ -430,6 +432,7 @@ it("persists timed calendar events, edits one recurrence, searches exceptions an
     target: { value: "项目会议" },
   });
   const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "日期与时间" }));
   await user.click(screen.getByRole("combobox", { name: "日程开始时间分钟" }));
   await user.click(await screen.findByRole("option", { name: "30 分" }));
   await user.click(screen.getByRole("combobox", { name: "日程结束时间小时" }));
@@ -523,6 +526,7 @@ it("shows timed reminders on the timeline, persists completion and returns them 
   await user.click(
     within(column).getByRole("button", { name: "编辑待办：定时读书" }),
   );
+  await user.click(screen.getByRole("button", { name: "日期与时间" }));
   await user.click(screen.getByRole("checkbox", { name: "指定待办时间" }));
   await user.click(screen.getByRole("button", { name: "保存待办" }));
   await waitFor(() =>
@@ -579,6 +583,7 @@ it("persists visibility and defaults and applies them to new events without dele
   expect(screen.queryByText("隐藏会议")).not.toBeInTheDocument();
   expect(await repo.listCalendarEvents()).toHaveLength(1);
   await user.click(screen.getByRole("button", { name: "新增安排" }));
+  await user.click(screen.getByRole("button", { name: "日期与时间" }));
   expect(screen.getByRole("combobox", { name: "类型标签" })).toHaveTextContent(
     "学习",
   );

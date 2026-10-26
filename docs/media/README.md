@@ -1,5 +1,9 @@
 # Preview assets
 
+Current README images (2026-10-26): `jotday-overview.png` and `jotday-calendar.png` are fresh screenshots of the current Jotday review build, using isolated local sample data in the packaged web preview. They show the web interface, not native Windows or physical-device acceptance.
+
+The files below are historical assets and are no longer embedded in the main README:
+
 These are real screenshots of `apps/web` at code commit `badefae05ea39a7d52d4f027b05e8696976e1ff5`, built with cloud configuration disabled and run in a separate local browser origin.
 
 - `overview.png`: notebook overview with synthetic sample notes.

@@ -5,6 +5,8 @@ import {
   SmokeNotesDatabase,
   SupabaseCloud,
   SyncEngine,
+  PlannerSyncEngine,
+  supabasePlannerTransport,
   createSyncRuntime,
   type CloudConfig,
   type SyncStatus,
@@ -101,6 +103,11 @@ async function bootstrap() {
 
   if (cloud && !noteId) {
     const engine = new SyncEngine(database, cloud.syncAdapter, { deviceId });
+    const planner = new PlannerSyncEngine(
+      database,
+      supabasePlannerTransport(cloud.client),
+      workspaceId,
+    );
     // Enrollment retries with each sync cycle; offline startup never blocks rendering.
     const runtime = createSyncRuntime({
       engine: {
@@ -108,8 +115,18 @@ async function bootstrap() {
           await cloud.enrollLocalWorkspace(workspaceId);
           return engine.flush();
         },
-        pull: (cursor) => engine.pull(cursor),
-        getQueueState: () => engine.getQueueState(),
+        async pull(cursor) {
+          const next = await engine.pull(cursor);
+          await planner.synchronize();
+          return next;
+        },
+        async getQueueState() {
+          const queue = await engine.getQueueState();
+          return {
+            ...queue,
+            pending: queue.pending + (await planner.pendingCount()),
+          };
+        },
       },
       cloud,
       storage: localStorage,

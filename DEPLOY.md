@@ -1,4 +1,4 @@
-# 烟笺部署说明
+# Jotday 部署说明
 
 ## 1. 创建 Supabase 项目
 
@@ -59,7 +59,7 @@ supabase secrets set WEB_APP_URL=https://YOUR_PROJECT.pages.dev
 pnpm --filter @smoke-notes/desktop package
 ```
 
-输出文件为 `apps/desktop/release/SmokeNotes-Setup-<版本号>.exe`，版本由桌面应用的 package.json 决定。当前构建没有商业代码签名；正式分发前应配置 Windows 代码签名证书。
+输出文件为 `apps/desktop/release/Jotday-Setup-<版本号>.exe`，版本由桌面应用的 package.json 决定。当前构建没有商业代码签名；正式分发前应配置 Windows 代码签名证书。
 
 ## 5. 上线验收
 

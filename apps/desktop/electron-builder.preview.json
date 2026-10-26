@@ -1,10 +1,10 @@
 {
   "extends": null,
   "appId": "com.smokenotes.clearpreview",
-  "productName": "SmokeNotes Clear Preview",
+  "productName": "Jotday Clear Preview",
   "extraMetadata": {
-    "name": "smoke-notes-clear-preview",
-    "productName": "SmokeNotes Clear Preview",
+    "name": "jotday-clear-preview",
+    "productName": "Jotday Clear Preview",
     "version": "0.1.10-clear-preview.1"
   },
   "directories": { "output": "release-preview" },
@@ -12,8 +12,8 @@
   "win": {
     "target": [{ "target": "nsis", "arch": ["x64"] }],
     "icon": "build/icon.png",
-    "artifactName": "SmokeNotes-Clear-Preview-Setup-${version}.${ext}",
-    "signAndEditExecutable": false
+    "artifactName": "Jotday-Clear-Preview-Setup-${version}.${ext}",
+    "signExecutable": false
   },
   "nsis": {
     "oneClick": false,
@@ -22,8 +22,8 @@
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": false,
     "createStartMenuShortcut": true,
-    "shortcutName": "SmokeNotes Clear Preview",
-    "uninstallDisplayName": "SmokeNotes Clear Preview",
+    "shortcutName": "Jotday Clear Preview",
+    "uninstallDisplayName": "Jotday Clear Preview",
     "runAfterFinish": false,
     "deleteAppDataOnUninstall": false
   }

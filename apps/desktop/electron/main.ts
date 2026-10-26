@@ -42,7 +42,7 @@ import {
 
 // Set isolation before the instance lock, any state reads, or browser session creation.
 const packagedPreview =
-  app.isPackaged && app.getName() === "SmokeNotes Clear Preview";
+  app.isPackaged && app.getName() === "Jotday Clear Preview";
 const previewMode =
   packagedPreview || (!app.isPackaged && process.argv.includes("--preview"));
 const customDataDirectory = previewMode

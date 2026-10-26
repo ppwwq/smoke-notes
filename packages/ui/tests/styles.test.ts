@@ -18,7 +18,7 @@ function declarationBlock(selector: string): string {
   return stylesheet.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
 }
 
-describe("Smoke Notes styling contracts", () => {
+describe("Jotday styling contracts", () => {
   it("keeps recent-note tabs outside the visible note body", () => {
     expect(declarationBlock(".note-window")).toMatch(/padding-left:\s*100px/);
     expect(declarationBlock(".note-window::before")).toMatch(

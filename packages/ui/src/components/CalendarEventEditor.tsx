@@ -1,6 +1,5 @@
-import { calendarColorOptions } from "./calendar-colors";
 import { useRef, useState } from "react";
-import { X, Trash2, Copy } from "lucide-react";
+import { X, Trash2, Copy, Check } from "lucide-react";
 import {
   addTodoDays,
   calendarMinute,
@@ -19,6 +18,7 @@ import { CalendarRepeatFields } from "./CalendarRepeatFields";
 import { PlannerTypeField, type PlannerTypeActions } from "./PlannerTypeField";
 import { CalendarTodoEditor } from "./CalendarTodoEditor";
 import { SegmentedControl } from "./SegmentedControl";
+import { CalendarScheduleDisclosure } from "./CalendarScheduleDisclosure";
 export function CalendarEventEditor({
   date,
   time,
@@ -132,6 +132,7 @@ export function CalendarEventEditor({
   const endDate = fields.allDay
     ? addTodoDays(fields.end.slice(0, 10), -1)
     : fields.end.slice(0, 10);
+  const composing = !occurrence || copy;
   if (!occurrence && entryKind === "todo")
     return (
       <CalendarTodoEditor
@@ -149,6 +150,7 @@ export function CalendarEventEditor({
     <WebDialog
       web
       kind="actions"
+      placement={composing ? "top-end" : "center"}
       label={occurrence && !copy ? "日程详情" : "新建日程"}
       onClose={() => {
         if (!pending.current) onClose();
@@ -243,7 +245,7 @@ export function CalendarEventEditor({
         </article>
       ) : (
         <form
-          className="calendar-event-editor"
+          className={`calendar-event-editor${composing ? " calendar-composer" : ""}`}
           onSubmit={(e) => {
             e.preventDefault();
             void run(() =>
@@ -257,7 +259,9 @@ export function CalendarEventEditor({
           }}
         >
           <header>
-            <h2>{occurrence && !copy ? "日程详情" : "新建日程"}</h2>
+            <h2 className={composing ? "calendar-composer-heading" : undefined}>
+              {occurrence && !copy ? "日程详情" : "新建日程"}
+            </h2>
             <button
               type="button"
               aria-label="关闭日程详情"
@@ -266,31 +270,40 @@ export function CalendarEventEditor({
             >
               <X size={20} />
             </button>
+            {composing && (
+              <fieldset className="calendar-composer-kind" disabled={busy}>
+                {(occurrence || !onSavePlannerTodo) && (
+                  <span>{copy ? "复制日程" : "新建日程"}</span>
+                )}
+                {!occurrence && onSavePlannerTodo && (
+                  <SegmentedControl
+                    label="新增安排类型"
+                    value="event"
+                    options={[
+                      { value: "event", label: "行程" },
+                      { value: "todo", label: "每日待办" },
+                    ]}
+                    onChange={(value) =>
+                      setEntryKind(value as "event" | "todo")
+                    }
+                  />
+                )}
+              </fieldset>
+            )}
+            {composing && (
+              <button
+                className="calendar-composer-save"
+                aria-label="保存日程"
+                title={busy ? "保存中…" : "保存日程"}
+                aria-busy={busy}
+                disabled={busy || !fields.title.trim()}
+              >
+                {busy ? <span>…</span> : <Check size={21} />}
+              </button>
+            )}
           </header>
           <fieldset disabled={busy}>
-            {!occurrence && onSavePlannerTodo && (
-              <SegmentedControl
-                label="新增安排类型"
-                value="event"
-                options={[
-                  { value: "event", label: "行程" },
-                  { value: "todo", label: "每日待办" },
-                ]}
-                onChange={(value) => setEntryKind(value as "event" | "todo")}
-              />
-            )}
-            <PlannerTypeField
-              {...typeActions}
-              value={fields.typeId}
-              onChange={(typeId) =>
-                change({
-                  typeId,
-                  color:
-                    types?.find((t) => t.id === typeId)?.color ?? fields.color,
-                })
-              }
-            />
-            <label>
+            <label className="calendar-composer-title">
               标题
               <input
                 autoFocus
@@ -331,143 +344,159 @@ export function CalendarEventEditor({
                 />
               </label>
             )}
-            <label className="calendar-toggle">
-              全天
-              <input
-                type="checkbox"
-                aria-label="全天日程"
-                checked={fields.allDay}
-                onChange={(e) => {
-                  const allDay = e.target.checked;
-                  change({
-                    allDay,
-                    start:
-                      fields.start.slice(0, 10) +
-                      (allDay ? "T00:00" : "T09:00"),
-                    end: allDay
-                      ? `${addTodoDays(fields.end.slice(0, 10), fields.end.endsWith("T00:00") ? 0 : 1)}T00:00`
-                      : `${endDate}T10:00`,
-                  });
-                }}
-              />
-            </label>
-            <div className="calendar-form-dates">
-              <label>
-                开始
-                <PlannerDatePicker
-                  label="日程开始日期"
-                  today={today}
-                  value={fields.start.slice(0, 10)}
-                  onChange={(next) => {
-                    const start = next + fields.start.slice(10),
-                      duration =
-                        calendarMinute(fields.end) -
-                        calendarMinute(fields.start);
-                    change({
-                      start,
-                      end: calendarStamp(calendarMinute(start) + duration),
-                    });
-                  }}
-                />
-                {!fields.allDay && (
-                  <CalendarTimePicker
-                    label="日程开始时间"
-                    value={fields.start.slice(11)}
-                    onChange={(time) => {
-                      const start = fields.start.slice(0, 11) + time;
+            <CalendarScheduleDisclosure
+              date={fields.start.slice(0, 10)}
+              detail={
+                fields.allDay
+                  ? endDate === fields.start.slice(0, 10)
+                    ? "全天"
+                    : "全天 · 至 " + endDate.replaceAll("-", "/")
+                  : fields.start.slice(11) +
+                    " – " +
+                    (endDate === fields.start.slice(0, 10)
+                      ? ""
+                      : endDate.replaceAll("-", "/") + " ") +
+                    fields.end.slice(11)
+              }
+            >
+              <div className="calendar-form-dates">
+                <label>
+                  开始
+                  <PlannerDatePicker
+                    label="日程开始日期"
+                    today={today}
+                    value={fields.start.slice(0, 10)}
+                    onChange={(next) => {
+                      const start = next + fields.start.slice(10),
+                        duration =
+                          calendarMinute(fields.end) -
+                          calendarMinute(fields.start);
                       change({
                         start,
-                        end: calendarStamp(
-                          calendarMinute(start) +
-                            calendarMinute(fields.end) -
-                            calendarMinute(fields.start),
-                        ),
+                        end: calendarStamp(calendarMinute(start) + duration),
                       });
                     }}
                   />
-                )}
-              </label>
-              <label>
-                结束
-                <PlannerDatePicker
-                  label="日程结束日期"
-                  today={today}
-                  value={endDate}
-                  onChange={(next) =>
+                  {!fields.allDay && (
+                    <CalendarTimePicker
+                      label="日程开始时间"
+                      value={fields.start.slice(11)}
+                      onChange={(time) => {
+                        const start = fields.start.slice(0, 11) + time;
+                        change({
+                          start,
+                          end: calendarStamp(
+                            calendarMinute(start) +
+                              calendarMinute(fields.end) -
+                              calendarMinute(fields.start),
+                          ),
+                        });
+                      }}
+                    />
+                  )}
+                </label>
+                <label>
+                  结束
+                  <PlannerDatePicker
+                    label="日程结束日期"
+                    today={today}
+                    value={endDate}
+                    onChange={(next) =>
+                      change({
+                        end:
+                          (fields.allDay ? addTodoDays(next, 1) : next) +
+                          fields.end.slice(10),
+                      })
+                    }
+                  />
+                  {!fields.allDay && (
+                    <CalendarTimePicker
+                      label="日程结束时间"
+                      value={fields.end.slice(11)}
+                      onChange={(time) =>
+                        change({ end: fields.end.slice(0, 11) + time })
+                      }
+                    />
+                  )}
+                </label>
+              </div>
+              <label className="calendar-toggle">
+                全天
+                <input
+                  type="checkbox"
+                  aria-label="全天日程"
+                  checked={fields.allDay}
+                  onChange={(e) => {
+                    const allDay = e.target.checked;
                     change({
-                      end:
-                        (fields.allDay ? addTodoDays(next, 1) : next) +
-                        fields.end.slice(10),
+                      allDay,
+                      start:
+                        fields.start.slice(0, 10) +
+                        (allDay ? "T00:00" : "T09:00"),
+                      end: allDay
+                        ? `${addTodoDays(fields.end.slice(0, 10), fields.end.endsWith("T00:00") ? 0 : 1)}T00:00`
+                        : `${endDate}T10:00`,
+                    });
+                  }}
+                />
+              </label>
+              <p className="calendar-local-hint">
+                {fields.allDay
+                  ? "全天安排"
+                  : occurrence
+                    ? `时间按原日程时区 ${fields.timeZone ?? "Asia/Hong_Kong"}`
+                    : "时间按日历设置"}{" "}
+                · 保存在本机
+              </p>
+              <label>
+                重复
+                <WorkspaceSelect
+                  label="日程重复"
+                  disabled={!!occurrenceDate && scope === "one"}
+                  value={
+                    (occurrenceDate && scope === "one"
+                      ? source?.repeat?.frequency
+                      : fields.repeat?.frequency) ?? "none"
+                  }
+                  options={[
+                    { value: "none", label: "从不" },
+                    { value: "daily", label: "每天" },
+                    { value: "weekly", label: "每周" },
+                    { value: "monthly", label: "每月" },
+                    { value: "yearly", label: "每年" },
+                  ]}
+                  onChange={(frequency) =>
+                    change({
+                      repeat:
+                        frequency === "none"
+                          ? undefined
+                          : {
+                              frequency: frequency as
+                                "daily" | "weekly" | "monthly" | "yearly",
+                              interval: 1,
+                              ...(frequency === "weekly"
+                                ? {
+                                    weekdays: [
+                                      new Date(
+                                        fields.start.slice(0, 10) + "T12:00:00",
+                                      ).getDay(),
+                                    ],
+                                  }
+                                : {}),
+                            },
                     })
                   }
                 />
-                {!fields.allDay && (
-                  <CalendarTimePicker
-                    label="日程结束时间"
-                    value={fields.end.slice(11)}
-                    onChange={(time) =>
-                      change({ end: fields.end.slice(0, 11) + time })
-                    }
-                  />
-                )}
               </label>
-            </div>
-            <p className="calendar-local-hint">
-              {fields.allDay
-                ? "全天安排"
-                : occurrence
-                  ? `时间按原日程时区 ${fields.timeZone ?? "Asia/Hong_Kong"}`
-                  : "时间按日历设置"}{" "}
-              · 保存在本机
-            </p>
-            <label>
-              重复
-              <WorkspaceSelect
-                label="日程重复"
-                disabled={!!occurrenceDate && scope === "one"}
-                value={
-                  (occurrenceDate && scope === "one"
-                    ? source?.repeat?.frequency
-                    : fields.repeat?.frequency) ?? "none"
-                }
-                options={[
-                  { value: "none", label: "从不" },
-                  { value: "daily", label: "每天" },
-                  { value: "weekly", label: "每周" },
-                  { value: "monthly", label: "每月" },
-                  { value: "yearly", label: "每年" },
-                ]}
-                onChange={(frequency) =>
-                  change({
-                    repeat:
-                      frequency === "none"
-                        ? undefined
-                        : {
-                            frequency: frequency as
-                              "daily" | "weekly" | "monthly" | "yearly",
-                            interval: 1,
-                            ...(frequency === "weekly"
-                              ? {
-                                  weekdays: [
-                                    new Date(
-                                      fields.start.slice(0, 10) + "T12:00:00",
-                                    ).getDay(),
-                                  ],
-                                }
-                              : {}),
-                          },
-                  })
-                }
-              />
-            </label>
-            {fields.repeat && (!occurrenceDate || scope === "following") && (
-              <CalendarRepeatFields
-                repeat={fields.repeat}
-                start={fields.start}
-                today={today}
-                onChange={(repeat) => change({ repeat })}
-              />
-            )}
+              {fields.repeat && (!occurrenceDate || scope === "following") && (
+                <CalendarRepeatFields
+                  repeat={fields.repeat}
+                  start={fields.start}
+                  today={today}
+                  onChange={(repeat) => change({ repeat })}
+                />
+              )}
+            </CalendarScheduleDisclosure>
             <label>
               地点
               <input
@@ -478,20 +507,17 @@ export function CalendarEventEditor({
                 onChange={(e) => change({ location: e.target.value })}
               />
             </label>
-            <label>
-              颜色
-              <WorkspaceSelect
-                label="日程颜色"
-                value={
-                  types?.find((t) => t.id === fields.typeId)?.color ??
-                  fields.color
-                }
-                disabled={!!fields.typeId}
-                options={calendarColorOptions}
-                onChange={(color) => change({ color })}
-              />
-              {fields.typeId && <small>跟随类型标签配色</small>}
-            </label>
+            <PlannerTypeField
+              {...typeActions}
+              value={fields.typeId}
+              onChange={(typeId) =>
+                change({
+                  typeId,
+                  color:
+                    types?.find((t) => t.id === typeId)?.color ?? fields.color,
+                })
+              }
+            />
             <label>
               链接
               <input
@@ -515,53 +541,55 @@ export function CalendarEventEditor({
             </label>
           </fieldset>
           {error && <p role="alert">{error}</p>}
-          <footer>
-            {occurrence && !copy && (
-              <>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    setCopy(true);
-                    setScope("all");
-                  }}
-                >
-                  <Copy size={16} />
-                  复制
-                </button>
-                {onDelete && (
+          {!composing && (
+            <footer>
+              {occurrence && !copy && (
+                <>
                   <button
                     type="button"
-                    className="calendar-delete"
                     disabled={busy}
-                    onClick={() =>
-                      void run(() =>
-                        onDelete(
-                          occurrence.eventId,
-                          occurrenceDate,
-                          scope === "following",
-                        ),
-                      )
-                    }
+                    onClick={() => {
+                      setCopy(true);
+                      setScope("all");
+                    }}
                   >
-                    <Trash2 size={16} />
-                    删除
-                    {scope === "following"
-                      ? "此日程及以后"
-                      : occurrenceDate
-                        ? "这一次"
-                        : "日程"}
+                    <Copy size={16} />
+                    复制
                   </button>
-                )}
-              </>
-            )}
-            <button
-              className="planner-save"
-              disabled={busy || !fields.title.trim()}
-            >
-              {busy ? "保存中…" : "保存日程"}
-            </button>
-          </footer>
+                  {onDelete && (
+                    <button
+                      type="button"
+                      className="calendar-delete"
+                      disabled={busy}
+                      onClick={() =>
+                        void run(() =>
+                          onDelete(
+                            occurrence.eventId,
+                            occurrenceDate,
+                            scope === "following",
+                          ),
+                        )
+                      }
+                    >
+                      <Trash2 size={16} />
+                      删除
+                      {scope === "following"
+                        ? "此日程及以后"
+                        : occurrenceDate
+                          ? "这一次"
+                          : "日程"}
+                    </button>
+                  )}
+                </>
+              )}
+              <button
+                className="planner-save"
+                disabled={busy || !fields.title.trim()}
+              >
+                {busy ? "保存中…" : "保存日程"}
+              </button>
+            </footer>
+          )}
         </form>
       )}
     </WebDialog>

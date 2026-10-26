@@ -37,9 +37,9 @@ describe("desktop application lifecycle", () => {
   });
 
   it("shows the main window for normal launches but not login launches", () => {
-    expect(shouldShowMainWindow(["SmokeNotes.exe"])).toBe(true);
+    expect(shouldShowMainWindow(["Jotday.exe"])).toBe(true);
     expect(
-      shouldShowMainWindow(["SmokeNotes.exe", BACKGROUND_LAUNCH_ARGUMENT]),
+      shouldShowMainWindow(["Jotday.exe", BACKGROUND_LAUNCH_ARGUMENT]),
     ).toBe(false);
   });
 });

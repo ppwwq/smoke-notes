@@ -39,7 +39,7 @@ export interface SpringCheckProps {
   strike?: StrikeSide;
   ariaLabel?: string;
   className?: string;
-  /** Smoke Notes: keep editable text beside the checkbox, never inside a button. */
+  /** Jotday: keep editable text beside the checkbox, never inside a button. */
   editableLabel?: boolean;
 }
 

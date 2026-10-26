@@ -1,6 +1,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { GlassSurface } from "./GlassSurface";
+import { useWebViewport } from "../../useWebViewport";
 
 // Base UI owns focus trapping, Escape and focus restoration on both platforms. Theme changes
 // leave the same modal and children mounted inside the existing app overlay.
@@ -10,14 +11,17 @@ export function WebDialog({
   label,
   onClose,
   children,
+  placement = "center",
 }: {
   web: boolean;
   kind: "settings" | "pairing" | "actions" | "appearance";
   label: string;
   onClose: () => void;
   children: ReactNode;
+  placement?: "center" | "top-end";
 }) {
   const portalHost = useRef<HTMLDivElement>(null);
+  const { style: viewportStyle } = useWebViewport(placement === "top-end");
   const [returnTarget] = useState(() =>
     document.activeElement instanceof HTMLElement
       ? document.activeElement
@@ -38,9 +42,12 @@ export function WebDialog({
     >
       <div ref={portalHost} style={{ display: "contents" }} />
       <Dialog.Portal container={appRoot ?? portalHost}>
-        <div className={`${kind}-backdrop`}>
+        <div
+          style={placement === "top-end" ? viewportStyle : undefined}
+          className={`${kind}-backdrop${placement === "top-end" ? " calendar-composer-backdrop" : ""}`}
+        >
           <Dialog.Popup
-            className={`${panel}${web ? " web-dialog" : ""}`}
+            className={`${panel}${web ? " web-dialog" : ""}${placement === "top-end" ? " calendar-composer-panel" : ""}`}
             aria-label={label}
             finalFocus={() =>
               !returnTarget?.isConnected || returnTarget.closest("[inert]")

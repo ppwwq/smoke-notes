@@ -9,10 +9,10 @@
 Sticky notes and checklists for your Windows desktop, with translucent backgrounds and always-on-top windows.
 
 ![Windows x64](https://img.shields.io/badge/Windows-x64-527E86?style=flat-square)
-![Version](https://img.shields.io/badge/version-0.1.13-687C65?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.1.14-687C65?style=flat-square)
 [![MIT](https://img.shields.io/badge/license-MIT-A78B6A?style=flat-square)](LICENSE)
 
-**[下载 Windows 版 · Download for Windows](https://github.com/ppwwq/smoke-notes/releases/latest/download/Jotday-Setup-0.1.13.exe)**
+**[下载 Windows 版 · Download for Windows](https://github.com/ppwwq/smoke-notes/releases/latest/download/Jotday-Setup-0.1.14.exe)**
 
 [版本说明 / Releases](https://github.com/ppwwq/smoke-notes/releases) · [反馈 / Issues](https://github.com/ppwwq/smoke-notes/issues) · [同步部署 / Deployment](DEPLOY.md)
 
@@ -20,29 +20,29 @@ Sticky notes and checklists for your Windows desktop, with translucent backgroun
 
 ## 下载与使用 · Get started
 
-下载 **Windows x64 的 0.1.13 安装包**，安装后先建立便签本，再新建普通便签或待办便签。双击卡片即可打开独立便签窗口，无需安装开发工具。
+下载 **Windows x64 的 0.1.14 安装包**，安装后先建立便签本，再新建普通便签或待办便签。双击卡片即可打开独立便签窗口，无需安装开发工具。
 
-Download the **0.1.13 installer for Windows x64**. Create a notebook, add a note or checklist, and double-click its card to open a separate note window. No developer tools are required.
+Download the **0.1.14 installer for Windows x64**. Create a notebook, add a note or checklist, and double-click its card to open a separate note window. No developer tools are required.
 
-安装包尚未配置代码签名，Windows 可能显示发布者或信誉提示。请根据下载来源和文件校验信息判断是否安装；SHA-256 见 [验证记录](docs/jotday-transparent-release-2026-10-25.md)。
+安装包尚未配置代码签名，Windows 可能显示发布者或信誉提示。请根据下载来源和文件校验信息判断是否安装；SHA-256 见 [验证记录](docs/jotday-release-2026-10-26.md)。
 
-The installer is currently unsigned, so Windows may show a publisher or reputation warning. Review the download source and [SHA-256 verification record](docs/jotday-transparent-release-2026-10-25.md) before deciding whether to install.
+The installer is currently unsigned, so Windows may show a publisher or reputation warning. Review the download source and [SHA-256 verification record](docs/jotday-release-2026-10-26.md) before deciding whether to install.
 
 ## 最近更新 · Recent updates
 
-**0.1.13 · Jotday**：应用名称统一为 Jotday，使用紫白日历便签图标的透明底版本；网页、PWA、桌面、托盘和安装包同步更新。保留既有本地数据库、配对与同步标识，桌面继续读取原数据目录。
+**0.1.14 · Jotday**：日历新增窗口改为右上弹出、点击展开时间；移除重复颜色选项，采用选定的淡紫与雪白局部配色。Windows 安装程序会检查旧版后台进程，等待正常退出后再升级，保留原数据目录。
 
-便签与日历可以在同一应用中使用；日历安排支持日、周、月、年视图。发布检查与边界见 [Jotday 发布记录](docs/jotday-transparent-release-2026-10-25.md)。
+便签与日历可以在同一应用中使用；日历安排支持日、周、月、年视图。发布检查与边界见 [Jotday 发布记录](docs/jotday-release-2026-10-26.md)。
 
 ## 看看界面 · Preview
 
-![Jotday便签本与便签界面 / Smoke Notes notebook and notes](docs/media/overview.png)
+![Jotday便签本与便签界面 / Jotday notebook and notes](docs/media/jotday-overview.png)
 
-![网页版真实操作演示（示例数据） / Live web app demonstration with sample data](docs/media/demo.gif)
+![Jotday日历界面 / Jotday calendar](docs/media/jotday-calendar.png)
 
-网页版真实操作画面组成的 18 秒步骤演示，使用示例数据。
+当前网页版的真实界面截图，使用独立的本地示例数据。
 
-An 18-second step walkthrough assembled from real web-app screenshots with sample data.
+Screenshots of the current web app using isolated local sample data.
 
 ## 一张便签，刚刚好 · Features
 
@@ -141,9 +141,9 @@ corepack pnpm@10.19.0 --filter @smoke-notes/desktop package
 
 The test command builds the required main-process files first. Installer output defaults to `apps/desktop/release/`; the web build is written to `apps/web/dist/`.
 
-2026-09-05 的本地完整回归为 **20 个测试文件、166 项测试通过**，覆盖数据读写、编辑保存、删除恢复、窗口状态、配对输入及同步队列。这是自动化检查结果；实际手机配对、PWA 更新及注销／重启后的开机启动仍需实机验收。详细范围见 [验证记录](docs/jotday-transparent-release-2026-10-25.md)。
+2026-09-05 的本地完整回归为 **20 个测试文件、166 项测试通过**，覆盖数据读写、编辑保存、删除恢复、窗口状态、配对输入及同步队列。这是自动化检查结果；实际手机配对、PWA 更新及注销／重启后的开机启动仍需实机验收。详细范围见 [验证记录](docs/jotday-release-2026-10-26.md)。
 
-The 2026-09-05 regression run passed **166 tests across 20 files**, covering data operations, editing and saving, deletion recovery, window state, pairing input, and sync queues. These are automated results; real-phone pairing, PWA updates, and startup after sign-out or restart still need device acceptance testing. See the [verification record](docs/jotday-transparent-release-2026-10-25.md) for scope and limits.
+The 2026-09-05 regression run passed **166 tests across 20 files**, covering data operations, editing and saving, deletion recovery, window state, pairing input, and sync queues. These are automated results; real-phone pairing, PWA updates, and startup after sign-out or restart still need device acceptance testing. See the [verification record](docs/jotday-release-2026-10-26.md) for scope and limits.
 
 ## 项目结构 · Project structure
 
@@ -177,4 +177,4 @@ Report bugs and suggestions in [Issues](https://github.com/ppwwq/smoke-notes/iss
 
 Jotday采用 [MIT License](LICENSE)，可以使用、修改、分发和商用，请保留版权与许可证声明。
 
-Smoke Notes is released under the [MIT License](LICENSE). You may use, modify, distribute, and use it commercially while preserving the copyright and license notice.
+Jotday is released under the [MIT License](LICENSE). You may use, modify, distribute, and use it commercially while preserving the copyright and license notice.

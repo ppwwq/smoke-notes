@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'"
+    />
+    <title>Jotday · 网页预览</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <div class="identity">
+        <img class="mark" src="dist/icon-192.png" alt="Jotday" />
+        <div>
+          <h1>Jotday · 网页预览</h1>
+          <p>Jotday / WEB PREVIEW</p>
+        </div>
+      </div>
+      <div class="source">
+        <label for="source">载入页面</label
+        ><select id="source">
+          <option value="local">本地新版 · 示例数据</option>
+          <option value="online">线上正式版 · 云端连接</option></select
+        ><button id="reload" title="重新载入当前页面">刷新</button>
+      </div>
+    </header>
+    <nav aria-label="设备视图">
+      <div class="modes">
+        <button data-mode="desktop">桌面</button
+        ><button data-mode="portrait">手机竖屏</button>
+        <button data-mode="ipadPortrait">iPad 竖屏</button>
+        <button data-mode="ipadLandscape" aria-pressed="true">iPad 横屏</button>
+      </div>
+      <div class="metrics">
+        <span id="dimensions">1180 × 820</span><span class="separator">/</span
+        ><span id="scale">100%</span><button id="rotate">旋转屏幕 ↻</button>
+      </div>
+    </nav>
+    <main aria-label="可交互网页显示区域">
+      <div class="stage-label">INTERACTIVE CANVAS</div>
+    </main>
+    <footer>
+      <span id="status" role="status">正在载入…</span
+      ><span id="hint">示例修改自动保存在此预览工具中</span
+      ><span>Chromium 预览 · 不替代真机 Safari 验收</span>
+    </footer>
+    <script src="renderer.js"></script>
+  </body>
+</html>
