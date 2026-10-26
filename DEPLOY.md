@@ -39,17 +39,25 @@ supabase secrets set WEB_APP_URL=https://YOUR_PROJECT.pages.dev
 
 将示例地址替换为实际 HTTPS 地址。网页域名改变时也要更新此值，否则二维码仍会指向旧地址。参考 [Supabase 环境变量文档](https://supabase.com/docs/guides/functions/secrets)。
 
-## 3. 发布手机 PWA 到 Cloudflare Pages
+## 3. 在本机发布网页到现有 Cloudflare Pages
 
-将代码推送到 Git 仓库，并在 Cloudflare Pages 选择该仓库：
+网页由本机构建、上传和验证。GitHub Actions 中的 `web`、`verify_web` 作业已删除；推送代码不会触发网页发布，也不再使用 `production-web` 环境。
 
-- Framework preset：None。
-- Build command：`pnpm install --frozen-lockfile && pnpm --filter @smoke-notes/web build`。
-- Build output directory：`apps/web/dist`。
-- Node.js：22 或更新版本。
-- 配置上一节的三个环境变量。
+先配置根目录 `.env` 的公开浏览器变量，完成本地检查，将应用源码提交并推送到 `main`。本机使用已安装并登录的 Wrangler，执行：
 
-发布后把实际 Pages 域名写回 `VITE_WEB_APP_URL`，重新构建桌面端。电脑生成的二维码才会指向正确的手机地址。
+```powershell
+node tools/deploy-web.mjs --wrangler "C:/path/to/node_modules/wrangler/bin/wrangler.js"
+```
+
+也可通过环境变量 `WRANGLER_CLI` 指定同一路径。脚本会核对本地与远端 main、构建网页、只上传 `apps/web/dist` 到现有 `smoke-notes-philipwwq` 项目的 main，随后核对 Production 记录和全部公开静态文件哈希。不会上传 `.env`、本机资料或仓库目录。结果保存在忽略目录 `outputs/web-local-deploy/`。当前脚本面向 Windows，使用系统 `curl.exe`。
+
+上传结果不确定时先检查现有 deployment，使用同一已构建版本只做核验，不重复上传：
+
+```powershell
+node tools/deploy-web.mjs --wrangler "C:/path/to/node_modules/wrangler/bin/wrangler.js" --verify-only
+```
+
+网页部署与数据库迁移分开。包含新增云端接口的版本先完成对应后端迁移与验证；本机网页上传不负责改数据库。现有 `Manual backend release` 只负责数据库／Edge Function 发布和检查，不再接续网页部署。
 
 ## 4. 构建 Windows 安装包
 

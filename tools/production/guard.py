@@ -8,7 +8,7 @@ import urllib.request
 
 REPO = 'ppwwq/smoke-notes'
 WORKFLOW = '.github/workflows/release-production.yml'
-ENVIRONMENTS = ('production-backend', 'production-web')
+ENVIRONMENTS = ('production-backend',)
 
 
 def require(ok, message):

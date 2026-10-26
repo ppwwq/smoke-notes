@@ -1,5 +1,7 @@
 # GitHub Actions 手動正式發布
 
+> 2026-10-26 更新：本文件中的网页云端部署流程已退役。`web`、`verify_web` 作业和网页发布凭据引用已删除，网页改为本机 Wrangler 上传，现行操作见 [DEPLOY.md](../DEPLOY.md)。工作流现名为 **Manual backend release**，只保留后端核验与迁移；下文为历史设计记录，不能再作为网页发布步骤。
+
 本分支只準備流程及離線驗證；**本雲端工作沒有設定 Secrets／權限、建立憑證、合併 main 或執行發布**。2026-10-20 桌面已回報部分設定完成，詳見[獨立復核紀錄](production-release-review-2026-10-20.md)；本環境未獨立核實那些設定。現有應用基線為 `e0b3cb5a19641679a9e2584241ed8d5e9239930f`；倉庫原本沒有 `.github/workflows`。未來由 GitHub 託管 Ubuntu runner 執行，不要求用戶電腦開機。
 
 2026-10-21：已按用戶接受資料損失風險的指示新增明確 `no_backup` 模式。備份是本流程原先的政策，不是 Supabase／GitHub 對每次部署的硬性要求。詳見[無備份發布評估及操作](no-backup-release.md)。

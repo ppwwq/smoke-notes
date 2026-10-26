@@ -143,20 +143,14 @@ class PagesProbeTests(unittest.TestCase):
             api.assert_not_called()
             upload.assert_not_called()
 
-    def test_verify_workflow_is_pinned_protected_and_has_no_deployment_commands(self):
+    def test_backend_workflow_cannot_publish_or_verify_the_web(self):
         workflow = (Path(__file__).resolve().parents[2] / '.github/workflows/release-production.yml').read_text()
-        section = workflow.split('\n  verify_web:\n', 1)[1]
-        self.assertIn("inputs.operation == 'verify_web'", section)
-        self.assertIn('environment: production-web', section)
-        self.assertIn('needs: validate', section)
-        self.assertIn('ref: 2733cdc8e1fb6965f1e4475ceeee6d294ecad48f', section)
-        self.assertIn('VERIFY_DEPLOYMENT_ID: ' + DEPLOYMENT_ID, section)
-        self.assertIn('python3 "$GITHUB_WORKSPACE/tools/production/pages.py" --verify-only', section)
-        self.assertEqual(section.count('python3 tools/production/guard.py'), 2)
-        self.assertIn('hosted_sync.py --config-only', section)
-        for forbidden in ('backend.py', 'adopt_baseline.py', 'SUPABASE_DB_URL', 'SUPABASE_ACCESS_TOKEN',
-                          'wrangler', 'RELEASE_ENABLED', 'upload-artifact'):
-            self.assertNotIn(forbidden, section)
+        for removed in ('\n  web:', '\n  verify_web:', 'environment: production-web',
+                        'CLOUDFLARE_API_TOKEN', 'tools/production/pages.py', 'wrangler'):
+            self.assertNotIn(removed, workflow)
+        self.assertIn('environment: production-backend', workflow)
+        self.assertIn('python3 tools/production/guard.py --release', workflow)
+
 
 
 if __name__ == '__main__':

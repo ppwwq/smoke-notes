@@ -1,10 +1,10 @@
-name: Manual production release
+name: Manual backend release
 
 on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Validate, audit, adopt baseline, verify existing web deployment, or release
+        description: Validate, audit, adopt baseline, or release the backend
         required: true
         default: audit_only
         type: choice
@@ -12,7 +12,6 @@ on:
           - validate_only
           - audit_only
           - adopt_baseline
-          - verify_web
           - release
       baseline_ack:
         description: "Metadata only: ADOPT_PRIOR_SEVEN_KEEP_DATA:<full SHA>:<project ref>"
@@ -109,7 +108,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Recheck reviewed main and both protected environments
+      - name: Recheck reviewed main and protected backend environment
         run: python3 tools/production/guard.py
         env:
           GH_TOKEN: ${{ github.token }}
@@ -206,123 +205,8 @@ jobs:
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      - name: Verify two isolated hosted API clients before allowing web deployment
+      - name: Verify two isolated hosted API clients and calendar synchronization
         run: python3 tools/production/hosted_sync.py
         env:
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-
-  web:
-    needs: backend
-    if: >-
-      inputs.operation == 'release' &&
-      github.repository == 'ppwwq/smoke-notes' &&
-      github.ref == 'refs/heads/main' && inputs.release_sha == github.sha
-    environment: production-web
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-      - name: Recheck reviewed main after the second environment approval
-        run: python3 tools/production/guard.py
-        env:
-          GH_TOKEN: ${{ github.token }}
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
-        with:
-          node-version: 22.14.0
-          package-manager-cache: false
-      - name: Install reviewed dependencies without production deployment credentials
-        run: |
-          corepack enable
-          corepack prepare pnpm@10.19.0 --activate
-          pnpm install --frozen-lockfile
-          npm install --prefix "$RUNNER_TEMP/release-tools" --no-save wrangler@4.151.2
-          echo "$RUNNER_TEMP/release-tools/node_modules/.bin" >> "$GITHUB_PATH"
-      - name: Build with public browser configuration only
-        run: |
-          python3 tools/production/hosted_sync.py --config-only
-          pnpm --filter @smoke-notes/web build
-        env:
-          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-          VITE_SUPABASE_URL: https://${{ vars.SUPABASE_PROJECT_REF }}.supabase.co
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-          VITE_WEB_APP_URL: https://smoke-notes-philipwwq.pages.dev
-      - name: Check backend again immediately before publishing
-        run: python3 tools/production/hosted_sync.py
-        env:
-          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-      - name: Recheck main at the final write boundary
-        run: python3 tools/production/guard.py
-        env:
-          GH_TOKEN: ${{ github.token }}
-      - name: Upload only dist and verify production deployment SHA and bytes
-        run: python3 tools/production/pages.py
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-  # Incident follow-up: inspect the already-published release, never redeploy it.
-  verify_web:
-    needs: validate
-    if: >-
-      inputs.operation == 'verify_web' &&
-      github.repository == 'ppwwq/smoke-notes' &&
-      github.ref == 'refs/heads/main' && inputs.release_sha == github.sha
-    environment: production-web
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-      - name: Verify current reviewed workflow and existing environment protections
-        run: python3 tools/production/guard.py
-        env:
-          GH_TOKEN: ${{ github.token }}
-      - name: Read the exact source of the already-published release
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with:
-          ref: 2733cdc8e1fb6965f1e4475ceeee6d294ecad48f
-          path: verification-source
-          persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
-        with:
-          node-version: 22.14.0
-          package-manager-cache: false
-      - name: Install exact released lockfile without deployment credentials
-        working-directory: verification-source
-        run: |
-          test "$(git rev-parse HEAD)" = 2733cdc8e1fb6965f1e4475ceeee6d294ecad48f
-          corepack enable
-          corepack prepare pnpm@10.19.0 --activate
-          pnpm install --frozen-lockfile
-      - name: Reconstruct released static assets with public configuration only
-        working-directory: verification-source
-        run: |
-          python3 tools/production/hosted_sync.py --config-only
-          pnpm --filter @smoke-notes/web build
-          python3 -c 'import json; from pathlib import Path; Path("apps/web/dist/release.json").write_text(json.dumps({"sha":"2733cdc8e1fb6965f1e4475ceeee6d294ecad48f"})+"\n")'
-        env:
-          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-          VITE_SUPABASE_URL: https://${{ vars.SUPABASE_PROJECT_REF }}.supabase.co
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-          VITE_WEB_APP_URL: https://smoke-notes-philipwwq.pages.dev
-      - name: Recheck reviewed main before read-only verification
-        run: python3 tools/production/guard.py
-        env:
-          GH_TOKEN: ${{ github.token }}
-      - name: Verify only the existing canonical deployment and public bytes
-        working-directory: verification-source
-        run: python3 "$GITHUB_WORKSPACE/tools/production/pages.py" --verify-only
-        env:
-          RELEASE_SHA: 2733cdc8e1fb6965f1e4475ceeee6d294ecad48f
-          VERIFY_DEPLOYMENT_ID: b5ae5285-bbcb-43d8-8de2-c401a4ef0ebb
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

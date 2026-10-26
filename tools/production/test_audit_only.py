@@ -237,7 +237,7 @@ class AuditSafetyTests(unittest.TestCase):
         for forbidden in ('backend.py','pages.py','hosted_sync.py','--release','--backup',
                           'RELEASE_ENABLED','supabase db','upload-artifact'):
             self.assertNotIn(forbidden,section)
-        for name, end in [('backend','web'),('web',None)]:
+        for name, end in [('backend',None)]:
             job = text.split('\n  '+name+':\n',1)[1]
             if end:
                 job = job.split('\n  '+end+':\n',1)[0]

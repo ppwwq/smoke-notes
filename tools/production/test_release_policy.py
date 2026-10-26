@@ -33,7 +33,7 @@ class ReleasePolicyTests(unittest.TestCase):
 
     def responses(self, config=None):
         config = self.config if config is None else config
-        return [{'object': {'sha': SHA}}, config, self.branches, config, self.branches]
+        return [{'object': {'sha': SHA}}, config, self.branches]
 
     def test_no_backup_is_honest_and_does_not_parse_or_create_attestation(self):
         env = dict(self.env, BACKUP_RESTORE_ATTESTATION='invalid old JSON is not evidence')
@@ -98,7 +98,7 @@ class ReleasePolicyTests(unittest.TestCase):
                  patch('guard.api', side_effect=self.responses()) as api, \
                  contextlib.redirect_stdout(io.StringIO()):
                 guard.main()
-            self.assertEqual(api.call_count, 5)
+            self.assertEqual(api.call_count, 3)
             self.assertIn('NO BACKUP', summary.read_text())
             self.assertNotIn('attestation accepted', summary.read_text())
 
