@@ -11,6 +11,7 @@ on:
         options:
           - validate_only
           - audit_only
+          - inspect_backend
           - adopt_baseline
           - release
       baseline_ack:
@@ -165,7 +166,7 @@ jobs:
   backend:
     needs: validate
     if: >-
-      inputs.operation == 'release' &&
+      (inputs.operation == 'release' || inputs.operation == 'inspect_backend') &&
       github.repository == 'ppwwq/smoke-notes' &&
       github.ref == 'refs/heads/main' && inputs.release_sha == github.sha
     environment: production-backend
@@ -200,12 +201,21 @@ jobs:
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
           BACKUP_RESTORE_ATTESTATION: ${{ vars.BACKUP_RESTORE_ATTESTATION }}
       - name: Apply only reviewed migration, check preservation and deploy existing Edge Function
+        if: inputs.operation == 'release'
         run: python3 tools/production/backend.py
         env:
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      - name: Inspect backend history and access without writes
+        if: inputs.operation == 'inspect_backend'
+        run: python3 tools/production/backend.py --inspect
+        env:
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       - name: Verify two isolated hosted API clients and calendar synchronization
+        if: inputs.operation == 'release'
         run: python3 tools/production/hosted_sync.py
         env:
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
