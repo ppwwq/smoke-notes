@@ -22,6 +22,8 @@ export interface CloudConfig {
   url: string;
   publishableKey: string;
   webUrl: string;
+  /** Desktop: write auth localStorage to disk after a token refresh. */
+  onAuthPersisted?: () => void;
 }
 
 export interface PairingDetails {
@@ -265,6 +267,25 @@ class SupabaseSyncAdapter implements RemoteSyncAdapter {
   }
 }
 
+const AUTH_USER_KEY = "smoke-notes:auth-user-id";
+
+// The last login the server accepted for this device's workspace.
+function savedUserId(): string | null {
+  try {
+    return globalThis.localStorage?.getItem(AUTH_USER_KEY) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function saveUserId(userId: string) {
+  try {
+    globalThis.localStorage?.setItem(AUTH_USER_KEY, userId);
+  } catch {
+    // Without storage we only lose this hint; sync still works.
+  }
+}
+
 export class SupabaseCloud {
   readonly client: SupabaseClient;
   readonly syncAdapter: RemoteSyncAdapter;
@@ -277,6 +298,21 @@ export class SupabaseCloud {
         detectSessionInUrl: false,
       },
     });
+    this.client.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") {
+        console.warn("Jotday：登录会话已退出；如果云端拒绝，请重新配对。", {
+          previous: savedUserId()?.slice(0, 8) ?? null,
+        });
+        return;
+      }
+      if (event === "TOKEN_REFRESHED") {
+        const uid = session?.user?.id;
+        console.info("Jotday：登录令牌已刷新", {
+          user: uid ? uid.slice(0, 8) : null,
+        });
+        config.onAuthPersisted?.();
+      }
+    });
     this.syncAdapter = new SupabaseSyncAdapter(this.client);
   }
 
@@ -284,6 +320,11 @@ export class SupabaseCloud {
     const current = await this.client.auth.getSession();
     if (current.error) throw current.error;
     if (current.data.session?.user.id) return current.data.session.user.id;
+    // Pairing needs a login, so we still sign in, but leave a clue first.
+    if (savedUserId())
+      console.warn(
+        "Jotday：登录会话已丢失，将使用新的匿名身份；如果云端拒绝，请重新配对。",
+      );
     const created = await this.client.auth.signInAnonymously();
     if (created.error || !created.data.user)
       throw created.error ?? new Error("Unable to create device session");
@@ -315,12 +356,20 @@ export class SupabaseCloud {
   }
 
   async enrollLocalWorkspace(workspaceId: string): Promise<void> {
-    await this.ensureAnonymousSession();
+    const userId = await this.ensureAnonymousSession();
+    const previous = savedUserId();
+    if (previous && previous !== userId)
+      console.warn("Jotday：登录身份已变化；如果云端拒绝，请重新配对。", {
+        previous: previous.slice(0, 8),
+        current: userId.slice(0, 8),
+      });
     const { data, error } = await this.client.rpc("enroll_local_workspace", {
       p_workspace_id: workspaceId,
     });
     if (error || data !== workspaceId)
       throw error ?? new Error("无法连接现有便签空间");
+    // Only remember a login after the server accepted it.
+    saveUserId(userId);
   }
 
   async redeemPairing(input: string): Promise<string> {

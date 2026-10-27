@@ -239,4 +239,30 @@ describe("createSyncRuntime", () => {
       runtime.stop();
     }
   });
+
+  it("stops retrying after workspace_forbidden until resume() is called", async () => {
+    const phases: SyncStatus["phase"][] = [];
+    const flush = vi
+      .fn()
+      .mockRejectedValueOnce({ code: "P0001", message: "workspace_forbidden" })
+      .mockResolvedValue({ applied: 0, conflicts: 0, failed: 0 });
+    const runtime = createSyncRuntime({
+      engine: { flush, pull: async () => "next" },
+      cloud: { subscribe: () => () => {} },
+      storage: { getItem: () => null, setItem: () => {} },
+      notify: () => {},
+      onStatusChange: (status) => phases.push(status.phase),
+    });
+    try {
+      await runtime.start();
+      expect(phases.at(-1)).toBe("unpaired");
+      await runtime.synchronize();
+      expect(flush).toHaveBeenCalledTimes(1);
+      runtime.resume();
+      await vi.waitFor(() => expect(phases.at(-1)).toBe("synced"));
+      expect(flush).toHaveBeenCalledTimes(2);
+    } finally {
+      runtime.stop();
+    }
+  });
 });

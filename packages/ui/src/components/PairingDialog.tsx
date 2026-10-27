@@ -23,6 +23,8 @@ export function PairingDialog({
   const [details, setDetails] = useState<PairingDetails | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [entering, setEntering] = useState(false);
+  const redeem = controller?.redeemPairing?.bind(controller);
 
   const create = useCallback(async () => {
     if (!controller) {
@@ -122,6 +124,26 @@ export function PairingDialog({
           重新尝试
         </button>
       )}
+      {redeem &&
+        (entering ? (
+          <PairingGate
+            embedded
+            hint="在仍能同步的网页或手机上打开「设置与同步 → 连接手机」，输入出现的 6 位码。本机记录会保留，不会被覆盖。"
+            onSkip={() => setEntering(false)}
+            onRedeem={async (code) => {
+              await redeem(code);
+              onClose();
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            className="pairing-retry"
+            onClick={() => setEntering(true)}
+          >
+            输入另一台设备的配对码
+          </button>
+        ))}
     </WebDialog>
   );
 }
@@ -131,6 +153,7 @@ interface PairingGateProps {
   onRedeem: (code: string) => Promise<void>;
   onSkip?: () => void;
   embedded?: boolean;
+  hint?: string;
 }
 
 export function PairingGate({
@@ -138,6 +161,7 @@ export function PairingGate({
   onRedeem,
   onSkip,
   embedded = false,
+  hint,
 }: PairingGateProps) {
   const [code, setCode] = useState(initialCode ?? "");
   const [connecting, setConnecting] = useState(
@@ -182,7 +206,8 @@ export function PairingGate({
         {connecting ? (
           <>
             <p>
-              在电脑端打开「设置与同步 → 连接手机」，然后输入出现的 6 位码。
+              {hint ??
+                "在电脑端打开「设置与同步 → 连接手机」，然后输入出现的 6 位码。"}
             </p>
             <p>已有本机记录会保留，配对后可以在设备间接着写。</p>
             <input

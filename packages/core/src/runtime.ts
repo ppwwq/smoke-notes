@@ -1,7 +1,7 @@
 import type { FlushResult, SyncQueueState } from "./sync";
 
 export interface SyncStatus {
-  phase: "syncing" | "synced" | "retrying" | "offline" | "error";
+  phase: "syncing" | "synced" | "retrying" | "offline" | "error" | "unpaired";
   pending: number;
   initial: boolean;
 }
@@ -31,6 +31,15 @@ interface SyncRuntimeOptions {
   intervalMs?: number;
 }
 
+/** True when the server says this device is no longer in its workspace. */
+export function isWorkspaceForbidden(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { message?: unknown }).message === "workspace_forbidden"
+  );
+}
+
 export function createSyncRuntime(options: SyncRuntimeOptions) {
   let timer: ReturnType<typeof setInterval> | null = null;
   let unsubscribe: (() => void) | null = null;
@@ -42,11 +51,15 @@ export function createSyncRuntime(options: SyncRuntimeOptions) {
   let notifying = false;
   let initial = true;
   let pending = 0;
+  // Set when the server says this device lost access to its workspace.
+  let needsPairing = false;
   const online = () => typeof navigator === "undefined" || navigator.onLine;
   const publish = (phase: SyncStatus["phase"]) => {
     if (!stopped) options.onStatusChange?.({ phase, pending, initial });
   };
-  const offline = () => publish("offline");
+  const offline = () => {
+    if (!needsPairing) publish("offline");
+  };
   const wake = () => {
     if (running) wakePending = true;
     else void synchronize();
@@ -59,7 +72,8 @@ export function createSyncRuntime(options: SyncRuntimeOptions) {
   };
 
   async function synchronize() {
-    if (stopped) return;
+    // Retrying cannot fix lost access; wait until pairing calls resume().
+    if (stopped || needsPairing) return;
     if (running) {
       wakePending = true;
       return;
@@ -100,7 +114,10 @@ export function createSyncRuntime(options: SyncRuntimeOptions) {
       }
     } catch (error) {
       if (active()) {
-        publish(online() ? "error" : "offline");
+        if (isWorkspaceForbidden(error)) {
+          needsPairing = true;
+          publish("unpaired");
+        } else publish(online() ? "error" : "offline");
         options.onError?.(error);
       }
     } finally {
@@ -150,6 +167,11 @@ export function createSyncRuntime(options: SyncRuntimeOptions) {
       timer = null;
       unsubscribe?.();
       unsubscribe = null;
+    },
+    /** Call after pairing succeeds to start syncing again. */
+    resume() {
+      needsPairing = false;
+      void synchronize();
     },
     synchronize,
   };

@@ -148,6 +148,7 @@ export function SmokeNotesApp({
         retrying: "待同步 · 内容已保存在本机，稍后重试",
         offline: "离线 · 内容已保存在本机，联网后同步",
         error: "同步失败 · 内容已保存在本机，请检查连接后重试",
+        unpaired: "此设备已失去云端权限，请重新配对",
       }[syncStatus.phase] +
       (syncStatus.pending ? ` · ${syncStatus.pending} 项待同步` : "")
     : "已保存在本机 · 未启用云端同步";
@@ -747,6 +748,7 @@ export function SmokeNotesApp({
                       retrying: "等待重试",
                       offline: "离线中",
                       error: "同步失败",
+                      unpaired: "需要重新配对",
                     }[syncStatus.phase]
                   : online
                     ? "网络在线"

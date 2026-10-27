@@ -8,6 +8,7 @@ import {
   PlannerSyncEngine,
   supabasePlannerTransport,
   createSyncRuntime,
+  isWorkspaceForbidden,
   type CloudConfig,
   type SyncStatus,
 } from "@smoke-notes/core";
@@ -37,9 +38,20 @@ function cloudConfig(): CloudConfig | null {
 async function bootstrap() {
   const noteId = new URLSearchParams(window.location.search).get("noteId");
   const previewMode = (await window.smokeDesktop.getPreviewMode?.()) === true;
-  const config = previewMode ? null : cloudConfig();
+  // --user-data-dir acceptance profiles must not mint production anonymous users.
+  const isolated =
+    (await window.smokeDesktop.getIsolatedProfile?.()) === true;
+  const baseConfig = previewMode || isolated ? null : cloudConfig();
   // Only the main renderer owns cloud authentication and background sync.
-  const cloud = config && !noteId ? new SupabaseCloud(config) : null;
+  const cloud =
+    baseConfig && !noteId
+      ? new SupabaseCloud({
+          ...baseConfig,
+          onAuthPersisted: () => {
+            void window.smokeDesktop.flushStorageData?.();
+          },
+        })
+      : null;
   const workspaceId = persistentId("smoke-notes:workspace-id");
   const deviceId = persistentId("smoke-notes:device-id");
   const database = new SmokeNotesDatabase(
@@ -55,11 +67,30 @@ async function bootstrap() {
     if (!(event as CustomEvent).detail?.remote)
       dataChannel.postMessage("changed");
   });
+  let runtime: ReturnType<typeof createSyncRuntime> | undefined;
   const pairingController: PairingController | undefined = cloud
     ? {
         createPairing: async () => {
-          await cloud.enrollLocalWorkspace(workspaceId);
+          try {
+            await cloud.enrollLocalWorkspace(workspaceId);
+          } catch (error) {
+            if (isWorkspaceForbidden(error))
+              throw new Error(
+                "此设备已失去云端权限，请在下方输入另一台设备的配对码。",
+                { cause: error },
+              );
+            throw error;
+          }
           return cloud.createPairing(workspaceId);
+        },
+        // Rejoin this device's own workspace. Local data is never moved or cleared.
+        redeemPairing: async (code) => {
+          const pairedWorkspace = await cloud.redeemPairing(code);
+          if (pairedWorkspace !== workspaceId)
+            throw new Error(
+              "这个配对码属于另一个便签空间。为保护本机数据，没有切换；请在原来同步的设备上生成配对码。",
+            );
+          runtime?.resume();
         },
       }
     : undefined;
@@ -109,7 +140,7 @@ async function bootstrap() {
       workspaceId,
     );
     // Enrollment retries with each sync cycle; offline startup never blocks rendering.
-    const runtime = createSyncRuntime({
+    const syncRuntime = createSyncRuntime({
       engine: {
         async flush() {
           await cloud.enrollLocalWorkspace(workspaceId);
@@ -138,8 +169,9 @@ async function bootstrap() {
         renderMain?.();
       },
     });
-    await runtime.start();
-    window.addEventListener("beforeunload", () => runtime.stop(), {
+    runtime = syncRuntime;
+    await syncRuntime.start();
+    window.addEventListener("beforeunload", () => syncRuntime.stop(), {
       once: true,
     });
   }

@@ -4,6 +4,10 @@ import type { NoteWindowState, WindowState } from "@smoke-notes/core";
 contextBridge.exposeInMainWorld("smokeDesktop", {
   getPreviewMode: (): Promise<boolean> =>
     ipcRenderer.invoke("app:preview-mode"),
+  getIsolatedProfile: (): Promise<boolean> =>
+    ipcRenderer.invoke("app:isolated-profile"),
+  flushStorageData: (): Promise<void> =>
+    ipcRenderer.invoke("app:flush-storage"),
   getWindowState: (): Promise<WindowState> =>
     ipcRenderer.invoke("window:get-state"),
   setBackgroundOpacity: (value: number): Promise<number> =>

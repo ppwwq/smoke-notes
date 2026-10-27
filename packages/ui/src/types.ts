@@ -3,6 +3,10 @@ import type { PairingDetails } from "@smoke-notes/core";
 
 export interface DesktopBridge {
   getPreviewMode?(): Promise<boolean>;
+  /** True for --preview or --user-data-dir (do not talk to production cloud). */
+  getIsolatedProfile?(): Promise<boolean>;
+  /** Ask the main process to flush Chromium localStorage to disk. */
+  flushStorageData?(): Promise<void>;
   getWindowState(): Promise<WindowState>;
   setBackgroundOpacity(value: number): Promise<number>;
   setAlwaysOnTop(value: boolean): Promise<boolean>;
@@ -31,4 +35,6 @@ export type AppPlatform = "desktop" | "web";
 
 export interface PairingController {
   createPairing(): Promise<PairingDetails>;
+  /** Desktop: rejoin the workspace with a code made on another device. */
+  redeemPairing?(code: string): Promise<void>;
 }

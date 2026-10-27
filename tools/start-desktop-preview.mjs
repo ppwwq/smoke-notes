@@ -17,6 +17,11 @@ if (!existsSync(executable)) {
     "没有可用的本地 Electron。请把 SMOKENOTES_ELECTRON 指向已安装的 electron.exe；预览不会下载或安装软件。",
   );
 }
+// Isolated preview: vite --mode preview sets envDir:false (no production .env).
+// Do not accept throwaway profiles with build:release — that embeds production cloud settings.
+console.info(
+  "Jotday preview: isolated profile, cloud disabled. Use this for UI acceptance; for sync tests use a test Supabase project, not production .env.",
+);
 const child = spawn(executable, [desktop, "--preview"], {
   stdio: "inherit",
   windowsHide: true,

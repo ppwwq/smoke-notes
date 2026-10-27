@@ -28,6 +28,9 @@ pnpm --filter @smoke-notes/desktop preview:desktop
 
 The launcher uses an existing executable only and fails if none is available;
 it does not download Electron. `preview:build` does not read environment files.
+**Do not** validate throwaway profiles with a production `build:release` bundle:
+that path embeds production cloud settings and can create orphan anonymous users.
+Use this preview path (or a dedicated test Supabase project) instead.
 The `--preview` option is accepted only by an unpackaged development app.
 It sets userData and sessionData to this checkout's `work/desktop-preview`
 before the instance lock and any data access, uses a separate preview database,

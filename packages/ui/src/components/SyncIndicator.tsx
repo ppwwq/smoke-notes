@@ -20,6 +20,7 @@ export function SyncIndicator({ status }: { status?: SyncStatus }) {
     retrying: "等待重试，内容已保存在本机",
     offline: "离线，内容已保存在本机，联网后自动同步",
     error: "同步失败，内容已保存在本机",
+    unpaired: "此设备已失去云端权限，请重新配对",
   };
   const label =
     labels[status.phase] +

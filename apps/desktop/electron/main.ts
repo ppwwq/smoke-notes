@@ -399,6 +399,14 @@ function registerIpc() {
     trustedWindow(event);
     return previewMode;
   });
+  ipcMain.handle("app:isolated-profile", (event) => {
+    trustedWindow(event);
+    return isolatedProfile;
+  });
+  ipcMain.handle("app:flush-storage", (event) => {
+    trustedWindow(event);
+    session.defaultSession.flushStorageData();
+  });
   ipcMain.handle(
     "app:quit-result",
     (event, requestId: unknown, saved: unknown) => {
@@ -646,6 +654,11 @@ if (registerSingleInstance(app, activateMainWindow)) {
   });
 
   app.on("before-quit", (event) => {
+    try {
+      session.defaultSession.flushStorageData();
+    } catch {
+      /* Best effort before exit. */
+    }
     if (quitting) return;
     event.preventDefault();
     requestSafeQuit();

@@ -122,6 +122,7 @@ async function startMain(
     session: {
       defaultSession: {
         setPermissionRequestHandler: vi.fn(),
+        flushStorageData: vi.fn(),
         webRequest: {
           onHeadersReceived: vi.fn(),
           onBeforeRequest: beforeRequest,
@@ -207,6 +208,7 @@ describe("main-process note window lifecycle", () => {
     expect(paths.get("sessionData")).toBe(paths.get("userData"));
     expect(startup.slice(0, 3)).toEqual(["userData", "sessionData", "lock"]);
     expect(invoke("app:preview-mode", 1)).toBe(false);
+    expect(invoke("app:isolated-profile", 1)).toBe(false);
     expect(trayCreated).toHaveBeenCalledOnce();
   });
   it.each([false, true])(
@@ -298,6 +300,8 @@ describe("main-process note window lifecycle", () => {
     const { invoke, paths, startup, trayCreated, beforeRequest, windows } =
       await startMain("release-test");
     expect(invoke("app:preview-mode", 1)).toBe(false);
+    expect(invoke("app:isolated-profile", 1)).toBe(true);
+    invoke("app:flush-storage", 1);
     expect(paths.get("userData")).toBe(resolve("work/release-acceptance"));
     expect(paths.get("sessionData")).toBe(paths.get("userData"));
     expect(startup.slice(0, 3)).toEqual(["userData", "sessionData", "lock"]);
@@ -311,6 +315,7 @@ describe("main-process note window lifecycle", () => {
     const { invoke, paths, startup, trayCreated, beforeRequest, windows } =
       await startMain("packaged");
     expect(invoke("app:preview-mode", 1)).toBe(true);
+    expect(invoke("app:isolated-profile", 1)).toBe(true);
     expect(paths.get("userData")).toContain("SmokeNotes Clear Preview");
     expect(paths.get("userData")).toBe(paths.get("sessionData"));
     expect(startup.slice(0, 3)).toEqual(["userData", "sessionData", "lock"]);
