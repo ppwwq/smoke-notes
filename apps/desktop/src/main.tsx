@@ -146,19 +146,11 @@ async function bootstrap() {
           await cloud.enrollLocalWorkspace(workspaceId);
           return engine.flush();
         },
-        async pull(cursor) {
-          const next = await engine.pull(cursor);
-          await planner.synchronize();
-          return next;
-        },
-        async getQueueState() {
-          const queue = await engine.getQueueState();
-          return {
-            ...queue,
-            pending: queue.pending + (await planner.pendingCount()),
-          };
-        },
+        pull: (cursor) => engine.pull(cursor),
+        getQueueState: () => engine.getQueueState(),
       },
+      // Calendar runs as its own step so a calendar error cannot block notes.
+      calendar: planner,
       cloud,
       storage: localStorage,
       notify: () =>

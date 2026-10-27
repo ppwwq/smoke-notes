@@ -159,10 +159,16 @@ export class SyncEngine {
           await this.database.operations.delete(operation.id);
           result.applied += 1;
         } else if (pushed.status === "rejected") {
+          // The server refused this change for good. Keep it (and the local
+          // note) but take it out of the retry queue so others keep syncing.
           await this.database.operations.update(operation.id, {
             rejected: pushed.reason,
           });
-          result.failed += 1;
+          console.warn(
+            "Note change set aside:",
+            pushed.reason,
+            operation.entityId,
+          );
         } else {
           if (await this.preserveConflict(operation, pushed.record))
             result.conflicts += 1;

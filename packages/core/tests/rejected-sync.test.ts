@@ -62,6 +62,42 @@ it("keeps the full 200-character title when preserving a conflict copy", async (
   expect(notes.some((item) => item.title === "我的标题")).toBe(true);
 });
 
+it("sets a rejected note aside, keeps its content and still uploads other notes", async () => {
+  const other = await repo.createNote(note.notebookId, {
+    title: "另一张",
+    body: "",
+  });
+  await repo.updateNote(note.id, { title: "会被拒绝" });
+  const uploads: string[] = [];
+  const engine = new SyncEngine(
+    db,
+    {
+      push: async (operation) => {
+        uploads.push(operation.entityId);
+        if (operation.entityId === note.id)
+          return { status: "rejected" as const, reason: "text_too_long" };
+        return { status: "applied" };
+      },
+      pull: async () => ({ changes: [], cursor: "next" }),
+    },
+    { deviceId: "desktop" },
+  );
+  // A rejection is not a network failure, so it does not count as failed.
+  expect(await engine.flush()).toMatchObject({ applied: 1, failed: 0 });
+  await engine.flush();
+  // Pushed once, then left out of the retry queue.
+  expect(uploads.filter((id) => id === note.id)).toHaveLength(1);
+  expect(uploads).toContain(other.id);
+  expect(await engine.getQueueState()).toEqual({ pending: 0, rejected: 1 });
+  const [setAside] = await db.operations.toArray();
+  expect(setAside).toMatchObject({
+    entityId: note.id,
+    rejected: "text_too_long",
+    payload: { title: "会被拒绝" },
+  });
+  expect((await repo.getNote(note.id))?.title).toBe("会被拒绝");
+});
+
 it("uploads a correction after an old oversized title was definitively rejected", async () => {
   // Simulate an outbox written by an older client, before input validation.
   const invalid = { ...note, title: "x".repeat(201), version: 2 };

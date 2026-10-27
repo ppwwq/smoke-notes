@@ -94,7 +94,6 @@ describe("createSyncRuntime", () => {
     { failed: 0, pending: 0, rejected: 0, phase: "synced" },
     { failed: 1, pending: 1, rejected: 0, phase: "retrying" },
     { failed: 0, pending: 3, rejected: 0, phase: "retrying" },
-    { failed: 0, pending: 0, rejected: 1, phase: "error" },
   ])(
     "reports $phase after flush with $pending pending and $rejected rejected",
     async ({ failed, pending, rejected, phase }) => {
@@ -125,6 +124,31 @@ describe("createSyncRuntime", () => {
       }
     },
   );
+  it("reports notes the server rejected without failing the whole round", async () => {
+    const states: SyncStatus[] = [];
+    const runtime = createSyncRuntime({
+      engine: {
+        flush: async () => ({ applied: 0, conflicts: 0, failed: 0 }),
+        pull: async () => "next",
+        getQueueState: async () => ({ pending: 0, rejected: 2 }),
+      },
+      cloud: { subscribe: () => () => {} },
+      storage: { getItem: () => null, setItem: () => {} },
+      notify: () => {},
+      onStatusChange: (state) => states.push(state),
+    });
+    try {
+      await runtime.start();
+      expect(states.at(-1)).toEqual({
+        phase: "synced",
+        pending: 0,
+        initial: false,
+        rejected: 2,
+      });
+    } finally {
+      runtime.stop();
+    }
+  });
   it("keeps initial sync visible until a slow pull finishes and reports pull failure", async () => {
     let reject!: (error: Error) => void;
     const states: SyncStatus[] = [];
@@ -261,6 +285,74 @@ describe("createSyncRuntime", () => {
       runtime.resume();
       await vi.waitFor(() => expect(phases.at(-1)).toBe("synced"));
       expect(flush).toHaveBeenCalledTimes(2);
+    } finally {
+      runtime.stop();
+    }
+  });
+});
+
+describe("calendar step", () => {
+  const notesEngine = {
+    flush: async () => ({ applied: 0, conflicts: 0, failed: 0 }),
+    pull: async () => "next",
+    getQueueState: async () => ({ pending: 0, rejected: 0 }),
+  };
+
+  it("keeps notes working when only the calendar fails, and clears the warning once it recovers", async () => {
+    const statuses: SyncStatus[] = [];
+    const setItem = vi.fn();
+    let calendarWorks = false;
+    const runtime = createSyncRuntime({
+      engine: notesEngine,
+      calendar: {
+        synchronize: async () => {
+          if (!calendarWorks) throw new Error("calendar offline");
+        },
+        pendingCount: async () => 0,
+      },
+      cloud: { subscribe: () => () => {} },
+      storage: { getItem: () => null, setItem },
+      notify: () => {},
+      onStatusChange: (status) => statuses.push(status),
+    });
+    try {
+      await runtime.synchronize();
+      // Notes were pulled, so their cursor is saved even though the calendar failed.
+      expect(setItem).toHaveBeenCalledWith("smoke-notes:sync-cursor", "next");
+      // Notes count as synced; the calendar problem is reported on its own.
+      expect(statuses.at(-1)).toMatchObject({
+        phase: "synced",
+        calendarFailed: true,
+      });
+      calendarWorks = true;
+      await runtime.synchronize();
+      expect(statuses.at(-1)).toMatchObject({
+        phase: "synced",
+        calendarFailed: false,
+      });
+    } finally {
+      runtime.stop();
+    }
+  });
+
+  it("still asks for pairing when the calendar step loses workspace access", async () => {
+    const statuses: SyncStatus[] = [];
+    const runtime = createSyncRuntime({
+      engine: notesEngine,
+      calendar: {
+        synchronize: async () => {
+          throw { message: "workspace_forbidden" };
+        },
+        pendingCount: async () => 0,
+      },
+      cloud: { subscribe: () => () => {} },
+      storage: { getItem: () => null, setItem: () => {} },
+      notify: () => {},
+      onStatusChange: (status) => statuses.push(status),
+    });
+    try {
+      await runtime.synchronize();
+      expect(statuses.at(-1)?.phase).toBe("unpaired");
     } finally {
       runtime.stop();
     }

@@ -45,3 +45,30 @@ it("renders nothing without cloud configuration", () => {
   const view = render(<SyncIndicator />);
   expect(view.container).toBeEmptyDOMElement();
 });
+it("says how many notes could not be uploaded", () => {
+  render(
+    <SyncIndicator
+      status={{ phase: "synced", initial: false, pending: 0, rejected: 2 }}
+    />,
+  );
+  expect(screen.getByRole("status", { name: "同步状态" })).toHaveTextContent(
+    "有 2 条内容未能上传",
+  );
+  expect(document.querySelector(".sync-ring")).not.toBeNull();
+});
+it("says the calendar is waiting when only the calendar failed", () => {
+  render(
+    <SyncIndicator
+      status={{
+        phase: "synced",
+        initial: false,
+        pending: 0,
+        calendarFailed: true,
+      }}
+    />,
+  );
+  expect(screen.getByRole("status", { name: "同步状态" })).toHaveTextContent(
+    "便签已同步，日历稍后重试",
+  );
+  expect(document.querySelector(".sync-ring")).not.toBeNull();
+});

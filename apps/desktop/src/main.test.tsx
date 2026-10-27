@@ -88,17 +88,20 @@ describe("desktop calendar sync integration", () => {
     );
     expect(await engine.pull("cursor-old")).toBe("cursor-next");
     expect(pull).toHaveBeenCalledWith("cursor-old");
+    // The calendar is its own step, so it cannot make the notes pull fail.
+    expect(calendar).not.toHaveBeenCalled();
+    const calendarStep = startup.runtime.mock.calls[0][0].calendar;
+    await calendarStep?.synchronize();
     expect(calendar).toHaveBeenCalledOnce();
-    expect(pull.mock.invocationCallOrder[0]).toBeLessThan(
-      calendar.mock.invocationCallOrder[0],
-    );
+    // Notes and calendar counts are kept apart; the runtime adds them up.
     expect(await engine.getQueueState?.()).toEqual({
-      pending: 5,
+      pending: 3,
       rejected: 0,
     });
+    expect(await calendarStep?.pendingCount()).toBe(2);
   });
 
-  it("does not acknowledge a cursor when calendar synchronization fails", async () => {
+  it("keeps the notes pull working when calendar synchronization fails", async () => {
     const core = await import("@smoke-notes/core");
     vi.spyOn(core.SyncEngine.prototype, "pull").mockResolvedValue(
       "cursor-next",
@@ -108,9 +111,9 @@ describe("desktop calendar sync integration", () => {
     );
     await import("./main");
     await waitFor(() => expect(startup.start).toHaveBeenCalledOnce());
-    await expect(
-      startup.runtime.mock.calls[0][0].engine.pull(null),
-    ).rejects.toThrow("offline");
+    const options = startup.runtime.mock.calls[0][0];
+    expect(await options.engine.pull(null)).toBe("cursor-next");
+    await expect(options.calendar?.synchronize()).rejects.toThrow("offline");
   });
 
   it("keeps separate note windows from starting a second calendar sync owner", async () => {

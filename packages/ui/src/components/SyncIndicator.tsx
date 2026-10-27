@@ -22,11 +22,15 @@ export function SyncIndicator({ status }: { status?: SyncStatus }) {
     error: "同步失败，内容已保存在本机",
     unpaired: "此设备已失去云端权限，请重新配对",
   };
+  // Notes synced but the calendar did not: say that instead of "已同步".
+  const calendarOnly = status.phase === "synced" && status.calendarFailed;
   const label =
-    labels[status.phase] +
-    (status.pending ? `，${status.pending} 项待同步` : "");
+    (calendarOnly ? "便签已同步，日历稍后重试" : labels[status.phase]) +
+    (status.pending ? `，${status.pending} 项待同步` : "") +
+    (status.rejected ? `，有 ${status.rejected} 条内容未能上传` : "");
   const visible =
-    status.phase !== "synced" && (!syncing || status.initial || slow);
+    (status.phase !== "synced" || calendarOnly || !!status.rejected) &&
+    (!syncing || status.initial || slow);
   return (
     <div
       className="sync-indicator"

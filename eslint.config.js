@@ -18,6 +18,9 @@ export default tseslint.config(
       "@smoke-notesdesktop/**",
       ".worktrees/**",
       ".smoke-test-profile-*/**",
+      // Generated Android build output and local design drafts.
+      "apps/android/**/build/**",
+      "docs/aesthetic-agent/**",
     ],
   },
   eslint.configs.recommended,

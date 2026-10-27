@@ -19,6 +19,8 @@ export interface PlannerSyncState {
   version: number;
   snapshot: PlannerPayload | null;
   pending?: { id: string; payload: PlannerPayload | null };
+  /** The server refused this exact payload; skip it until the record changes. */
+  rejected?: { payload: PlannerPayload | null; reason: string };
 }
 export interface PlannerConflict {
   id: string;
@@ -28,6 +30,8 @@ export interface PlannerConflict {
   local: PlannerPayload | null;
   remote: PlannerPayload | null;
   createdAt: string;
+  /** Set when the server refused the record (for example "invalid_event"). */
+  reason?: string;
 }
 export interface PlannerTransport {
   capabilities(): Promise<void>;
@@ -51,6 +55,26 @@ export function plannerFingerprint(value: unknown): string {
 const equal = (a: unknown, b: unknown) =>
   plannerFingerprint(a) === plannerFingerprint(b);
 const kinds: PlannerKind[] = ["type", "event", "link"];
+
+// Errors the server raises after checking a record. Sending the same record
+// again would fail the same way, so it is set aside instead of retried forever.
+const serverRejections = new Set([
+  "invalid_operation",
+  "invalid_payload",
+  "invalid_event",
+  "invalid_exception",
+  "invalid_type",
+  "invalid_link",
+  "invalid_time",
+  "missing_remote_record",
+  "operation_id_conflict",
+]);
+function serverRejection(error: unknown): string | null {
+  const message = (error as { message?: unknown } | null)?.message;
+  return typeof message === "string" && serverRejections.has(message)
+    ? message
+    : null;
+}
 
 /** A durable snapshot outbox. Scan and pull-merge run in local transactions so
  * edits made during network requests cannot be overwritten. Persisted local
@@ -108,9 +132,13 @@ export class PlannerSyncEngine {
             version: 0,
             snapshot: null,
           };
+          // A payload the server already refused waits until the user edits it.
+          const refused =
+            !!state.rejected && equal(payload, state.rejected.payload);
           // Never alter a sent payload while its acknowledgement is uncertain.
-          if (!state.pending && !equal(payload, state.snapshot)) {
+          if (!state.pending && !refused && !equal(payload, state.snapshot)) {
             state.pending = { id: crypto.randomUUID(), payload };
+            state.rejected = undefined;
             await this.db.plannerSync.put(state);
           }
         }
@@ -126,7 +154,15 @@ export class PlannerSyncEngine {
       .filter((s) => !!s.pending)
       .toArray();
     for (const state of states) {
-      const result = await this.transport.push(state);
+      let result: Awaited<ReturnType<PlannerTransport["push"]>>;
+      try {
+        result = await this.transport.push(state);
+      } catch (error) {
+        const reason = serverRejection(error);
+        if (!reason) throw error; // network or unknown: retry next round
+        await this.setAside(state, reason);
+        continue;
+      }
       if (
         !["applied", "conflict"].includes(result.status) ||
         result.record.workspace_id !== this.workspaceId ||
@@ -202,6 +238,30 @@ export class PlannerSyncEngine {
       }
     });
     await this.scan();
+  }
+  /** Keep a refused record on this device and copy it into the conflict area.
+   * Nothing is deleted; other records keep syncing. */
+  private async setAside(state: PlannerSyncState, reason: string) {
+    console.warn("Calendar record refused by the server", state.id, reason);
+    await this.db.transaction("rw", this.localTables(), async () => {
+      const current = await this.db.plannerSync.get(state.key);
+      if (!current || current.pending?.id !== state.pending?.id) return;
+      await this.db.plannerConflicts.put({
+        id: state.pending!.id,
+        workspaceId: this.workspaceId,
+        kind: state.kind,
+        recordId: state.id,
+        local: (await this.table(state.kind).get(state.id)) ?? null,
+        remote: null,
+        createdAt: new Date().toISOString(),
+        reason,
+      });
+      await this.db.plannerSync.put({
+        ...current,
+        pending: undefined,
+        rejected: { payload: state.pending!.payload, reason },
+      });
+    });
   }
   async pendingCount() {
     await this.scan();

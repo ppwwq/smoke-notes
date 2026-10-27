@@ -186,6 +186,40 @@ describe("calendar snapshot outbox", () => {
     expect((await a.repo.listCalendarEvents())[0].title).toBe("typing");
     expect(await a.sync.pendingCount()).toBe(1);
   });
+  it("sets aside a record the server rejects, keeps it on this device and syncs the rest", async () => {
+    const s = server(),
+      a = device(s.transport);
+    const bad = await a.repo.saveCalendarEvent({ ...input, title: "坏记录" });
+    const good = await a.repo.saveCalendarEvent({ ...input, title: "好记录" });
+    const push = s.transport.push;
+    let badAttempts = 0;
+    s.transport.push = async (state) => {
+      if (state.id === bad.id) {
+        badAttempts += 1;
+        // Supabase reports a raised SQL exception like this.
+        throw { code: "P0001", message: "invalid_event" };
+      }
+      return push(state);
+    };
+    await a.sync.synchronize();
+    await a.sync.synchronize();
+    expect(s.rows.get(`event:${good.id}`)?.payload?.title).toBe("好记录");
+    expect(badAttempts).toBe(1);
+    expect((await a.db.calendarEvents.get(bad.id))?.title).toBe("坏记录");
+    expect(await a.sync.pendingCount()).toBe(0);
+    const conflicts = await a.db.plannerConflicts.toArray();
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0]).toMatchObject({
+      recordId: bad.id,
+      reason: "invalid_event",
+      local: expect.objectContaining({ title: "坏记录" }),
+    });
+    // Editing the record again gives it a fresh try.
+    s.transport.push = push;
+    await a.repo.saveCalendarEvent({ ...input, title: "改好了" }, bad.id);
+    await a.sync.synchronize();
+    expect(s.rows.get(`event:${bad.id}`)?.payload?.title).toBe("改好了");
+  });
   it("never sends rows from another workspace", async () => {
     const s = server(),
       a = device(s.transport);
