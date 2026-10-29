@@ -51,16 +51,15 @@
 .calendar-event-editor.calendar-composer > header {
   padding: 14px 14px 12px;
   gap: 8px;
+  flex-wrap: wrap;
 }
 .calendar-composer .calendar-composer-heading {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+  flex: 0 0 100%;
+  margin: 0;
+  padding: 0 4px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--muted);
 }
 .calendar-event-editor.calendar-composer > header > button {
   flex: 0 0 40px;

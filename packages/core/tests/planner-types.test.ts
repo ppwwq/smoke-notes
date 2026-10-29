@@ -316,3 +316,103 @@ it("persists calendar layout per workspace and defaults older preferences withou
     defaultDuration: 30,
   });
 });
+
+it("edits a recurring todo from the selected date and preserves earlier days and exceptions", async () => {
+  const { repo, db } = setup();
+  const series = await repo.savePlannerTodo({
+    text: "原计划",
+    date: "2028-02-28",
+    notes: "旧备注",
+    repeat: { kind: "daily" },
+  });
+  const days = projectTodoRange(
+    await db.todos.toArray(),
+    "2028-02-28",
+    "2028-03-02",
+    "2028-02-27",
+  );
+  await repo.savePlannerTodo(
+    { text: "单次例外", date: "2028-03-01", notes: "保留" },
+    days[2],
+  );
+  await repo.savePlannerTodo(
+    {
+      text: "新计划",
+      date: "2028-02-29",
+      notes: "新备注",
+      scope: "following",
+      repeat: { kind: "daily" },
+    },
+    days[1],
+  );
+  const next = projectTodoRange(
+    await db.todos.toArray(),
+    "2028-02-28",
+    "2028-03-02",
+    "2028-02-27",
+  );
+  expect(next.map((t) => [getTodoDate(t), t.text, t.planning?.notes])).toEqual([
+    ["2028-02-28", "原计划", "旧备注"],
+    ["2028-02-29", "新计划", "新备注"],
+    ["2028-03-01", "单次例外", "保留"],
+    ["2028-03-02", "新计划", "新备注"],
+  ]);
+  expect(
+    (await repo.listTodoSeries()).find((t) => t.id === series.id)?.planning
+      ?.revisions,
+  ).toHaveLength(2);
+});
+
+it("changes frequency from a past selected day, preserves completed days and replaces later scheduled rules", async () => {
+  const { repo, db } = setup();
+  const series = await repo.savePlannerTodo({
+    text: "每天",
+    date: "2028-02-24",
+    notes: "",
+    repeat: { kind: "daily" },
+  });
+  await repo.reconcileTodos();
+  const days = await repo.listTodos();
+  const selected = days.find((t) => getTodoDate(t) === "2028-02-25")!;
+  const completed = days.find((t) => getTodoDate(t) === "2028-02-26")!;
+  await repo.setTodoStatus(completed.id, "completed");
+  await repo.updateTodoRule(series.id, { text: "原定未来修改" });
+  await repo.savePlannerTodo(
+    {
+      text: "只在工作日",
+      date: "2028-02-25",
+      notes: "新规则",
+      repeat: { kind: "weekdays" },
+      scope: "following",
+    },
+    selected,
+  );
+  const stored = await db.todos.toArray();
+  expect(stored.find((t) => t.id === completed.id)).toMatchObject({
+    text: "每天",
+    completed: true,
+  });
+  expect(
+    stored.find(
+      (t) =>
+        getTodoDate(t) === "2028-02-24" && t.planning?.kind === "occurrence",
+    )?.text,
+  ).toBe("每天");
+  expect(
+    stored.find(
+      (t) =>
+        getTodoDate(t) === "2028-02-27" && t.planning?.kind === "occurrence",
+    )?.planning?.ruleSkipped,
+  ).toBe(true);
+  expect(
+    projectTodoRange(stored, "2028-02-28", "2028-03-05", "2028-02-27").map(
+      (t) => [getTodoDate(t), t.text],
+    ),
+  ).toEqual([
+    ["2028-02-28", "只在工作日"],
+    ["2028-02-29", "只在工作日"],
+    ["2028-03-01", "只在工作日"],
+    ["2028-03-02", "只在工作日"],
+    ["2028-03-03", "只在工作日"],
+  ]);
+});

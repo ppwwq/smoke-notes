@@ -1811,3 +1811,52 @@
     flex-shrink: 0;
   }
 }
+
+/* Both the page and the nested day/week timeline must clear the mobile FAB. */
+@media (max-width: 760px) {
+  .workspace-app[data-web-background]
+    .todo-workspace.todo-planner.calendar-view,
+  .workspace-app[data-web-background] .calendar-timeline-scroll {
+    padding-bottom: calc(180px + env(safe-area-inset-bottom, 0px));
+    scroll-padding-bottom: calc(180px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Narrow weeks use compact colour bars; full event text remains in the agenda. */
+@media (max-width: 600px) {
+  .calendar-studio.scale-week .calendar-timeline {
+    grid-template-columns: 36px repeat(7, minmax(0, 1fr));
+  }
+  .calendar-studio.scale-week .calendar-column-heading {
+    min-width: 0;
+  }
+  .calendar-studio.scale-week .calendar-event > strong,
+  .calendar-studio.scale-week .calendar-event > small,
+  .calendar-studio.scale-week .calendar-timeline-todo strong,
+  .calendar-studio.scale-week .calendar-timeline-todo small {
+    display: none;
+  }
+  .calendar-studio.scale-week .calendar-event {
+    min-width: 0;
+    padding-inline: 2px;
+  }
+  .calendar-studio.scale-week .calendar-timeline-todo {
+    min-width: 0;
+    padding-inline: 0;
+    overflow: hidden;
+  }
+  .calendar-studio.scale-week .calendar-all-day {
+    min-width: 0;
+    overflow: hidden;
+  }
+  .calendar-studio.scale-week .calendar-column-heading span {
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+  }
+  /* Reserve a FAB-sized lane so every agenda card remains clickable while scrolling. */
+  .calendar-studio:is(.scale-day, .scale-week) .calendar-agenda {
+    padding-right: 132px;
+    padding-bottom: calc(180px + env(safe-area-inset-bottom, 0px));
+  }
+}

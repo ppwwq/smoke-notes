@@ -48,7 +48,9 @@
   align-items: center;
   justify-content: center;
   gap: 9px;
-  width: var(--family-trigger-width);
+  width: max-content;
+  min-width: var(--family-trigger-width);
+  white-space: nowrap;
   min-height: 52px;
   padding: 12px 17px;
   border: 0;

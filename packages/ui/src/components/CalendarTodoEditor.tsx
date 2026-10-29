@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { X, Check } from "lucide-react";
 import {
   getTodoDate,
+  type TodoRepeat,
   plannerTodoValue,
   RecordValidationError,
   type PlannerTodoInput,
@@ -21,6 +22,7 @@ export function CalendarTodoEditor({
   today,
   initialDraft,
   initialTime,
+  seriesRepeat,
   onDraftChange,
   onSwitchToEvent,
   onClose,
@@ -31,6 +33,7 @@ export function CalendarTodoEditor({
   today: string;
   initialDraft?: PlannerTodoInput;
   initialTime?: string;
+  seriesRepeat?: TodoRepeat;
   onDraftChange?(draft: PlannerTodoInput): void;
   onSwitchToEvent?(): void;
   onClose(): void;
@@ -52,6 +55,7 @@ export function CalendarTodoEditor({
           : (actions.preferences?.defaultTypeId ?? null),
       },
   );
+  const [scope, setScope] = useState<"one" | "following">("one");
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const pending = useRef(false);
@@ -66,7 +70,16 @@ export function CalendarTodoEditor({
     setBusy(true);
     setError("");
     try {
-      await actions.onSavePlannerTodo(draft, todo);
+      await actions.onSavePlannerTodo(
+        recurring
+          ? {
+              ...draft,
+              scope,
+              repeat: scope === "following" ? draft.repeat : undefined,
+            }
+          : draft,
+        todo,
+      );
       onClose();
     } catch (e) {
       setError(
@@ -85,7 +98,7 @@ export function CalendarTodoEditor({
       web
       kind="actions"
       placement={todo ? "center" : "top-end"}
-      label={todo ? "编辑每日待办" : "新增每日待办"}
+      label={todo ? "编辑待办" : "新建安排"}
       onClose={() => {
         if (!pending.current) onClose();
       }}
@@ -99,11 +112,11 @@ export function CalendarTodoEditor({
       >
         <header>
           <h2 className={!todo ? "calendar-composer-heading" : undefined}>
-            {todo ? "编辑待办" : "新增安排"}
+            {todo ? "编辑待办" : "新建安排"}
           </h2>
           <button
             type="button"
-            aria-label="关闭待办编辑"
+            aria-label={todo ? "关闭待办编辑" : "关闭新建安排"}
             disabled={busy}
             onClick={onClose}
           >
@@ -111,14 +124,14 @@ export function CalendarTodoEditor({
           </button>
           {!todo && (
             <fieldset className="calendar-composer-kind" disabled={busy}>
-              {!onSwitchToEvent && <span>新增每日待办</span>}
+              {!onSwitchToEvent && <span>新建安排</span>}
               {onSwitchToEvent && (
                 <SegmentedControl
-                  label="新增安排类型"
+                  label="安排类型"
                   value="todo"
                   options={[
-                    { value: "event", label: "行程" },
-                    { value: "todo", label: "每日待办" },
+                    { value: "event", label: "日程" },
+                    { value: "todo", label: "待办" },
                   ]}
                   onChange={(value) => {
                     if (value === "event") onSwitchToEvent();
@@ -144,7 +157,7 @@ export function CalendarTodoEditor({
             内容
             <input
               autoFocus
-              aria-label="每日待办内容"
+              aria-label="待办内容"
               value={draft.text}
               maxLength={500}
               placeholder="今天想完成什么？"
@@ -158,6 +171,24 @@ export function CalendarTodoEditor({
               }}
             />
           </label>
+          {recurring && (
+            <>
+              <SegmentedControl<"one" | "following">
+                label="修改范围"
+                value={scope}
+                options={[
+                  { value: "one", label: "仅此次" },
+                  { value: "following", label: "此后全部" },
+                ]}
+                onChange={setScope}
+              />
+              <p className="calendar-local-hint">
+                {scope === "one"
+                  ? "只修改这一天的待办。"
+                  : "从这一天起修改内容、备注和重复规则；保留其他日期的单次修改和完成记录。时间与类型请选“仅此次”修改。"}
+              </p>
+            </>
+          )}
           <CalendarScheduleDisclosure
             date={draft.date}
             detail={draft.time ?? "未指定时间"}
@@ -165,35 +196,44 @@ export function CalendarTodoEditor({
             <label>
               {recurring ? "本次日期" : "开始日期"}
               <PlannerDatePicker
-                label="每日待办日期"
+                label="待办日期"
                 value={draft.date}
                 today={today}
                 disabled={recurring}
                 onChange={(date) => change({ date })}
               />
             </label>
-            <label className="calendar-toggle">
-              <input
-                type="checkbox"
-                checked={!!draft.time}
-                onChange={(e) =>
-                  change({ time: e.target.checked ? "09:00" : null })
-                }
-              />
-              指定待办时间
-            </label>
-            {draft.time && (
-              <CalendarTimePicker
-                label="待办时间"
-                value={draft.time}
-                onChange={(time) => change({ time })}
-              />
-            )}
-            {!todo && (
+            <fieldset disabled={recurring && scope === "following"}>
+              <label className="calendar-toggle">
+                <input
+                  type="checkbox"
+                  checked={!!draft.time}
+                  onChange={(e) =>
+                    change({ time: e.target.checked ? "09:00" : null })
+                  }
+                />
+                指定待办时间
+              </label>
+              {draft.time && (
+                <CalendarTimePicker
+                  label="待办时间"
+                  value={draft.time}
+                  onChange={(time) => change({ time })}
+                />
+              )}
+            </fieldset>
+            {(!todo || (recurring && scope === "following")) && (
               <RepeatFields
-                label="每日待办重复"
-                value={draft.repeat?.kind ?? "once"}
-                days={draft.repeat?.weekdays ?? [1, 2, 3, 4, 5]}
+                allowOnce={!todo}
+                label="待办重复"
+                value={
+                  draft.repeat?.kind ??
+                  (recurring ? (seriesRepeat?.kind ?? "daily") : "once")
+                }
+                days={
+                  draft.repeat?.weekdays ??
+                  seriesRepeat?.weekdays ?? [1, 2, 3, 4, 5]
+                }
                 onChange={(kind) =>
                   change({
                     repeat:
@@ -212,21 +252,18 @@ export function CalendarTodoEditor({
                 }
               />
             )}
-            {recurring && (
-              <p className="calendar-local-hint">
-                修改仅影响这一次。其他日期继续按原规则重复。
-              </p>
-            )}
           </CalendarScheduleDisclosure>
-          <PlannerTypeField
-            {...actions}
-            value={draft.typeId}
-            onChange={(typeId) => change({ typeId })}
-          />
+          <fieldset disabled={recurring && scope === "following"}>
+            <PlannerTypeField
+              {...actions}
+              value={draft.typeId}
+              onChange={(typeId) => change({ typeId })}
+            />
+          </fieldset>
           <label>
             备注
             <textarea
-              aria-label="每日待办备注"
+              aria-label="待办备注"
               rows={3}
               maxLength={10000}
               value={draft.notes}

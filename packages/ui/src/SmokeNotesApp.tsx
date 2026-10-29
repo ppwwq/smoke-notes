@@ -181,6 +181,7 @@ export function SmokeNotesApp({
   const [todoTypeIds, setTodoTypeIds] = useState<Record<string, string | null>>(
     {},
   );
+  const [calendarEditorOpen, setCalendarEditorOpen] = useState(false);
   const [plannerCreateDate, setPlannerCreateDate] = useState<string | null>(
     null,
   );
@@ -794,6 +795,7 @@ export function SmokeNotesApp({
           ) : view === "todos" ? (
             <TodoWorkspace
               {...plannerActions}
+              onEditorOpenChange={setCalendarEditorOpen}
               events={calendarEvents}
               onImportPlan={async (text, timeZone) => {
                 const result = await repository.importCalendarPlan(
@@ -962,15 +964,19 @@ export function SmokeNotesApp({
                     格式
                   </button>
                 )}
-                <button
-                  type="button"
-                  className="mobile-save-button"
-                  aria-label="保存"
-                  disabled={manualSaving || saveStatus === "保存中…"}
-                  onClick={() => void saveManually()}
-                >
-                  {manualSaving ? "保存中…" : "保存"}
-                </button>
+                {(platform !== "web" ||
+                  manualSaving ||
+                  (saveStatus !== "已自动保存" && saveStatus !== "已保存")) && (
+                  <button
+                    type="button"
+                    className="mobile-save-button"
+                    aria-label="保存"
+                    disabled={manualSaving || saveStatus === "保存中…"}
+                    onClick={() => void saveManually()}
+                  >
+                    {manualSaving ? "保存中…" : "保存"}
+                  </button>
+                )}
                 <div className="editor-more-control">
                   {
                     <button
@@ -1251,16 +1257,25 @@ export function SmokeNotesApp({
           )}
         </div>
         <WorkspaceCreate
-          hidden={webEditing || settingsOpen || pairingOpen || mobileNavOpen}
+          hidden={
+            webEditing ||
+            settingsOpen ||
+            pairingOpen ||
+            mobileNavOpen ||
+            !!plannerCreateDate ||
+            calendarEditorOpen
+          }
           open={createOpen}
           onOpenChange={(open) => {
-            if (open && view === "todos" && calendarCreateDate)
-              setPlannerCreateDate(calendarCreateDate);
+            if (open && view === "todos")
+              setPlannerCreateDate(calendarCreateDate ?? todoToday);
             else setCreateOpen(open);
           }}
-          triggerLabel={
-            view === "todos" && calendarCreateDate ? "新增安排" : undefined
-          }
+          onArrange={() => {
+            setCreateOpen(false);
+            setPlannerCreateDate(calendarCreateDate ?? todoToday);
+          }}
+          triggerLabel={view === "todos" ? "新建安排" : undefined}
           mode={createMode}
           onModeChange={setCreateMode}
           allowNotebook={notebookCollectionOpen}

@@ -1,7 +1,6 @@
 import type { Note, Notebook } from "@smoke-notes/core";
 import {
   ArrowLeft,
-  CheckSquare2,
   ExternalLink,
   FilePlus2,
   Trash2,
@@ -163,7 +162,7 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
                               className="note-kind-marker"
                               aria-label={`待办便签：${displayTitle}`}
                             >
-                              <CheckSquare2 size={13} />
+                              清单
                             </span>
                           )}
                           <strong>{displayTitle}</strong>

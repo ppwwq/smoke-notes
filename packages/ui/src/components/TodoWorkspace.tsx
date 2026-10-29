@@ -811,6 +811,7 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
             onMovePlannerTodo={props.onMovePlannerTodo}
             events={props.events}
             onImportPlan={props.onImportPlan}
+            onEditorOpenChange={props.onEditorOpenChange}
             onSaveEvent={props.onSaveEvent}
             onDeleteEvent={props.onDeleteEvent}
             onUndoEvent={props.onUndoEvent}

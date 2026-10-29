@@ -197,6 +197,9 @@ export const RichNoteEditor = forwardRef<
       TaskList,
       TaskItem.configure({
         nested: true,
+        a11y: {
+          checkboxLabel: (node) => `勾选：${node.textContent || "空白清单项"}`,
+        },
         HTMLAttributes: { class: "task-list-item" },
       }),
     ],

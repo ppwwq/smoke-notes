@@ -464,7 +464,10 @@
 }
 .workspace-app .settings-todo-planning {
   margin-top: 12px;
-  background: #f2efe9;
+}
+.workspace-app .settings-todo-planning,
+.workspace-app .settings-quick-help {
+  background: var(--surface-soft);
 }
 .workspace-app .settings-todo-planning .planner-disclosure-body {
   padding: 0 14px 14px;

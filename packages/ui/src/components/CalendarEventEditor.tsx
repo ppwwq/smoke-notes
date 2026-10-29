@@ -151,7 +151,9 @@ export function CalendarEventEditor({
       web
       kind="actions"
       placement={composing ? "top-end" : "center"}
-      label={occurrence && !copy ? "日程详情" : "新建日程"}
+      label={
+        occurrence && !copy ? (editing ? "编辑日程" : "日程详情") : "新建安排"
+      }
       onClose={() => {
         if (!pending.current) onClose();
       }}
@@ -260,11 +262,11 @@ export function CalendarEventEditor({
         >
           <header>
             <h2 className={composing ? "calendar-composer-heading" : undefined}>
-              {occurrence && !copy ? "日程详情" : "新建日程"}
+              {occurrence && !copy ? "编辑日程" : "新建安排"}
             </h2>
             <button
               type="button"
-              aria-label="关闭日程详情"
+              aria-label={occurrence && !copy ? "关闭编辑日程" : "关闭新建安排"}
               disabled={busy}
               onClick={onClose}
             >
@@ -277,11 +279,11 @@ export function CalendarEventEditor({
                 )}
                 {!occurrence && onSavePlannerTodo && (
                   <SegmentedControl
-                    label="新增安排类型"
+                    label="安排类型"
                     value="event"
                     options={[
-                      { value: "event", label: "行程" },
-                      { value: "todo", label: "每日待办" },
+                      { value: "event", label: "日程" },
+                      { value: "todo", label: "待办" },
                     ]}
                     onChange={(value) =>
                       setEntryKind(value as "event" | "todo")

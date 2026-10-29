@@ -17,6 +17,7 @@ export interface TodoTypeLink {
   time?: string | null;
 }
 export interface PlannerTodoInput extends TodoCreateOptions {
+  scope?: "one" | "following";
   text: string;
   date: string;
   notes: string;

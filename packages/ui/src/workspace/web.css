@@ -417,7 +417,7 @@ body[data-web-background="paper"] #root {
   .rich-note-content
   li.task-list-item
   > label {
-  padding-top: 8px;
+  padding-top: 0;
 }
 .workspace-app[data-web-background="paper"]
   .rich-note-content

@@ -302,7 +302,7 @@ describe("SmokeNotesApp", () => {
           expect(update).toHaveBeenCalledTimes(previousSaves + 1),
         );
         await waitFor(() =>
-          expect(screen.getByRole("button", { name: "保存" })).toBeEnabled(),
+          expect(screen.queryByRole("button", { name: "保存" })).toBeNull(),
         );
         await act(async () => {
           while (pendingReads.size) await Promise.all([...pendingReads]);
@@ -793,7 +793,9 @@ describe("SmokeNotesApp", () => {
       pending.resolve();
       await pending.promise;
     });
-    await waitFor(() => expect(button).not.toBeDisabled());
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "保存" })).toBeNull(),
+    );
     expect(title).toHaveValue("手动保存的标题");
     fireEvent.click(screen.getByRole("button", { name: "返回便签列表" }));
     expect(
@@ -802,6 +804,21 @@ describe("SmokeNotesApp", () => {
     expect(
       await screen.findByRole("button", { name: "打开便签：手动保存的标题" }),
     ).toBeInTheDocument();
+  });
+
+  it("hides manual save after autosave and shows it for a pending edit", async () => {
+    render(<SmokeNotesApp repository={repository} platform="web" />);
+    fireEvent.click(await findNote("周会记录"));
+    const title = await screen.findByRole("textbox", { name: "便签标题" });
+    expect(screen.queryByRole("button", { name: "保存" })).toBeNull();
+    fireEvent.change(title, { target: { value: "自动保存的标题" } });
+    expect(screen.getByRole("button", { name: "保存" })).toBeEnabled();
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "保存" })).toBeNull(),
+    );
+    expect(
+      screen.getByRole("status", { name: "保存状态" }),
+    ).toHaveTextContent("已自动保存");
   });
 
   it("retains web browsing positions and todo filters across notebook navigation", async () => {

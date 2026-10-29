@@ -96,15 +96,29 @@
 }
 .workspace-app[data-web-background] .note-color-graphite .note-kind-marker {
   color: #fbfaf8;
-  background: #ffffff18;
+  background: transparent;
 }
 .workspace-app[data-web-background] .appearance-swatch {
   box-shadow: inset 0 0 0 1px #11111114;
 }
-/* A pale sheet keeps authored text colors legible while carrying the cover hue. */
+/* Carry the cover color into the editor, with readable default text. */
 .workspace-app[data-web-background] .progressive-editor {
   background: color-mix(in srgb, var(--card-color) 16%, var(--surface));
 }
 .workspace-app[data-web-background] .progressive-editor.note-color-graphite {
-  background: var(--surface);
+  background: var(--card-color);
+}
+.workspace-app[data-web-background]
+  .progressive-editor.note-color-graphite
+  .rich-note-scroll {
+  --ink: var(--card-ink);
+  --muted: var(--card-muted);
+  --paper-ink: var(--card-ink);
+  --paper-muted: var(--card-muted);
+  --line: #ffffff30;
+}
+.workspace-app[data-web-background]
+  .progressive-editor.note-color-graphite
+  .rich-note-title::placeholder {
+  color: var(--card-muted);
 }

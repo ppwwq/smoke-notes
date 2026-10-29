@@ -60,6 +60,7 @@ export function PairingDialog({
         </button>
         <PairingGate
           embedded
+          hint="当前网页暂时不能出示配对码。请在另一台已连接的设备上打开「设置与同步 → 连接手机」，在这里输入其 6 位码。"
           onSkip={onClose}
           onRedeem={
             onRedeem ??
@@ -90,7 +91,7 @@ export function PairingDialog({
       <p className="eyebrow">PAIR A DEVICE</p>
       <h2>连接手机</h2>
       <p className="pairing-copy">
-        用手机相机扫描二维码，或在手机网页输入下方 6 位码。
+        在这里出示配对码，到手机填写下方 6 位码，或用手机相机扫描二维码。
       </p>
       {loading && (
         <div className="pairing-loading">
@@ -176,7 +177,7 @@ export function PairingGate({
     if (pending.current) return;
     const normalizedCode = code.replace(/\s/g, "");
     if (!/^\d{6}$/.test(normalizedCode)) {
-      setError("请输入完整的 6 位配对码，可在电脑端的「连接手机」中找到。");
+      setError("请输入完整的 6 位配对码，可在另一台已连接设备的「连接手机」中找到。");
       return;
     }
     pending.current = true;
@@ -207,7 +208,7 @@ export function PairingGate({
           <>
             <p>
               {hint ??
-                "在电脑端打开「设置与同步 → 连接手机」，然后输入出现的 6 位码。"}
+                "在另一台已连接的设备上打开「设置与同步 → 连接手机」，然后在这里输入出现的 6 位码。"}
             </p>
             <p>已有本机记录会保留，配对后可以在设备间接着写。</p>
             <input
@@ -247,7 +248,7 @@ export function PairingGate({
         ) : (
           <>
             <p>留住一个想法，写下今天的小计划。</p>
-            <p>先在此浏览器保存；需要跨设备使用时，再从设置连接电脑。</p>
+            <p>先在此浏览器保存；需要跨设备使用时，再从设置连接其他设备。</p>
             <button type="button" onClick={onSkip}>
               开始记录
             </button>

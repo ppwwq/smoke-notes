@@ -24,6 +24,7 @@ interface FamilyButtonProps {
   open?: boolean;
   onOpenChange?(open: boolean): void;
   label?: string;
+  triggerText?: string;
 }
 
 export { FamilyButton };
@@ -33,6 +34,7 @@ export default function FamilyButton({
   open: controlledOpen,
   onOpenChange,
   label = "新建",
+  triggerText = "新建",
 }: FamilyButtonProps) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? localOpen;
@@ -110,7 +112,7 @@ export default function FamilyButton({
           }}
         >
           <PlusIcon size={21} aria-hidden="true" />
-          <span>新建</span>
+          <span>{triggerText}</span>
         </Dialog.Trigger>
         <div ref={portalHost} style={{ display: "contents" }} />
         <Dialog.Portal container={portalHost} keepMounted>

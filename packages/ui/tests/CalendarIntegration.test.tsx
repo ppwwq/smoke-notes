@@ -46,6 +46,85 @@ async function openCalendar() {
   );
   fireEvent.click(await screen.findByRole("button", { name: "日历" }));
 }
+it("opens calendar creation from the arrangement entry beside notes", async () => {
+  render(<SmokeNotesApp repository={repo} platform="web" />);
+  await screen.findByText("日历测试", {
+    selector: ".note-stack-caption strong",
+  });
+  fireEvent.click(screen.getByRole("button", { name: "新建便签" }));
+  const choices = screen.getByRole("group", { name: "新建类型" });
+  await waitFor(() =>
+    expect(within(choices).getByRole("button", { name: "便签" })).toBeVisible(),
+  );
+  expect(screen.getByRole("button", { name: /清单便签/ })).toBeVisible();
+  fireEvent.click(within(choices).getByRole("button", { name: "安排" }));
+  expect(
+    await screen.findByRole("textbox", { name: "日程标题" }),
+  ).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "关闭新建安排" }));
+  expect(screen.getByRole("button", { name: "新建便签" })).toBeVisible();
+  expect(screen.queryByRole("searchbox", { name: "搜索日历" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "新建便签" }));
+  fireEvent.click(screen.getByRole("button", { name: "安排" }));
+  expect(screen.getByRole("dialog", { name: "新建安排" })).toBeVisible();
+  const types = screen.getByRole("group", { name: "安排类型" });
+  expect(within(types).getByRole("button", { name: "日程" })).toBeVisible();
+  fireEvent.click(within(types).getByRole("button", { name: "待办" }));
+  expect(screen.getByRole("dialog", { name: "新建安排" })).toBeVisible();
+  expect(
+    await screen.findByRole("textbox", { name: "待办内容" }),
+  ).toBeVisible();
+  expect(screen.queryByRole("textbox", { name: "新待办内容" })).toBeNull();
+});
+it("matches the arrangement FAB text, accessible name and composer title", async () => {
+  await openCalendar();
+  const trigger = screen.getByRole("button", { name: "新建安排" });
+  expect(trigger).toHaveTextContent("新建安排");
+  fireEvent.click(trigger);
+  const dialog = await screen.findByRole("dialog", { name: "新建安排" });
+  expect(
+    within(dialog).getByRole("heading", { name: "新建安排" }),
+  ).toBeVisible();
+  expect(
+    within(dialog).getByRole("button", { name: "关闭新建安排" }),
+  ).toBeVisible();
+});
+it("hides the FAB while creating either arrangement kind and restores it on close", async () => {
+  await openCalendar();
+  const trigger = screen.getByRole("button", { name: "新建安排" });
+  fireEvent.click(trigger);
+  expect(trigger).not.toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "待办" }));
+  expect(trigger).not.toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "关闭新建安排" }));
+  await waitFor(() => expect(trigger).toBeVisible());
+});
+it("hides the FAB while viewing and editing an existing event", async () => {
+  await repo.saveCalendarEvent({
+    title: "已有日程",
+    start: "2026-10-20T09:00",
+    end: "2026-10-20T10:00",
+    allDay: false,
+    color: "purple",
+    notes: "",
+    location: "",
+    url: "",
+  });
+  await openCalendar();
+  const trigger = screen.getByRole("button", { name: "新建安排" });
+  fireEvent.click(
+    screen.getByRole("button", { name: "日程：已有日程，09:00–10:00" }),
+  );
+  expect(trigger).not.toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "编辑日程" }));
+  const dialog = screen.getByRole("dialog", { name: "编辑日程" });
+  expect(
+    within(dialog).getByRole("heading", { name: "编辑日程" }),
+  ).toBeVisible();
+  expect(trigger).not.toBeVisible();
+  fireEvent.click(within(dialog).getByRole("button", { name: "关闭编辑日程" }));
+  await waitFor(() => expect(trigger).toBeVisible());
+});
 it("keeps one global add entry and moves one day across month boundaries in every calendar scale", async () => {
   await openCalendar();
   expect(
@@ -88,7 +167,7 @@ it("keeps one global add entry and moves one day across month boundaries in ever
   expect(screen.getByRole("combobox", { name: "日历月份" })).toHaveTextContent(
     "11月",
   );
-  fireEvent.click(screen.getByRole("button", { name: "新增安排" }));
+  fireEvent.click(screen.getByRole("button", { name: "新建安排" }));
   fireEvent.click(screen.getByRole("button", { name: "日期与时间" }));
   expect(
     screen.getByRole("button", { name: "日程开始日期" }),
@@ -101,7 +180,7 @@ it("creates events in the settings timezone without a timezone picker in the edi
     timeZone: "Asia/Tokyo",
   });
   await openCalendar();
-  fireEvent.click(screen.getByRole("button", { name: "新增安排" }));
+  fireEvent.click(screen.getByRole("button", { name: "新建安排" }));
   expect(screen.queryByRole("combobox", { name: "日程时区" })).toBeNull();
   expect(screen.queryByText("香港时间 · 保存在本机")).toBeNull();
   fireEvent.change(screen.getByRole("textbox", { name: "日程标题" }), {
@@ -216,20 +295,20 @@ it("opens every compressed entry and expands a day with a return to its original
 });
 it("switches entry kinds without losing drafts, creates a labeled daily task and edits only that day", async () => {
   await openCalendar();
-  fireEvent.click(screen.getByRole("button", { name: "新增安排" }));
+  fireEvent.click(screen.getByRole("button", { name: "新建安排" }));
   fireEvent.change(screen.getByRole("textbox", { name: "日程标题" }), {
     target: { value: "保留行程草稿" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "每日待办" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "每日待办内容" }), {
+  fireEvent.click(screen.getByRole("button", { name: "待办" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "待办内容" }), {
     target: { value: "每日阅读" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "行程" }));
+  fireEvent.click(screen.getByRole("button", { name: "日程" }));
   expect(screen.getByRole("textbox", { name: "日程标题" })).toHaveValue(
     "保留行程草稿",
   );
-  fireEvent.click(screen.getByRole("button", { name: "每日待办" }));
-  expect(screen.getByRole("textbox", { name: "每日待办内容" })).toHaveValue(
+  fireEvent.click(screen.getByRole("button", { name: "待办" }));
+  expect(screen.getByRole("textbox", { name: "待办内容" })).toHaveValue(
     "每日阅读",
   );
   fireEvent.click(screen.getByRole("button", { name: "编辑类型标签" }));
@@ -243,7 +322,7 @@ it("switches entry kinds without losing drafts, creates a labeled daily task and
   await waitFor(() =>
     expect(screen.queryByRole("dialog", { name: "编辑类型标签" })).toBeNull(),
   );
-  expect(screen.getByRole("textbox", { name: "每日待办内容" })).toHaveValue(
+  expect(screen.getByRole("textbox", { name: "待办内容" })).toHaveValue(
     "每日阅读",
   );
   expect(await repo.listTodoSeries()).toHaveLength(0);
@@ -257,10 +336,10 @@ it("switches entry kinds without losing drafts, creates a labeled daily task and
     (await repo.listTodoSeries())[0].planning?.revisions?.[0].repeat?.kind,
   ).toBe("daily");
   fireEvent.click(screen.getByRole("button", { name: "编辑待办：每日阅读" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "每日待办内容" }), {
+  fireEvent.change(screen.getByRole("textbox", { name: "待办内容" }), {
     target: { value: "今天读三十页" },
   });
-  fireEvent.change(screen.getByRole("textbox", { name: "每日待办备注" }), {
+  fireEvent.change(screen.getByRole("textbox", { name: "待办备注" }), {
     target: { value: "记下重点" },
   });
   fireEvent.click(screen.getByRole("button", { name: "保存待办" }));
@@ -318,7 +397,7 @@ it("renames and removes a type from an existing event without deleting the event
   );
   fireEvent.click(screen.getByRole("button", { name: "保存日程" }));
   await waitFor(() =>
-    expect(screen.queryByRole("dialog", { name: "日程详情" })).toBeNull(),
+    expect(screen.queryByRole("dialog", { name: "编辑日程" })).toBeNull(),
   );
   expect(await repo.listCalendarEvents()).toHaveLength(1);
   expect((await repo.listCalendarEvents())[0].typeId).toBeNull();
@@ -327,11 +406,11 @@ it("creates a one-off task on the selected date through the unified editor and k
   await openCalendar();
   fireEvent.click(screen.getByRole("button", { name: /2026年10月23日/ }));
   fireEvent.click(screen.getByRole("button", { name: "添加待办到2026-10-23" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "每日待办内容" }), {
+  fireEvent.change(screen.getByRole("textbox", { name: "待办内容" }), {
     target: { value: "周五交材料" },
   });
   await userEvent.click(screen.getByRole("button", { name: "日期与时间" }));
-  await userEvent.click(screen.getByRole("combobox", { name: "每日待办重复" }));
+  await userEvent.click(screen.getByRole("combobox", { name: "待办重复" }));
   await userEvent.click(screen.getByRole("option", { name: "不重复" }));
   fireEvent.click(screen.getByRole("button", { name: "保存待办" }));
   await waitFor(async () =>
@@ -427,7 +506,7 @@ it("preserves a draft date across calendar changes but uses the new date for the
 
 it("persists timed calendar events, edits one recurrence, searches exceptions and restores deletion", async () => {
   await openCalendar();
-  fireEvent.click(screen.getByRole("button", { name: "新增安排" }));
+  fireEvent.click(screen.getByRole("button", { name: "新建安排" }));
   fireEvent.change(screen.getByRole("textbox", { name: "日程标题" }), {
     target: { value: "项目会议" },
   });
@@ -447,7 +526,7 @@ it("persists timed calendar events, edits one recurrence, searches exceptions an
   );
   await waitFor(() =>
     expect(
-      screen.queryByRole("dialog", { name: "新建日程" }),
+      screen.queryByRole("dialog", { name: "新建安排" }),
     ).not.toBeInTheDocument(),
   );
   const agenda = screen.getByRole("region", { name: "选中日期的待办" });
@@ -465,7 +544,7 @@ it("persists timed calendar events, edits one recurrence, searches exceptions an
   );
   await waitFor(() =>
     expect(
-      screen.queryByRole("dialog", { name: "日程详情" }),
+      screen.queryByRole("dialog", { name: "编辑日程" }),
     ).not.toBeInTheDocument(),
   );
   fireEvent.change(screen.getByRole("searchbox", { name: "搜索日历" }), {
@@ -582,7 +661,7 @@ it("persists visibility and defaults and applies them to new events without dele
   );
   expect(screen.queryByText("隐藏会议")).not.toBeInTheDocument();
   expect(await repo.listCalendarEvents()).toHaveLength(1);
-  await user.click(screen.getByRole("button", { name: "新增安排" }));
+  await user.click(screen.getByRole("button", { name: "新建安排" }));
   await user.click(screen.getByRole("button", { name: "日期与时间" }));
   expect(screen.getByRole("combobox", { name: "类型标签" })).toHaveTextContent(
     "学习",

@@ -6,7 +6,7 @@ import {
   screen,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { PairingGate } from "../src/components/PairingDialog";
+import { PairingDialog, PairingGate } from "../src/components/PairingDialog";
 
 afterEach(cleanup);
 
@@ -62,4 +62,10 @@ it("does not redeem while confirming IME text", () => {
   fireEvent.keyDown(input, { key: "Enter", isComposing: true });
   fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
   expect(onRedeem).not.toHaveBeenCalled();
+});
+
+it("explains that a web preview without a controller cannot display a code", () => {
+  render(<PairingDialog web onClose={vi.fn()} />);
+  expect(screen.getByText(/网页暂时不能出示配对码/)).toBeInTheDocument();
+  expect(screen.queryByText(/在电脑端打开/)).toBeNull();
 });

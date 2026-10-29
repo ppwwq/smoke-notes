@@ -101,7 +101,7 @@ describe("RichNoteEditor", () => {
     };
     render(<RichNoteEditor note={taskNote} onSave={onSave} />);
 
-    const checkbox = screen.getByRole("checkbox");
+    const checkbox = screen.getByRole("checkbox", { name: "勾选：牛奶" });
     expect(checkbox.closest("li")).toHaveClass("task-list-item");
     expect(checkbox).not.toBeChecked();
     await user.click(checkbox);

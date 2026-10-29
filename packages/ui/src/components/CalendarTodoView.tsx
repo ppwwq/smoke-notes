@@ -42,6 +42,7 @@ import {
   calendarMinute,
   calendarStamp,
   getTodoDate,
+  getTodoRule,
   getTodoStatus,
   plannerTodoValue,
   projectTodoRange,
@@ -78,6 +79,7 @@ const CalendarImportDialog = lazy(() =>
 );
 
 export interface CalendarEventActions extends PlannerTypeActions {
+  onEditorOpenChange?(open: boolean): void;
   events?: CalendarEvent[];
   onImportPlan?(text: string, timeZone: string): Promise<CalendarImportResult>;
   onSaveEvent?(
@@ -148,6 +150,7 @@ export function CalendarTodoView({
   onDeleteType,
   onSavePlannerTodo,
   onMovePlannerTodo,
+  onEditorOpenChange,
 }: CalendarEventActions & {
   onToggleTodo?(todo: Todo): Promise<void>;
   busyTodoIds?: string[];
@@ -253,6 +256,11 @@ export function CalendarTodoView({
     initialKind?: "event" | "todo";
     initialInput?: CalendarEventInput;
   } | null>(null);
+  const editorOpen = !!editor || !!todoEditor;
+  useEffect(() => {
+    onEditorOpenChange?.(editorOpen);
+    return () => onEditorOpenChange?.(false);
+  }, [editorOpen, onEditorOpenChange]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
@@ -1208,7 +1216,7 @@ export function CalendarTodoView({
                     setContext(null);
                   }}
                 >
-                  新增行程
+                  新建日程
                 </button>
                 {onSavePlannerTodo && (
                   <button
@@ -1222,7 +1230,7 @@ export function CalendarTodoView({
                       setContext(null);
                     }}
                   >
-                    新增每日待办
+                    新建待办
                   </button>
                 )}
                 <button type="button" disabled={!clipboard} onClick={paste}>
@@ -1265,6 +1273,14 @@ export function CalendarTodoView({
         <CalendarTodoEditor
           {...typeActions}
           todo={todoEditor}
+          seriesRepeat={
+            getTodoRule(
+              (todoRecords ?? []).find(
+                (record) => record.id === todoEditor.planning?.seriesId,
+              ) ?? todoEditor,
+              todoEditor.planning?.date,
+            )?.repeat
+          }
           date={date}
           today={today}
           onClose={() => setTodoEditor(null)}

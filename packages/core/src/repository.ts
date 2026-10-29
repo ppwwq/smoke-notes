@@ -279,6 +279,29 @@ export class LocalRepository {
             throw new RecordValidationError("待办已删除，请刷新。");
           if (current.planning?.kind === "series")
             throw new RecordValidationError("请选择具体日期的待办。");
+          if (input.scope === "following") {
+            if (
+              current.planning?.kind !== "occurrence" ||
+              input.date !== getTodoDate(current)
+            )
+              throw new RecordValidationError("请选择重复待办的本次日期。");
+            await this.updateTodoRule(
+              current.planning.seriesId!,
+              {
+                text: input.text,
+                notes: input.notes,
+                ...(input.repeat ? { repeat: input.repeat } : {}),
+              },
+              input.date,
+            );
+            // Explicit exceptions on other dates remain unchanged; this date is the user's edit.
+            saved = await this.updateTodo(current.id, {
+              text: input.text,
+              notes: input.notes,
+            });
+            await this.reconcileTodos();
+            return saved;
+          }
           if (input.repeat)
             throw new RecordValidationError("编辑这一次时不能更改重复规则。");
           if (
@@ -1118,16 +1141,26 @@ export class LocalRepository {
     });
   }
 
-  async updateTodoRule(id: string, changes: TodoRuleChanges): Promise<Todo> {
+  async updateTodoRule(
+    id: string,
+    changes: TodoRuleChanges,
+    fromDate?: string,
+  ): Promise<Todo> {
+    if (fromDate !== undefined && !isTodoDate(fromDate))
+      throw new RecordValidationError("请选择有效日期。");
     await this.reconcileTodos();
     const settings = await this.getTodoSettings();
-    const effectiveFrom = addTodoDays(
-      getTodoDay(this.now(), settings.dayBoundaryHour),
-      1,
-    );
+    const effectiveFrom =
+      fromDate ??
+      addTodoDays(getTodoDay(this.now(), settings.dayBoundaryHour), 1);
     return this.persistMutation(this.database.todos, "todo", id, (current) => {
-      const previous = getTodoRule(current);
-      if (current.planning?.kind !== "series" || !previous)
+      const previous = getTodoRule(current, fromDate);
+      if (
+        current.deletedAt ||
+        current.workspaceId !== this.context.workspaceId ||
+        current.planning?.kind !== "series" ||
+        !previous
+      )
         throw new RecordValidationError("未找到重复待办规则。");
       const rule = {
         ...previous,
@@ -1153,7 +1186,24 @@ export class LocalRepository {
         planning: {
           ...current.planning,
           notes: rule.notes,
-          revisions: [...(current.planning.revisions ?? []), rule],
+          revisions: [
+            ...(current.planning.revisions ?? []),
+            rule,
+            // Override already scheduled revisions too, without deleting revision history.
+            ...(fromDate
+              ? [
+                  ...new Set(
+                    (current.planning.revisions ?? [])
+                      .map((r) => r.effectiveFrom)
+                      .filter((date) => date > fromDate),
+                  ),
+                ].map((effectiveFrom) => ({
+                  ...rule,
+                  id: this.createId(),
+                  effectiveFrom,
+                }))
+              : []),
+          ],
         },
       };
     });

@@ -29,6 +29,7 @@ export function WorkspaceCreate({
   onCreateNotebook,
   onCreateTodo,
   onShowTodos,
+  onArrange,
 }: {
   open: boolean;
   onOpenChange(open: boolean): void;
@@ -50,6 +51,7 @@ export function WorkspaceCreate({
   onCreateNotebook(name: string): Promise<string>;
   onCreateTodo(text: string, options?: TodoCreateOptions): Promise<void>;
   onShowTodos(): void;
+  onArrange?(): void;
 }) {
   const [targetId, setTargetId] = useState("");
   const [name, setName] = useState("");
@@ -85,6 +87,7 @@ export function WorkspaceCreate({
     <div className="workspace-create" hidden={hidden}>
       <FamilyButton
         open={open}
+        triggerText={triggerLabel}
         label={
           triggerLabel ??
           (defaultMode === "notebook"
@@ -101,10 +104,13 @@ export function WorkspaceCreate({
         <SegmentedControl
           label="新建类型"
           value={mode}
-          onChange={onModeChange}
+          onChange={(next) => {
+            if (next === "todo" && onArrange) onArrange();
+            else onModeChange(next);
+          }}
           options={[
             { value: "note", label: "便签" },
-            { value: "todo", label: "待办" },
+            { value: "todo", label: onArrange ? "安排" : "待办" },
             ...(allowNotebook
               ? [{ value: "notebook" as const, label: "便签本" }]
               : []),
@@ -199,7 +205,9 @@ export function WorkspaceCreate({
                 <ArrowUpRight size={18} />
               </button>
               <p className="create-footnote">
-                清单留在便签本；按日期安排的事项选「待办」。
+                {onArrange
+                  ? "日程或待办，选「安排」。"
+                  : "清单留在便签本；按日期安排的事项选「待办」。"}
               </p>
             </>
           ) : (
@@ -304,7 +312,7 @@ export function WorkspaceCreate({
             )}
           </form>
         </section>
-        <section hidden={mode !== "todo"} aria-label="新建每日待办">
+        <section hidden={mode !== "todo"} aria-label="新建待办">
           <TodoComposer
             today={today}
             defaultDate={todoDate}
