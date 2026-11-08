@@ -2194,6 +2194,11 @@ button {
 }
 .mark-control {
   position: relative;
+  display: flex;
+  gap: 4px;
+}
+.mark-swatch-row {
+  display: contents;
 }
 .mark-palette {
   position: absolute;

@@ -734,7 +734,7 @@ export class LocalRepository {
   }
 
   async createNote(
-    notebookId: string,
+    notebookId: string | null,
     content: Pick<Note, "title"> &
       Partial<Pick<Note, "body" | "contentJson" | "color" | "kind">>,
   ): Promise<Note> {
@@ -750,16 +750,17 @@ export class LocalRepository {
       this.database.notes,
       this.database.operations,
       async () => {
-        const notebook = await this.requireRecord(
-          this.database.notebooks,
-          notebookId,
-        );
+        const notebook =
+          notebookId === null
+            ? ((await this.listNotebooks())[0] ??
+              (await this.createNotebook("随手记")))
+            : await this.requireRecord(this.database.notebooks, notebookId);
         if (notebook.deletedAt)
           throw new Error("便签本已删除，请先恢复或选择其他便签本。");
-        const current = await this.listNotes(notebookId);
+        const current = await this.listNotes(notebook.id);
         const note: Note = {
           id: this.createId(),
-          notebookId,
+          notebookId: notebook.id,
           kind,
           title: content.title.trim(),
           contentJson,

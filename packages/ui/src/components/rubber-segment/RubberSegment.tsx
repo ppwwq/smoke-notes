@@ -442,24 +442,23 @@ const RubberSegment: React.FC<RubberSegmentProps> = ({
     const d = drag.current;
     if (!d || e.pointerId !== d.id) return;
     release();
-    suppressClick.current = true;
     const x = localX(e);
     const rect = box.current;
     if (
       rect &&
       (e.clientY < rect.top - SLOP || e.clientY > rect.bottom + SLOP)
     ) {
+      suppressClick.current = true;
       jumpTo(committed.current);
       return;
     }
     if (!d.live) {
-      if (Math.abs(x - d.x0) <= SLOP && d.slot !== committed.current) {
-        const from = committed.current;
-        commit(d.slot);
-        travel(from, d.slot);
-      }
+      // Let the native click activate taps before the destination can move
+      // a different control under the touch point.
+      suppressClick.current = Math.abs(x - d.x0) > SLOP;
       return;
     }
+    suppressClick.current = true;
     const v = velocityOf(d.hist, e.timeStamp);
     const flick = Math.abs(v) > FLICK;
     let to = nearestSlot(

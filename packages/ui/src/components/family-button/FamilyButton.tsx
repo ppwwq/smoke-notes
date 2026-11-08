@@ -25,6 +25,7 @@ interface FamilyButtonProps {
   onOpenChange?(open: boolean): void;
   label?: string;
   triggerText?: string;
+  title?: string;
 }
 
 export { FamilyButton };
@@ -35,6 +36,7 @@ export default function FamilyButton({
   onOpenChange,
   label = "新建",
   triggerText = "新建",
+  title = "新建一件小事",
 }: FamilyButtonProps) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? localOpen;
@@ -144,8 +146,7 @@ export default function FamilyButton({
           >
             <header className="family-heading">
               <div>
-                <p>留住想法，安排日常</p>
-                <Dialog.Title id={titleId}>新建一件小事</Dialog.Title>
+                <Dialog.Title id={titleId}>{title}</Dialog.Title>
               </div>
               <Dialog.Close className="family-close" aria-label="收起新建面板">
                 <motion.span

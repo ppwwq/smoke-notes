@@ -119,7 +119,6 @@ export function SettingsPanel({
               设置
             </button>
           )}
-          <p className="eyebrow">PREFERENCES</p>
           <h2>
             {web
               ? {
@@ -176,7 +175,7 @@ export function SettingsPanel({
               <small>
                 {trash.length
                   ? `${trash.length} 项内容可恢复`
-                  : "这里收好暂时移走的内容"}
+                  : "恢复误删的记录"}
               </small>
             </span>
             <ChevronRight size={18} />
@@ -185,7 +184,6 @@ export function SettingsPanel({
       )}
       {webBackground !== undefined && section === "appearance" && (
         <div className="settings-group">
-          <h3>外观</h3>
           <fieldset className="web-background-options">
             <legend>背景</legend>
             {(["default", "paper", "glass"] as const).map((value) => (
@@ -215,6 +213,9 @@ export function SettingsPanel({
                         : "暖白底色与柔和色块"}
                   </small>
                 </span>
+                <span className="background-selected" aria-hidden="true">
+                  ✓
+                </span>
               </label>
             ))}
           </fieldset>
@@ -239,7 +240,12 @@ export function SettingsPanel({
 
       {onTodoBoundaryChange && (!web || section === "overview") && (
         <details className="planner-disclosure settings-todo-planning">
-          <summary>每日待办</summary>
+          <summary>
+            每日待办
+            <span className="settings-disclosure-value">
+              {String(todoBoundaryHour).padStart(2, "0")}:00
+            </span>
+          </summary>
           <div className="planner-disclosure-body">
             <label>
               换日时间（香港时间）
@@ -275,7 +281,7 @@ export function SettingsPanel({
 
       {web && section === "overview" && (
         <details className="planner-disclosure settings-quick-help">
-          <summary>使用小提示</summary>
+          <summary>使用帮助</summary>
           <div className="planner-disclosure-body">
             <p>
               <strong>找回记录：</strong>
@@ -420,12 +426,13 @@ export function SettingsPanel({
         className="settings-group trash-group"
         hidden={web && section !== "trash"}
       >
-        <h3>
-          <ArchiveRestore size={16} />
-          最近删除
-        </h3>
+        {!web && (
+          <h3>
+            <ArchiveRestore size={16} /> 最近删除
+          </h3>
+        )}
         {trash.length === 0 ? (
-          <p>最近删除中没有内容。</p>
+          <p>没有可恢复的内容。</p>
         ) : (
           trash.map((item) => (
             <div className="trash-row" key={`${item.entity}-${item.record.id}`}>

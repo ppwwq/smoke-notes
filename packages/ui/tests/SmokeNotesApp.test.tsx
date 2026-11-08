@@ -174,7 +174,7 @@ describe("SmokeNotesApp", () => {
       expect(container.querySelector(".notes-board-scroll")!.scrollTop).toBe(
         180,
       );
-      fireEvent.click(screen.getByRole("button", { name: "收起便签" }));
+      fireEvent.click(screen.getByRole("button", { name: "返回所有便签" }));
       expect(container.querySelector(".stack-paper")).toHaveTextContent(
         "保存后的标题",
       );
@@ -816,9 +816,9 @@ describe("SmokeNotesApp", () => {
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "保存" })).toBeNull(),
     );
-    expect(
-      screen.getByRole("status", { name: "保存状态" }),
-    ).toHaveTextContent("已自动保存");
+    expect(screen.getByRole("status", { name: "保存状态" })).toHaveTextContent(
+      "已自动保存",
+    );
   });
 
   it("retains web browsing positions and todo filters across notebook navigation", async () => {

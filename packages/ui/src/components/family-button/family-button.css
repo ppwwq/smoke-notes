@@ -159,8 +159,9 @@
   border-color: #b8a4cf;
 }
 .family-popup .checklist-choice {
-  background: #e4e9d5;
-  color: #353b2d;
+  background: transparent;
+  border-color: var(--line);
+  color: var(--ink);
 }
 .create-kind-icon {
   display: grid;

@@ -69,9 +69,9 @@ it("catches up on focus after Hong Kong midnight and retains the prior completed
   fireEvent.click(
     await screen.findByRole("button", { name: "编辑待办：每天读书" }),
   );
-  expect(
-    await screen.findByRole("textbox", { name: "每日待办内容" }),
-  ).toHaveValue("每天读书");
+  expect(await screen.findByRole("textbox", { name: "待办内容" })).toHaveValue(
+    "每天读书",
+  );
 });
 
 it("persists the 04:00 setting and shows the real local-only sync state", async () => {
@@ -101,4 +101,22 @@ it("persists the 04:00 setting and shows the real local-only sync state", async 
   expect(
     await screen.findByText("已保存在本机 · 未启用云端同步"),
   ).toBeVisible();
+});
+
+it("shows the newly added task in Today when following the creation feedback", async () => {
+  render(<SmokeNotesApp repository={repository} platform="web" />);
+  await screen.findByText("计划测试", {
+    selector: ".note-stack-caption strong",
+  });
+  fireEvent.click(screen.getByRole("button", { name: "待办" }));
+  fireEvent.click(await screen.findByRole("button", { name: "新增待办" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "新待办内容" }), {
+    target: { value: "买牛奶" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "添加" }));
+  fireEvent.click(await screen.findByRole("button", { name: "查看待办" }));
+  expect(
+    await screen.findByRole("heading", { name: "今天，慢慢完成" }),
+  ).toBeVisible();
+  expect(screen.getByRole("checkbox", { name: "完成：买牛奶" })).toBeVisible();
 });

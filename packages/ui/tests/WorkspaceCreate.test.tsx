@@ -107,7 +107,7 @@ it("creates tomorrow's task once, clears only the submitted draft and offers its
     screen.getByRole("status", { name: "新建待办反馈" }),
   ).toHaveTextContent("明天");
   fireEvent.click(screen.getByRole("button", { name: "查看待办" }));
-  expect(callbacks.onShowTodos).toHaveBeenCalledOnce();
+  expect(callbacks.onShowTodos).toHaveBeenCalledExactlyOnceWith("2026-10-24");
 });
 
 it("creates a checklist note in the chosen notebook without creating a daily task", async () => {
@@ -176,16 +176,18 @@ it("retains failed note creation in the panel for retry", async () => {
   await waitFor(() => expect(callbacks.onCreateNote).toHaveBeenCalledTimes(2));
 });
 
-it("can establish the first notebook without leaving the creation flow", async () => {
+it("can write the first note without first naming a notebook", async () => {
   const callbacks = setup("note", []);
   fireEvent.click(screen.getByRole("button", { name: "新建便签" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "第一个便签本名称" }), {
-    target: { value: "日常灵感" },
+  fireEvent.change(screen.getByRole("textbox", { name: "快速记录内容" }), {
+    target: { value: "下班后去图书馆" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "建立便签本" }));
+  fireEvent.click(screen.getByRole("button", { name: /保存并继续写/ }));
   await waitFor(() =>
-    expect(callbacks.onCreateNotebook).toHaveBeenCalledExactlyOnceWith(
-      "日常灵感",
+    expect(callbacks.onCreateNote).toHaveBeenCalledExactlyOnceWith(
+      "note",
+      null,
+      "下班后去图书馆",
     ),
   );
 });

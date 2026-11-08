@@ -11,6 +11,8 @@ import {
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { WebDialog } from "./glass/WebDialog";
 
+const manageOption = "__edit_types__";
+
 export interface PlannerTypeActions {
   preferences?: PlannerPreferences;
   onSavePreferences?(preferences: PlannerPreferences): Promise<void>;
@@ -61,20 +63,16 @@ export function PlannerTypeField({
                 swatchInk: color?.swatchInk,
               };
             }),
+            ...(onSaveType && onDeleteType
+              ? [{ value: manageOption, label: "编辑类型标签" }]
+              : []),
           ]}
-          onChange={(id) => onChange(id || null)}
+          onChange={(id) => {
+            if (id === manageOption) setManage(true);
+            else onChange(id || null);
+          }}
         />
       </label>
-      {onSaveType && onDeleteType && (
-        <button
-          type="button"
-          className="planner-manage-types"
-          onClick={() => setManage(true)}
-        >
-          <Pencil size={15} />
-          编辑类型标签
-        </button>
-      )}
       {manage && onSaveType && onDeleteType && (
         <PlannerTypeManager
           types={types}

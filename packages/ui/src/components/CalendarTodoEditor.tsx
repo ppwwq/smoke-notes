@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { X, Check } from "lucide-react";
+import { X } from "lucide-react";
 import {
   getTodoDate,
   type TodoRepeat,
@@ -148,7 +148,7 @@ export function CalendarTodoEditor({
               aria-busy={busy}
               disabled={busy || !draft.text.trim()}
             >
-              {busy ? <span>…</span> : <Check size={21} />}
+              {busy ? "保存中…" : "保存"}
             </button>
           )}
         </header>

@@ -109,6 +109,7 @@ it("blocks duplicate submissions and retains the complete draft after failure", 
   fail(new Error("offline"));
   expect(await screen.findByRole("alert")).toHaveTextContent("保存失败");
   expect(close).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText("更多选项", { selector: "summary" }));
   expect(screen.getByRole("textbox", { name: "日程备注" })).toHaveValue(
     draft.notes,
   );

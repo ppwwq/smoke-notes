@@ -284,36 +284,39 @@ export function CalendarTimeline({
     Number(localNow.slice(11, 13)) * 60 + Number(localNow.slice(14, 16));
   return (
     <>
-      <div
-        className="calendar-zoom-controls"
-        role="group"
-        aria-label="时间轴缩放"
-      >
-        <span>双指缩放时间轴</span>
-        <button
-          type="button"
-          aria-label="缩小时间轴"
-          disabled={hourHeight <= MIN_HOUR_HEIGHT}
-          onClick={() => zoom(hourHeight / 1.25)}
+      <details className="calendar-zoom">
+        <summary>时间轴缩放 · {Math.round((hourHeight / 60) * 100)}%</summary>
+        <div
+          className="calendar-zoom-controls"
+          role="group"
+          aria-label="时间轴缩放"
         >
-          <Minus size={16} />
-        </button>
-        <button
-          type="button"
-          aria-label="重置时间轴缩放"
-          onClick={() => zoom(60)}
-        >
-          {Math.round((hourHeight / 60) * 100)}%
-        </button>
-        <button
-          type="button"
-          aria-label="放大时间轴"
-          disabled={hourHeight >= MAX_HOUR_HEIGHT}
-          onClick={() => zoom(hourHeight * 1.25)}
-        >
-          <Plus size={16} />
-        </button>
-      </div>
+          <span>双指缩放时间轴</span>
+          <button
+            type="button"
+            aria-label="缩小时间轴"
+            disabled={hourHeight <= MIN_HOUR_HEIGHT}
+            onClick={() => zoom(hourHeight / 1.25)}
+          >
+            <Minus size={16} />
+          </button>
+          <button
+            type="button"
+            aria-label="重置时间轴缩放"
+            onClick={() => zoom(60)}
+          >
+            {Math.round((hourHeight / 60) * 100)}%
+          </button>
+          <button
+            type="button"
+            aria-label="放大时间轴"
+            disabled={hourHeight >= MAX_HOUR_HEIGHT}
+            onClick={() => zoom(hourHeight * 1.25)}
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+      </details>
       <div
         ref={scroll}
         className="calendar-timeline-scroll"

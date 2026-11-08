@@ -15,7 +15,14 @@ import {
   getTodoStatus,
   projectTodoRange,
 } from "@smoke-notes/core";
-import { SlidersHorizontal, Repeat2, Sun, Plus } from "lucide-react";
+import {
+  Check,
+  GripVertical,
+  SlidersHorizontal,
+  Repeat2,
+  Sun,
+  Plus,
+} from "lucide-react";
 import { RepeatFields, type RepeatChoice } from "./TodoRepeatFields";
 import { SortableStack } from "./SortableStack";
 import { RecordActions } from "./RecordActions";
@@ -42,7 +49,7 @@ interface TodoWorkspaceProps extends CalendarEventActions {
   deletedTodos?: Todo[];
   onPrepareTodo?(todo: Todo): Promise<void>;
   onCalendarDateChange?(date: string | null): void;
-  showAllRequest?: number;
+  viewRequest?: { view: "today" | "all" } | null;
   onSetStatus?: (id: string, status: TodoStatus) => Promise<void>;
   onReschedule?: (id: string, date: string) => Promise<void>;
   onUpdateRule?: (id: string, changes: TodoRuleChanges) => Promise<void>;
@@ -251,7 +258,7 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
   const today = props.today ?? getTodoDay();
   const [view, setView] = useState<TodoView>(
-    props.showAllRequest ? "all" : "today",
+    props.viewRequest?.view ?? "today",
   );
   const [selectedDate, setSelectedDate] = useState(today);
   const [calendarMonth, setCalendarMonth] = useState(`${today.slice(0, 7)}-01`);
@@ -336,9 +343,7 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
 
   const [arranging, setArranging] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [lastShowAllRequest, setLastShowAllRequest] = useState(
-    props.showAllRequest,
-  );
+  const [lastViewRequest, setLastViewRequest] = useState(props.viewRequest);
   const [actionError, setActionError] = useState("");
   const [errorId, setErrorId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
@@ -358,9 +363,9 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
     [],
   );
   const [localFilter, setLocalFilter] = useState<TodoFilter>("all");
-  if (props.showAllRequest !== lastShowAllRequest) {
-    setLastShowAllRequest(props.showAllRequest);
-    setView(props.showAllRequest ? "all" : "today");
+  if (props.viewRequest !== lastViewRequest) {
+    setLastViewRequest(props.viewRequest);
+    setView(props.viewRequest?.view ?? "today");
     setLocalFilter("all");
   }
   const filter = props.filter ?? localFilter;
@@ -669,13 +674,12 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
       )}
       <header className="todo-hero">
         <div>
-          <p className="eyebrow">ONE THING AT A TIME</p>
           <h1>
             {view === "calendar"
               ? "日历"
               : view === "today"
                 ? "今天，慢慢完成"
-                : "所有安排"}
+                : "全部待办"}
           </h1>
           <p className="planner-date">
             <Sun size={15} aria-hidden="true" />
@@ -689,26 +693,24 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
             </time>
           </p>
         </div>
+        {view !== "calendar" && (
+          <section
+            className="planner-daily-progress planner-progress-summary"
+            aria-label="今日进度"
+          >
+            <div>
+              <span>
+                今天完成 <strong>{completed}</strong> / {currentTodos.length}
+              </span>
+            </div>
+            <progress
+              aria-label="今天完成进度"
+              value={completed}
+              max={currentTodos.length || 1}
+            />
+          </section>
+        )}
       </header>
-      <section className="planner-daily-progress" aria-label="今日进度">
-        <div>
-          <span>
-            今天完成 <strong>{completed}</strong> / {currentTodos.length}
-          </span>
-          <span>
-            {openToday > 0
-              ? `还剩 ${openToday} 件`
-              : currentTodos.length
-                ? "今天已安排妥当"
-                : "从一件小事开始"}
-          </span>
-        </div>
-        <progress
-          aria-label="今天完成进度"
-          value={completed}
-          max={currentTodos.length || 1}
-        />
-      </section>
       <div className="planner-navigation">
         <SegmentedControl<TodoView>
           label="待办视图"
@@ -720,17 +722,26 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
             { value: "all", label: "全部" },
           ]}
         />
-        <button
-          className="planner-filter-toggle"
-          type="button"
-          aria-expanded={filtersOpen}
-          onClick={() => setFiltersOpen(!filtersOpen)}
-        >
-          <SlidersHorizontal size={16} />
-          {filter === "all" ? "筛选" : filter === "open" ? "未完成" : "已完成"}
-        </button>
+        {view !== "calendar" && (
+          <button
+            className="planner-filter-toggle"
+            type="button"
+            aria-expanded={filtersOpen}
+            onClick={() => setFiltersOpen(!filtersOpen)}
+          >
+            <SlidersHorizontal size={16} />
+            {filter === "all"
+              ? "筛选"
+              : filter === "open"
+                ? "未完成"
+                : "已完成"}
+          </button>
+        )}
       </div>
-      <div className="filter-bar planner-filter-bar" hidden={!filtersOpen}>
+      <div
+        className="filter-bar planner-filter-bar"
+        hidden={!filtersOpen || view === "calendar"}
+      >
         <SegmentedControl<TodoFilter>
           label="待办筛选"
           value={filter}
@@ -744,16 +755,6 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
             props.onFilterChange?.(value);
           }}
         />
-        {props.web && (
-          <button
-            type="button"
-            className="arrange-todos"
-            aria-pressed={arranging}
-            onClick={() => setArranging(!arranging)}
-          >
-            {arranging ? "完成整理" : "整理待办"}
-          </button>
-        )}
       </div>
       {actionError && <p role="alert">{actionError}</p>}
       <div className="planner-feedback-row">
@@ -822,6 +823,11 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
             todos={calendarTodos}
             todoRecords={visibleCalendarRecords}
             selectedTodos={selectedTodos}
+            todoStatus={filter}
+            onTodoStatusChange={(value) => {
+              setLocalFilter(value);
+              props.onFilterChange?.(value);
+            }}
             onMonthChange={setCalendarMonth}
             onDateChange={setSelectedDate}
             onCreate={
@@ -843,10 +849,27 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
         )}
         {view !== "calendar" && visible.length > 0 && (
           <section className="planner-open" aria-label="待办事项">
-            <h2>
-              {view === "today" ? "今天的事" : "全部事项"}{" "}
-              <span>· {visible.length}</span>
-            </h2>
+            <div className="planner-list-heading">
+              <h2>
+                {view === "today" ? "今天的事" : "全部事项"}{" "}
+                <span>· {visible.length}</span>
+              </h2>
+              {props.web && visible.length > 1 && (
+                <button
+                  type="button"
+                  className="arrange-todos"
+                  aria-pressed={arranging}
+                  onClick={() => setArranging(!arranging)}
+                >
+                  {arranging ? (
+                    <Check size={16} aria-hidden="true" />
+                  ) : (
+                    <GripVertical size={16} aria-hidden="true" />
+                  )}
+                  {arranging ? "完成整理" : "整理待办"}
+                </button>
+              )}
+            </div>
             {list(visible)}
           </section>
         )}
@@ -864,16 +887,18 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
             <p>
               {filter !== "all"
                 ? "这个筛选下没有事项。"
-                : "留一点空白，给今天的小计划。"}
+                : view === "today"
+                  ? "今天没有待办。"
+                  : "还没有待办。"}
             </p>
-            {filter === "all" && props.onCreateRequest && (
+            {!props.web && filter === "all" && props.onCreateRequest && (
               <button
                 type="button"
                 className="planner-empty-add"
                 onClick={() => props.onCreateRequest?.()}
               >
                 <Plus size={16} />
-                添加一件事
+                新增待办
               </button>
             )}
           </div>

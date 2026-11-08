@@ -132,55 +132,46 @@ export function CalendarImportDialog({
           </button>
         </header>
         <div className="calendar-import-body">
-          <fieldset disabled={busy || !!result}>
-            <p>
-              选择 .ics 或规划
-              .json，也可以直接粘贴规划内容。先预览，再导入到本机。
-            </p>
-            <div className="calendar-import-tools">
-              <label className="calendar-file-label">
-                <Upload size={16} />
-                选择文件
-                <input
-                  type="file"
-                  aria-label="选择日程文件"
-                  accept=".ics,.json,text/calendar,application/json"
-                  onChange={(e) => void read(e.target.files?.[0])}
-                />
-              </label>
-              <button type="button" onClick={download}>
-                <Download size={16} />
-                下载规划模板
-              </button>
-            </div>
-            <textarea
-              aria-label="日程规划内容"
-              rows={7}
-              value={text}
-              placeholder="粘贴我为你生成的 JSON 规划，或 ICS 文件内容"
-              onChange={(e) => {
-                setText(e.target.value);
-                setPlan(null);
-                setError("");
-              }}
-            />
-            <p className="calendar-local-hint">
-              最多 500 项／2 MB。重复标识自动跳过；不会覆盖已有安排。JSON
-              全天结束日期为不包含的下一天。
-            </p>
-            <button
-              type="button"
-              className="planner-save"
-              disabled={!text.trim()}
-              onClick={preview}
-            >
-              检查并预览
-            </button>
-          </fieldset>
+          {!plan && (
+            <fieldset disabled={busy}>
+              <p>选择 .ics 或 .json 文件，也可以粘贴日程内容。</p>
+              <div className="calendar-import-tools">
+                <label className="calendar-file-label">
+                  <Upload size={16} />
+                  选择文件
+                  <input
+                    type="file"
+                    aria-label="选择日程文件"
+                    accept=".ics,.json,text/calendar,application/json"
+                    onChange={(e) => void read(e.target.files?.[0])}
+                  />
+                </label>
+                <button type="button" onClick={download}>
+                  <Download size={16} />
+                  下载规划模板
+                </button>
+              </div>
+              <textarea
+                aria-label="日程规划内容"
+                rows={7}
+                value={text}
+                placeholder="粘贴 JSON 或 ICS 内容"
+                onChange={(e) => {
+                  setText(e.target.value);
+                  setPlan(null);
+                  setError("");
+                }}
+              />
+              <p className="calendar-local-hint">
+                最多 500 项／2 MB。重复标识自动跳过；不会覆盖已有安排。JSON
+                全天结束日期为不包含的下一天。
+              </p>
+            </fieldset>
+          )}
           {error && <p role="alert">{error}</p>}
           {plan && (
             <section className="calendar-import-preview" aria-label="导入预览">
-              <h3>{plan.items.length} 项安排</h3>
+              <h3>预览 · {plan.items.length} 项安排</h3>
               {plan.warnings.map((warning) => (
                 <p key={warning} className="calendar-import-warning">
                   {warning}
@@ -217,13 +208,34 @@ export function CalendarImportDialog({
             <button className="planner-save" onClick={onClose}>
               完成
             </button>
+          ) : plan ? (
+            <>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setPlan(null);
+                  setError("");
+                }}
+              >
+                返回编辑
+              </button>
+              <button
+                className="planner-save"
+                disabled={!plan || busy}
+                onClick={() => void save()}
+              >
+                {busy ? "处理中…" : "确认导入"}
+              </button>
+            </>
           ) : (
             <button
+              type="button"
               className="planner-save"
-              disabled={!plan || busy}
-              onClick={() => void save()}
+              disabled={busy || !text.trim()}
+              onClick={preview}
             >
-              {busy ? "处理中…" : "确认导入"}
+              检查并预览
             </button>
           )}
         </footer>

@@ -27,6 +27,7 @@ import {
 } from "@dnd-kit/core";
 import { DayPicker, type WeekNumberProps } from "@daypicker/react";
 import { zhCN } from "@daypicker/react/locale";
+import { Popover } from "@base-ui/react/popover";
 import {
   ChevronLeft,
   ChevronRight,
@@ -36,6 +37,7 @@ import {
   List,
   SlidersHorizontal,
   Upload,
+  Ellipsis,
 } from "lucide-react";
 import {
   addTodoDays,
@@ -68,6 +70,7 @@ import { CalendarEventEditor } from "./CalendarEventEditor";
 import { CalendarTodoEditor } from "./CalendarTodoEditor";
 import type { PlannerTypeActions } from "./PlannerTypeField";
 import { CalendarTimeline } from "./CalendarCanvas";
+import type { TodoFilter } from "./TodoWorkspace";
 import "@daypicker/react/style.css";
 import "./calendar-todo-view.css";
 import "./calendar-studio.css";
@@ -129,6 +132,8 @@ export function CalendarTodoView({
   todos: suppliedTodos,
   todoRecords,
   selectedTodos,
+  todoStatus,
+  onTodoStatusChange,
   onMonthChange,
   onDateChange,
   onCreate,
@@ -160,6 +165,8 @@ export function CalendarTodoView({
   todos: Todo[];
   todoRecords?: Todo[];
   selectedTodos: Todo[];
+  todoStatus: TodoFilter;
+  onTodoStatusChange(value: TodoFilter): void;
   onMonthChange(value: string): void;
   onDateChange(value: string): void;
   onCreate?(): void;
@@ -174,6 +181,10 @@ export function CalendarTodoView({
   const viewToday = calendarWallTime(now, timeZone).slice(0, 10);
   const [importOpen, setImportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [toolsContainer, setToolsContainer] = useState<HTMLElement | null>(
+    null,
+  );
   const [hourHeight, setHourHeight] = useState(60);
   const [scale, setScale] = useState<Scale>("month");
   const [expandedFrom, setExpandedFrom] = useState<{
@@ -434,8 +445,26 @@ export function CalendarTodoView({
     if (next.slice(0, 7) !== month.slice(0, 7))
       onMonthChange(`${next.slice(0, 7)}-01`);
   }
-  function navigate(delta: number) {
-    select(addTodoDays(date, delta));
+  const period = { day: "一天", week: "一周", month: "一个月", year: "一年" }[
+    scale
+  ];
+  function adjacentDate(delta: number) {
+    if (scale === "day" || scale === "week")
+      return addTodoDays(date, delta * (scale === "week" ? 7 : 1));
+    const day = calendarDay(date);
+    const target = new Date(
+      day.getFullYear(),
+      day.getMonth() + delta * (scale === "year" ? 12 : 1),
+      1,
+      12,
+    );
+    const lastDay = new Date(
+      target.getFullYear(),
+      target.getMonth() + 1,
+      0,
+    ).getDate();
+    target.setDate(Math.min(day.getDate(), lastDay));
+    return calendarDate(target);
   }
   async function move(event: DragEndEvent) {
     const data = event.active.data.current,
@@ -672,53 +701,108 @@ export function CalendarTodoView({
         >
           <List size={20} />
         </button>
-        {onSavePreferences && (
-          <button
-            type="button"
-            className="calendar-list-toggle"
-            aria-label="日历显示与默认设置"
-            aria-pressed={settingsOpen}
-            onClick={() => setSettingsOpen(true)}
+        {(onSavePreferences || onImportPlan) && (
+          <Popover.Root
+            open={toolsOpen}
+            onOpenChange={(open) => {
+              if (open)
+                setToolsContainer(
+                  root.current?.closest<HTMLElement>(".workspace-app") ?? null,
+                );
+              setToolsOpen(open);
+            }}
           >
-            <SlidersHorizontal size={20} />
-          </button>
+            <Popover.Trigger
+              className="calendar-list-toggle"
+              aria-label="更多日历操作"
+            >
+              <Ellipsis size={20} />
+            </Popover.Trigger>
+            <Popover.Portal container={toolsContainer ?? undefined}>
+              <Popover.Positioner
+                sideOffset={8}
+                collisionPadding={12}
+                className="calendar-tools-positioner"
+              >
+                <Popover.Popup
+                  className="calendar-tools-menu"
+                  aria-label="更多日历操作"
+                >
+                  {onSavePreferences && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setToolsOpen(false);
+                        setSettingsOpen(true);
+                      }}
+                    >
+                      <SlidersHorizontal size={16} />
+                      日历显示与默认设置
+                    </button>
+                  )}
+                  {onImportPlan && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setToolsOpen(false);
+                        setImportOpen(true);
+                      }}
+                    >
+                      <Upload size={16} />
+                      导入日程规划
+                    </button>
+                  )}
+                </Popover.Popup>
+              </Popover.Positioner>
+            </Popover.Portal>
+          </Popover.Root>
         )}
-        {onImportPlan && (
-          <button
-            type="button"
-            className="calendar-list-toggle"
-            aria-label="导入日程规划"
-            onClick={() => setImportOpen(true)}
-          >
-            <Upload size={20} />
-          </button>
-        )}
-        <label className="calendar-search">
-          <Search size={17} />
-          <input
-            type="search"
-            aria-label="搜索日历"
-            placeholder="搜索日程与待办"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          {query && (
-            <button aria-label="清除日历搜索" onClick={() => setQuery("")}>
-              <X size={16} />
-            </button>
+        <div
+          className="calendar-find-tools"
+          role="group"
+          aria-label="搜索和筛选安排"
+        >
+          <label className="calendar-search">
+            <Search size={17} />
+            <input
+              type="search"
+              aria-label="搜索日历"
+              placeholder="搜索日程与待办"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            {query && (
+              <button aria-label="清除日历搜索" onClick={() => setQuery("")}>
+                <X size={16} />
+              </button>
+            )}
+          </label>
+          <div className="calendar-entry-filter">
+            <WorkspaceSelect<"all" | "events" | "todos">
+              label="显示安排"
+              value={entryKind}
+              onChange={setEntryKind}
+              options={[
+                { value: "all", label: "全部安排" },
+                { value: "events", label: "只看日程" },
+                { value: "todos", label: "只看待办" },
+              ]}
+            />
+          </div>
+          {entryKind !== "events" && (
+            <div className="calendar-entry-filter">
+              <WorkspaceSelect<TodoFilter>
+                label="当天待办状态"
+                value={todoStatus}
+                onChange={onTodoStatusChange}
+                options={[
+                  { value: "all", label: "待办状态" },
+                  { value: "open", label: "未完成" },
+                  { value: "done", label: "已完成" },
+                ]}
+              />
+            </div>
           )}
-        </label>
-        <div className="calendar-entry-filter">
-          <WorkspaceSelect<"all" | "events" | "todos">
-            label="显示安排"
-            value={entryKind}
-            onChange={setEntryKind}
-            options={[
-              { value: "all", label: "全部安排" },
-              { value: "events", label: "只看日程" },
-              { value: "todos", label: "只看待办" },
-            ]}
-          />
         </div>
       </div>
       <div className="calendar-month-toolbar">
@@ -754,10 +838,10 @@ export function CalendarTodoView({
         </div>
         <div className="calendar-month-controls">
           <button
-            aria-label="前一天"
-            title="前一天"
-            disabled={date <= "1900-01-01"}
-            onClick={() => navigate(-1)}
+            aria-label={`前${period}`}
+            title={`前${period}`}
+            disabled={adjacentDate(-1) < "1900-01-01"}
+            onClick={() => select(adjacentDate(-1))}
           >
             <ChevronLeft size={18} />
           </button>
@@ -770,10 +854,10 @@ export function CalendarTodoView({
             今天
           </button>
           <button
-            aria-label="后一天"
-            title="后一天"
-            disabled={date >= "2100-12-31"}
-            onClick={() => navigate(1)}
+            aria-label={`后${period}`}
+            title={`后${period}`}
+            disabled={adjacentDate(1) > "2100-12-31"}
+            onClick={() => select(adjacentDate(1))}
           >
             <ChevronRight size={18} />
           </button>
@@ -1001,6 +1085,7 @@ export function CalendarTodoView({
                           }}
                         >
                           {i + 1}月
+                          <ChevronRight size={16} aria-hidden="true" />
                         </button>
                         <DayPicker
                           locale={zhCN}

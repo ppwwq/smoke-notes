@@ -268,9 +268,6 @@
   background: #eae5dd;
   color: #312b25;
 }
-.workspace-app .todo-planner .planner-filter-bar .arrange-todos {
-  margin-left: auto;
-}
 .workspace-app .planner-feedback-row {
   display: flex;
   align-items: center;
@@ -468,9 +465,64 @@
 .workspace-app .settings-todo-planning,
 .workspace-app .settings-quick-help {
   background: var(--surface-soft);
+  border-radius: 12px;
 }
-.workspace-app .settings-todo-planning .planner-disclosure-body {
-  padding: 0 14px 14px;
+.workspace-app .settings-quick-help {
+  margin-top: 8px;
+}
+.workspace-app :is(.settings-todo-planning, .settings-quick-help) > summary {
+  padding-inline: 16px;
+  gap: 8px;
+}
+.workspace-app
+  :is(.settings-todo-planning, .settings-quick-help)
+  > summary::before {
+  order: 1;
+  margin-inline-start: auto;
+}
+.workspace-app .settings-todo-planning .settings-disclosure-value {
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+}
+.workspace-app .settings-todo-planning > summary::before {
+  margin-inline-start: 0;
+}
+.workspace-app
+  :is(.settings-todo-planning, .settings-quick-help)
+  .planner-disclosure-body {
+  padding: 0 16px 16px;
+}
+.workspace-app .planner-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.workspace-app .planner-list-heading .arrange-todos {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.workspace-app .planner-list-heading .arrange-todos:hover {
+  background: var(--surface-soft);
+}
+.workspace-app .planner-list-heading .arrange-todos[aria-pressed="true"] {
+  border-color: var(--line);
+  background: var(--surface-soft);
+}
+.workspace-app .planner-list-heading .arrange-todos:focus-visible {
+  outline: 2px solid #7359b5;
+  outline-offset: 2px;
 }
 .workspace-app .settings-todo-planning label {
   display: grid;

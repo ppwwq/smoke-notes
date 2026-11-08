@@ -436,7 +436,12 @@ describe("compact formatting", () => {
         onFormatClose={close}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "字体颜色" }));
+    fireEvent.click(screen.getByRole("button", { name: "颜色" }));
+    expect(screen.getByRole("button", { name: "字体颜色" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "荧光标注" })).toBeVisible();
     expect(close).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "清除字体颜色" }));
     expect(close).toHaveBeenCalledOnce();

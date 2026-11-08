@@ -281,3 +281,8 @@
     display: none;
   }
 }
+.note-result-copy mark {
+  color: inherit;
+  background: #e6dcfb;
+  border-radius: 2px;
+}

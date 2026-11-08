@@ -71,6 +71,30 @@
   background: #68764d;
   border-radius: 10px;
 }
+.workspace-app .todo-planner .todo-hero:has(> .planner-progress-summary) {
+  padding-inline-end: 0;
+}
+.workspace-app .planner-progress-summary {
+  flex: 0 0 clamp(112px, 23vw, 192px);
+  align-self: start;
+  margin: 0;
+  padding: 8px 12px 12px;
+  border-radius: 12px;
+}
+.planner-progress-summary strong {
+  font-size: 18px;
+}
+.planner-progress-summary progress {
+  margin-top: 4px;
+}
+@media (max-width: 360px) {
+  .workspace-app[data-web-background]
+    .todo-planner
+    .todo-hero:has(> .planner-progress-summary)
+    h1 {
+    font-size: 22px;
+  }
+}
 .planner-navigation {
   display: flex;
   align-items: center;

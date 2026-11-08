@@ -193,7 +193,9 @@ export function SmokeNotesApp({
   const [createMode, setCreateMode] = useState<"note" | "todo" | "notebook">(
     "note",
   );
-  const [showAllTodosRequest, setShowAllTodosRequest] = useState(0);
+  const [todoViewRequest, setTodoViewRequest] = useState<{
+    view: "today" | "all";
+  } | null>(null);
   const [calendarCreateDate, setCalendarCreateDate] = useState<string | null>(
     null,
   );
@@ -527,7 +529,7 @@ export function SmokeNotesApp({
 
   async function createWorkspaceNote(
     kind: NoteKind,
-    notebookId: string,
+    notebookId: string | null,
     body = "",
   ) {
     if (creatingRef.current) return;
@@ -539,7 +541,7 @@ export function SmokeNotesApp({
         body,
         kind,
       });
-      await refreshAfterMutation(notebookId);
+      await refreshAfterMutation(note.notebookId);
       setView("notes");
       setNotebookCollectionOpen(false);
       setNotesExpanded(true);
@@ -769,6 +771,7 @@ export function SmokeNotesApp({
           {notebookCollectionOpen ? (
             <WebNotebookCollection
               notebooks={notebooks}
+              notebookNotes={notebookNotes}
               onSelect={(id) => {
                 setNotebookCollectionOpen(false);
                 void selectNotebook(id);
@@ -856,7 +859,7 @@ export function SmokeNotesApp({
                 setCreateMode("todo");
                 setCreateOpen(true);
               }}
-              showAllRequest={showAllTodosRequest}
+              viewRequest={todoViewRequest}
               onSetStatus={async (id, status) => {
                 await repository.setTodoStatus(id, status);
                 await refreshAfterMutation(selectedNotebookId);
@@ -1249,7 +1252,7 @@ export function SmokeNotesApp({
                 setNotebookCollectionOpen(index === 2);
                 if (index === 0) setView("notes");
                 if (index === 1) {
-                  setShowAllTodosRequest(0);
+                  setTodoViewRequest(null);
                   void showTodos();
                 }
               }}
@@ -1267,15 +1270,30 @@ export function SmokeNotesApp({
           }
           open={createOpen}
           onOpenChange={(open) => {
-            if (open && view === "todos")
-              setPlannerCreateDate(calendarCreateDate ?? todoToday);
+            if (
+              open &&
+              !notebookCollectionOpen &&
+              view === "todos" &&
+              calendarCreateDate
+            )
+              setPlannerCreateDate(calendarCreateDate);
             else setCreateOpen(open);
           }}
           onArrange={() => {
             setCreateOpen(false);
             setPlannerCreateDate(calendarCreateDate ?? todoToday);
           }}
-          triggerLabel={view === "todos" ? "新建安排" : undefined}
+          triggerLabel={
+            !notebookCollectionOpen && view === "todos"
+              ? calendarCreateDate
+                ? "新建安排"
+                : "新增待办"
+              : undefined
+          }
+          triggerText={notebookCollectionOpen ? "新建便签本" : undefined}
+          quickTodoOnly={
+            !notebookCollectionOpen && view === "todos" && !calendarCreateDate
+          }
           mode={createMode}
           onModeChange={setCreateMode}
           allowNotebook={notebookCollectionOpen}
@@ -1302,11 +1320,13 @@ export function SmokeNotesApp({
             await repository.createTodo(text, options ?? {});
             await refreshAfterMutation(selectedNotebookId);
           }}
-          onShowTodos={() => {
+          onShowTodos={(date) => {
             setNotebookCollectionOpen(false);
             setTodoFilter("all");
             if (!calendarCreateDate || view !== "todos")
-              setShowAllTodosRequest((value) => value + 1);
+              setTodoViewRequest({
+                view: date === todoToday ? "today" : "all",
+              });
             void showTodos();
           }}
         />

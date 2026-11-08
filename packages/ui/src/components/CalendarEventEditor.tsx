@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { X, Trash2, Copy, Check } from "lucide-react";
+import { X, Trash2, Copy } from "lucide-react";
 import {
   addTodoDays,
   calendarMinute,
@@ -300,7 +300,7 @@ export function CalendarEventEditor({
                 aria-busy={busy}
                 disabled={busy || !fields.title.trim()}
               >
-                {busy ? <span>…</span> : <Check size={21} />}
+                {busy ? "保存中…" : "保存"}
               </button>
             )}
           </header>
@@ -499,16 +499,6 @@ export function CalendarEventEditor({
                 />
               )}
             </CalendarScheduleDisclosure>
-            <label>
-              地点
-              <input
-                aria-label="日程地点"
-                value={fields.location}
-                maxLength={500}
-                placeholder="地点或会议室"
-                onChange={(e) => change({ location: e.target.value })}
-              />
-            </label>
             <PlannerTypeField
               {...typeActions}
               value={fields.typeId}
@@ -520,27 +510,49 @@ export function CalendarEventEditor({
                 })
               }
             />
-            <label>
-              链接
-              <input
-                aria-label="日程链接"
-                type="url"
-                value={fields.url}
-                maxLength={2000}
-                placeholder="https://"
-                onChange={(e) => change({ url: e.target.value })}
-              />
-            </label>
-            <label>
-              备注
-              <textarea
-                aria-label="日程备注"
-                rows={3}
-                value={fields.notes}
-                maxLength={4000}
-                onChange={(e) => change({ notes: e.target.value })}
-              />
-            </label>
+            <details
+              className="calendar-composer-options"
+              open={!composing || undefined}
+            >
+              <summary>更多选项</summary>
+              <div className="calendar-composer-extra-fields">
+                <label>
+                  地点
+                  <input
+                    aria-label="日程地点"
+                    value={fields.location}
+                    maxLength={500}
+                    placeholder="地点或会议室"
+                    onChange={(e) => change({ location: e.target.value })}
+                  />
+                </label>
+                <label>
+                  链接
+                  <input
+                    aria-label="日程链接"
+                    type="url"
+                    value={fields.url}
+                    maxLength={2000}
+                    placeholder="https://"
+                    onInvalid={(e) => {
+                      const options = e.currentTarget.closest("details");
+                      if (options) options.open = true;
+                    }}
+                    onChange={(e) => change({ url: e.target.value })}
+                  />
+                </label>
+                <label>
+                  备注
+                  <textarea
+                    aria-label="日程备注"
+                    rows={3}
+                    value={fields.notes}
+                    maxLength={4000}
+                    onChange={(e) => change({ notes: e.target.value })}
+                  />
+                </label>
+              </div>
+            </details>
           </fieldset>
           {error && <p role="alert">{error}</p>}
           {!composing && (

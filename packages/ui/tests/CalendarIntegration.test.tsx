@@ -46,6 +46,16 @@ async function openCalendar() {
   );
   fireEvent.click(await screen.findByRole("button", { name: "日历" }));
 }
+async function openTypeManager() {
+  await userEvent.click(screen.getByRole("combobox", { name: "类型标签" }));
+  await userEvent.click(
+    await screen.findByRole("option", { name: "编辑类型标签" }),
+  );
+}
+function openCalendarTool(name: string) {
+  fireEvent.click(screen.getByRole("button", { name: "更多日历操作" }));
+  fireEvent.click(screen.getByRole("button", { name }));
+}
 it("opens calendar creation from the arrangement entry beside notes", async () => {
   render(<SmokeNotesApp repository={repo} platform="web" />);
   await screen.findByText("日历测试", {
@@ -125,13 +135,18 @@ it("hides the FAB while viewing and editing an existing event", async () => {
   fireEvent.click(within(dialog).getByRole("button", { name: "关闭编辑日程" }));
   await waitFor(() => expect(trigger).toBeVisible());
 });
-it("keeps one global add entry and moves one day across month boundaries in every calendar scale", async () => {
+it("keeps one global add entry and steps by the visible calendar period", async () => {
   await openCalendar();
   expect(
     document.querySelector(".calendar-studio-top .calendar-new"),
   ).toBeNull();
   expect(screen.queryByRole("button", { name: "新建日程" })).toBeNull();
-  for (const scale of ["日", "周", "月", "年"]) {
+  for (const [scale, unit, next] of [
+    ["日", "一天", "2026-10-21"],
+    ["周", "一周", "2026-10-27"],
+    ["月", "一个月", "2026-11-20"],
+    ["年", "一年", "2027-10-20"],
+  ]) {
     fireEvent.click(
       within(screen.getByRole("group", { name: "日历显示方式" })).getByRole(
         "button",
@@ -143,13 +158,13 @@ it("keeps one global add entry and moves one day across month boundaries in ever
         document.querySelector<HTMLElement>(".calendar-month-controls")!,
       ).getByRole("button", { name: "今天" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "后一天" }));
+    fireEvent.click(screen.getByRole("button", { name: `后${unit}` }));
     expect(
       screen
         .getByRole("region", { name: "选中日期的待办" })
         .querySelector("time"),
-    ).toHaveAttribute("datetime", "2026-10-21");
-    fireEvent.click(screen.getByRole("button", { name: "前一天" }));
+    ).toHaveAttribute("datetime", next);
+    fireEvent.click(screen.getByRole("button", { name: `前${unit}` }));
     expect(
       screen
         .getByRole("region", { name: "选中日期的待办" })
@@ -163,7 +178,7 @@ it("keeps one global add entry and moves one day across month boundaries in ever
     ),
   );
   fireEvent.click(screen.getByRole("button", { name: /2026年10月31日/ }));
-  fireEvent.click(screen.getByRole("button", { name: "后一天" }));
+  fireEvent.click(screen.getByRole("button", { name: "后一个月" }));
   expect(screen.getByRole("combobox", { name: "日历月份" })).toHaveTextContent(
     "11月",
   );
@@ -171,7 +186,7 @@ it("keeps one global add entry and moves one day across month boundaries in ever
   fireEvent.click(screen.getByRole("button", { name: "日期与时间" }));
   expect(
     screen.getByRole("button", { name: "日程开始日期" }),
-  ).toHaveTextContent("2026/11/01");
+  ).toHaveTextContent("2026/11/30");
   // This traverses all four views; shared CI runners can exceed the 5s default.
 }, 15000);
 it("creates events in the settings timezone without a timezone picker in the editor", async () => {
@@ -284,6 +299,7 @@ it("opens every compressed entry and expands a day with a return to its original
       { name: "周" },
     ),
   );
+  await user.click(screen.getByText(/时间轴缩放 ·/, { selector: "summary" }));
   await user.click(screen.getByRole("button", { name: "放大时间轴" }));
   await user.click(screen.getByRole("button", { name: "展开2026-10-21整天" }));
   expect(document.querySelectorAll(".calendar-time-column")).toHaveLength(1);
@@ -311,7 +327,7 @@ it("switches entry kinds without losing drafts, creates a labeled daily task and
   expect(screen.getByRole("textbox", { name: "待办内容" })).toHaveValue(
     "每日阅读",
   );
-  fireEvent.click(screen.getByRole("button", { name: "编辑类型标签" }));
+  await openTypeManager();
   expect(screen.queryByRole("textbox", { name: "类型名称" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "新增类型标签" }));
   expect(screen.getByRole("textbox", { name: "类型名称" })).toHaveFocus();
@@ -368,7 +384,7 @@ it("renames and removes a type from an existing event without deleting the event
     screen.getByRole("button", { name: "日程：会议，09:00–10:00" }),
   );
   fireEvent.click(screen.getByRole("button", { name: "编辑日程" }));
-  fireEvent.click(screen.getByRole("button", { name: "编辑类型标签" }));
+  await openTypeManager();
   fireEvent.click(screen.getByRole("button", { name: "编辑类型：工作" }));
   fireEvent.change(screen.getByRole("textbox", { name: "类型名称" }), {
     target: { value: "项目" },
@@ -381,7 +397,7 @@ it("renames and removes a type from an existing event without deleting the event
     "项目",
   );
   expect(screen.getByRole("textbox", { name: "日程标题" })).toHaveValue("会议");
-  fireEvent.click(screen.getByRole("button", { name: "编辑类型标签" }));
+  await openTypeManager();
   fireEvent.click(screen.getByRole("button", { name: "编辑类型：项目" }));
   fireEvent.click(screen.getByRole("button", { name: "删除标签" }));
   fireEvent.click(screen.getByRole("button", { name: "确认删除标签" }));
@@ -436,8 +452,8 @@ it("browses future repeats without writes, persists one completion, and respects
   });
   await openCalendar();
   const count = await db.todos.count();
-  fireEvent.click(screen.getByRole("button", { name: "后一天" }));
-  fireEvent.click(screen.getByRole("button", { name: "前一天" }));
+  fireEvent.click(screen.getByRole("button", { name: "后一个月" }));
+  fireEvent.click(screen.getByRole("button", { name: "前一个月" }));
   expect(await db.todos.count()).toBe(count);
   fireEvent.click(screen.getByRole("button", { name: /2026年10月23日/ }));
   fireEvent.click(screen.getByRole("checkbox", { name: "完成：每日读书" }));
@@ -644,7 +660,7 @@ it("persists visibility and defaults and applies them to new events without dele
   });
   await openCalendar();
   const user = userEvent.setup();
-  await user.click(screen.getByRole("button", { name: "日历显示与默认设置" }));
+  openCalendarTool("日历显示与默认设置");
   const dialog = screen.getByRole("dialog", { name: "日历显示与默认设置" });
   await user.click(within(dialog).getByRole("checkbox", { name: "学习" }));
   await user.click(within(dialog).getByRole("combobox", { name: "类型标签" }));
@@ -750,7 +766,7 @@ it("copies a single occurrence through calendar actions and pastes a reviewed dr
 });
 it("previews pasted planning, imports on confirmation, and reports duplicates", async () => {
   await openCalendar();
-  fireEvent.click(screen.getByRole("button", { name: "导入日程规划" }));
+  openCalendarTool("导入日程规划");
   const text = JSON.stringify({
     version: 1,
     events: [
@@ -779,7 +795,7 @@ it("previews pasted planning, imports on confirmation, and reports duplicates", 
       { name: "完成" },
     ),
   );
-  fireEvent.click(screen.getByRole("button", { name: "导入日程规划" }));
+  openCalendarTool("导入日程规划");
   fireEvent.change(
     await screen.findByRole("textbox", { name: "日程规划内容" }),
     { target: { value: text } },

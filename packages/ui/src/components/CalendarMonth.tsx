@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import {
   addTodoDays,
   getTodoDate,
@@ -73,8 +74,16 @@ export function CalendarMonth({
         );
         const rows = calendarSpanRows(events, todos, dates);
         const shown = rows.filter((row) => row.row < 4);
+        const lanes = shown.reduce(
+          (count, item) => Math.max(count, item.row + 1),
+          0,
+        );
         return (
-          <div className="calendar-month-week" key={dates[0]}>
+          <div
+            className="calendar-month-week"
+            key={dates[0]}
+            style={{ "--calendar-month-lanes": lanes } as CSSProperties}
+          >
             {showWeekNumbers && (
               <span
                 className="calendar-week-number"

@@ -1,10 +1,5 @@
 import type { Note, Notebook } from "@smoke-notes/core";
-import {
-  ArrowLeft,
-  ExternalLink,
-  FilePlus2,
-  Trash2,
-} from "../icons";
+import { ArrowLeft, ExternalLink, FilePlus2, Trash2 } from "../icons";
 import { SortableStack } from "./SortableStack";
 import { RecordActions } from "./RecordActions";
 import { NoteStacks, type NotebookNotes } from "./NoteStacks";
@@ -39,23 +34,11 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
   if (!props.notebook)
     return (
       <main className="empty-workspace">
-        <span className="empty-orbit">
+        <span className="empty-orbit" aria-hidden="true">
           <FilePlus2 size={28} />
         </span>
-        <p className="eyebrow">NO NOTEBOOK YET</p>
-        <h1>先建立一个便签本</h1>
-        <p>
-          {props.web
-            ? "在下方「便签本」中建立一个空间。工作、生活、灵感，都可以各有一处。"
-            : "左侧的「＋」是入口。工作、生活、灵感，都可以各有一处安静空间。"}
-        </p>
-        <button
-          type="button"
-          className="planner-empty-add"
-          onClick={props.onCreateRequest}
-        >
-          建立便签本与便签
-        </button>
+        <h1>写下第一张便签</h1>
+        <p>点「新建」，记下一个想法。</p>
       </main>
     );
 
@@ -70,7 +53,7 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
               onClick={props.onCollapse}
             >
               <ArrowLeft size={16} />
-              收起便签
+              返回所有便签
             </button>
           )}
           <h1>{collapsed ? "我的便签" : props.notebook.name}</h1>
@@ -90,6 +73,7 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
         <NoteFinderToolbar
           query={props.query ?? ""}
           onQueryChange={props.onQueryChange}
+          inNotebook={!collapsed}
         />
       )}
       {props.web && !collapsed && !finding && (

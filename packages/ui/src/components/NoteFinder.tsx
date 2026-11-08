@@ -2,8 +2,7 @@ import { useRef } from "react";
 import { Search, X, ArrowRight } from "lucide-react";
 import type { NotebookNotes } from "./NoteStacks";
 
-function findNotes(groups: NotebookNotes[], query: string) {
-  const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+function findNotes(groups: NotebookNotes[], terms: string[]) {
   return groups
     .flatMap(({ notebook, notes }) => notes.map((note) => ({ notebook, note })))
     .filter(({ notebook, note }) => {
@@ -18,12 +17,43 @@ function findNotes(groups: NotebookNotes[], query: string) {
     );
 }
 
+function matchedText(text: string, terms: string[], excerpt = false) {
+  const lower = text.toLocaleLowerCase();
+  const matches = terms
+    .map((term) => ({ index: lower.indexOf(term), length: term.length }))
+    .filter(({ index }) => index !== -1)
+    .sort((a, b) => a.index - b.index || b.length - a.length);
+  const start = excerpt ? Math.max(0, (matches[0]?.index ?? 0) - 24) : 0;
+  const end = excerpt ? Math.min(text.length, start + 96) : text.length;
+  let offset = start;
+  return (
+    <>
+      {start > 0 && "…"}
+      {matches.map(({ index, length }) => {
+        if (index < offset || index >= end) return null;
+        const preceding = text.slice(offset, index);
+        offset = Math.min(index + length, end);
+        return (
+          <span key={index}>
+            {preceding}
+            <mark>{text.slice(index, offset)}</mark>
+          </span>
+        );
+      })}
+      {text.slice(offset, end)}
+      {end < text.length && "…"}
+    </>
+  );
+}
+
 export function NoteFinderToolbar({
   query,
   onQueryChange,
+  inNotebook = false,
 }: {
   query: string;
   onQueryChange(value: string): void;
+  inNotebook?: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
   return (
@@ -34,7 +64,7 @@ export function NoteFinderToolbar({
           ref={input}
           type="search"
           aria-label="搜索所有便签"
-          placeholder="搜索标题、内容或便签本"
+          placeholder={inNotebook ? "搜索所有便签本" : "搜索标题、内容或便签本"}
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           onKeyDown={(event) => {
@@ -72,7 +102,10 @@ export function NoteFinderResults({
   onClear(): void;
   onOpen(id: string, notebookId: string): void;
 }) {
-  const results = findNotes(groups, query);
+  const terms = [
+    ...new Set(query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean)),
+  ];
+  const results = findNotes(groups, terms);
   return (
     <div className="note-finder-results">
       <p className="note-finder-count" role="status">
@@ -90,8 +123,12 @@ export function NoteFinderResults({
                 onClick={() => onOpen(note.id, notebook.id)}
               >
                 <span className="note-result-copy">
-                  <strong>{note.title || "无标题便签"}</strong>
-                  <span>{note.body || "空白便签"}</span>
+                  <strong>
+                    {matchedText(note.title || "无标题便签", terms)}
+                  </strong>
+                  <span>
+                    {matchedText(note.body || "空白便签", terms, true)}
+                  </span>
                   <small>
                     {notebook.name} ·{" "}
                     {note.kind === "todo" ? "清单便签" : "文字便签"}

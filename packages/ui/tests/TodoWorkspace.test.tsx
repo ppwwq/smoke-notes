@@ -5,6 +5,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { Todo } from "@smoke-notes/core";
@@ -31,6 +32,32 @@ function handlers() {
     onMove: vi.fn(async () => {}),
   };
 }
+it("keeps today's progress in the header of both todo lists", () => {
+  render(
+    <TodoWorkspace
+      web
+      today="2026-09-24"
+      todos={[
+        todo,
+        { ...todo, id: "done", text: "已完成事项", completed: true },
+        { ...todo, id: "old", updatedAt: "2026-09-23T12:00:00Z" },
+      ]}
+      {...handlers()}
+    />,
+  );
+  for (const [tab, title] of [
+    ["今天", "今天，慢慢完成"],
+    ["全部", "全部待办"],
+  ]) {
+    fireEvent.click(screen.getByRole("button", { name: tab }));
+    const heading = screen.getByRole("heading", { name: title });
+    const progress = within(heading.closest("header")!).getByRole("progressbar", {
+      name: "今天完成进度",
+    });
+    expect(progress).toHaveAttribute("value", "1");
+    expect(progress).toHaveAttribute("max", "2");
+  }
+});
 it("retains the user draft and displays a failure when saving fails", async () => {
   const callbacks = handlers();
   callbacks.onUpdate.mockRejectedValueOnce(new Error("storage unavailable"));

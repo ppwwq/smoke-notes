@@ -3,6 +3,7 @@ import { Layers, X } from "../icons";
 import {
   RecordValidationError,
   TEXT_LIMITS,
+  type Note,
   type Notebook,
 } from "@smoke-notes/core";
 import { SortableStack } from "./SortableStack";
@@ -13,6 +14,7 @@ import "./notebook-collection.css";
 
 interface Props {
   notebooks: Notebook[];
+  notebookNotes?: Record<string, Note[]>;
   onSelect(id: string): void;
   onRename(id: string, name: string): Promise<void>;
   onTrash(id: string): Promise<void>;
@@ -24,6 +26,7 @@ interface Props {
 }
 export function WebNotebookCollection({
   notebooks,
+  notebookNotes = {},
   onSelect,
   onRename,
   onTrash,
@@ -35,19 +38,40 @@ export function WebNotebookCollection({
   const [error, setError] = useState("");
   const pending = useRef(false);
   const tones = useNotebookTones(notebooks);
+  function cover(notebook: Notebook) {
+    const notes = notebookNotes[notebook.id] ?? [];
+    const updatedAt = notes.reduce(
+      (latest, note) => (note.updatedAt > latest ? note.updatedAt : latest),
+      notebook.updatedAt,
+    );
+    return (
+      <>
+        <strong>{notebook.name}</strong>
+        <span className="collection-card-bottom">
+          {notes.length} 张便签
+          <time dateTime={updatedAt}>
+            更新于{" "}
+            {new Date(updatedAt).toLocaleDateString("zh-CN", {
+              month: "short",
+              day: "numeric",
+            })}
+          </time>
+        </span>
+      </>
+    );
+  }
   return (
     <main className="web-notebook-collection">
       <header className="notes-board-header">
         <div>
-          <p className="eyebrow">A PLACE FOR EVERYTHING</p>
           <h1>便签本</h1>
-          <span>{notebooks.length} 个便签本 · 在这里分类、命名与整理</span>
+          <span>{notebooks.length} 个便签本</span>
         </div>
       </header>
-      <div className="web-section-heading">
-        <h2>全部便签本</h2>
-      </div>
-      <p className="collection-hint">点击进入 · 长按任意位置拖动排序</p>
+      <h2 className="sr-only">全部便签本</h2>
+      {notebooks.length > 1 && (
+        <p className="collection-hint">长按便签本可调整顺序</p>
+      )}
       <div id="notebook-collection-cards">
         <SortableStack
           wholeCard
@@ -56,23 +80,17 @@ export function WebNotebookCollection({
           items={notebooks}
           label={(book) => book.name}
           onMove={onMove}
-          renderDragOverlay={(notebook, index) => (
+          renderDragOverlay={(notebook) => (
             <div className="collection-drag-overlay" aria-hidden="true" inert>
               <div
                 className={`collection-card collection-tone-${tones[notebook.id]}`}
               >
-                <span className="collection-card-top">
-                  <span>NOTEBOOK / {String(index + 1).padStart(2, "0")}</span>
-                </span>
-                <strong>{notebook.name}</strong>
-                <span className="collection-card-bottom">
-                  打开这个空间<span>记录 · 整理 · 继续</span>
-                </span>
+                {cover(notebook)}
               </div>
             </div>
           )}
           className="collection-cards"
-          renderItem={(notebook, index) => (
+          renderItem={(notebook) => (
             <div className="collection-card-shell">
               <button
                 type="button"
@@ -81,13 +99,7 @@ export function WebNotebookCollection({
                 aria-label={`进入便签本：${notebook.name}`}
                 onClick={() => onSelect(notebook.id)}
               >
-                <span className="collection-card-top">
-                  <span>NOTEBOOK / {String(index + 1).padStart(2, "0")}</span>
-                </span>
-                <strong>{notebook.name}</strong>
-                <span className="collection-card-bottom">
-                  打开这个空间<span>记录 · 整理 · 继续</span>
-                </span>
+                {cover(notebook)}
               </button>
               <RecordActions
                 kind="便签本"
@@ -107,8 +119,8 @@ export function WebNotebookCollection({
       {!notebooks.length && (
         <div className="collection-empty">
           <Layers size={32} />
-          <h2>给想法一个落脚处。</h2>
-          <p>点击右下角「新增」，建立你的第一个便签本。</p>
+          <h2>还没有便签本</h2>
+          <p>点「新建便签本」为记录分类。</p>
         </div>
       )}
       {editing && (

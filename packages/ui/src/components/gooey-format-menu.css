@@ -14,10 +14,6 @@
   position: relative;
   isolation: isolate;
 }
-.gooey-format-hint {
-  font-size: 10px;
-  color: var(--muted);
-}
 .gooey-format-trigger {
   position: relative;
   display: flex;
@@ -86,6 +82,40 @@
 .workspace-app .gooey-format-control .format-status {
   display: none;
 }
+.workspace-app[data-web-background]
+  .gooey-format-control
+  .mark-palette-combined {
+  display: flex;
+  flex-direction: column;
+  inset-inline: auto 0;
+  width: max-content;
+}
+.mark-palette-combined .mark-swatch-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.workspace-app[data-web-background] .gooey-format-control .mark-kind-switch {
+  display: flex;
+  gap: 4px;
+}
+.workspace-app[data-web-background]
+  .gooey-format-control
+  .mark-kind-switch
+  button {
+  width: auto;
+  height: auto;
+  padding: 6px 8px;
+  color: var(--ink);
+  white-space: nowrap;
+  font-size: 12px;
+}
+.workspace-app[data-web-background]
+  .gooey-format-control
+  .mark-kind-switch
+  button[aria-pressed="true"] {
+  background: var(--surface-soft);
+}
 @keyframes format-unfurl {
   from {
     opacity: 0;
@@ -102,8 +132,26 @@
   .gooey-format-entry {
     padding-inline: 16px;
   }
-  .workspace-app[data-web-background] .gooey-format-control .format-toolbar {
-    width: 244px;
+  .workspace-app[data-web-background]
+    .progressive-editor
+    .gooey-format-control
+    .format-toolbar {
+    max-width: calc(100vw - 32px);
+    gap: 2px;
+    padding: 8px;
+  }
+  .workspace-app[data-web-background]
+    .gooey-format-control
+    .format-toolbar
+    > button,
+  .workspace-app[data-web-background]
+    .gooey-format-control
+    .format-toolbar
+    > .mark-control
+    > button {
+    width: 42px;
+    min-width: 42px;
+    min-height: 44px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

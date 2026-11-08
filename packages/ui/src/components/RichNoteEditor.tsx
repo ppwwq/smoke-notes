@@ -179,6 +179,7 @@ export const RichNoteEditor = forwardRef<
     onSave,
   });
   const [markMenu, setMarkMenu] = useState<"text" | "highlight" | null>(null);
+  const combinedMarks = compact || progressive;
   const updateDraft = useCallback((changes: Partial<NoteEdit>) => {
     const session = sessionRef.current;
     session.draft = { ...session.draft, ...changes };
@@ -677,98 +678,105 @@ export const RichNoteEditor = forwardRef<
           >
             <List size={17} />
           </button>
-          <span className="format-divider" />
           <div className="mark-control">
-            <button
-              type="button"
-              aria-label="字体颜色"
-              aria-expanded={markMenu === "text"}
-              className={markMenu === "text" ? "active" : ""}
-              onClick={() => setMarkMenu(markMenu === "text" ? null : "text")}
-            >
-              <Palette size={17} />
-            </button>
-            {markMenu === "text" && (
-              <div className="mark-palette" aria-label="选择字体颜色">
-                {TEXT_COLORS.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    aria-label={`字体色 ${item}`}
-                    style={{ "--swatch": item } as CSSProperties}
-                    onClick={() => {
-                      editor
-                        .chain()
-                        .focus(undefined, { scrollIntoView: !compact })
-                        .setColor(item)
-                        .run();
-                      setMarkMenu(null);
-                    }}
-                  />
-                ))}
+            {combinedMarks ? (
+              <button
+                type="button"
+                aria-label="颜色"
+                aria-expanded={markMenu !== null}
+                className={markMenu ? "active" : ""}
+                onClick={() => setMarkMenu(markMenu ? null : "text")}
+              >
+                <Palette size={17} />
+              </button>
+            ) : (
+              <>
                 <button
                   type="button"
-                  className="clear-mark"
-                  aria-label="清除字体颜色"
-                  onClick={() => {
-                    editor
-                      .chain()
-                      .focus(undefined, { scrollIntoView: !compact })
-                      .unsetColor()
-                      .run();
-                    setMarkMenu(null);
-                  }}
+                  aria-label="字体颜色"
+                  aria-expanded={markMenu === "text"}
+                  className={markMenu === "text" ? "active" : ""}
+                  onClick={() =>
+                    setMarkMenu(markMenu === "text" ? null : "text")
+                  }
                 >
-                  ×
+                  <Palette size={17} />
                 </button>
-              </div>
+                <button
+                  type="button"
+                  aria-label="荧光标注"
+                  aria-expanded={markMenu === "highlight"}
+                  className={markMenu === "highlight" ? "active" : ""}
+                  onClick={() =>
+                    setMarkMenu(markMenu === "highlight" ? null : "highlight")
+                  }
+                >
+                  <Highlighter size={17} />
+                </button>
+              </>
             )}
-          </div>
-          <div className="mark-control">
-            <button
-              type="button"
-              aria-label="荧光标注"
-              aria-expanded={markMenu === "highlight"}
-              className={markMenu === "highlight" ? "active" : ""}
-              onClick={() =>
-                setMarkMenu(markMenu === "highlight" ? null : "highlight")
-              }
-            >
-              <Highlighter size={17} />
-            </button>
-            {markMenu === "highlight" && (
-              <div className="mark-palette" aria-label="选择荧光颜色">
-                {HIGHLIGHT_COLORS.map((item) => (
+            {markMenu && (
+              <div
+                className={`mark-palette${combinedMarks ? " mark-palette-combined" : ""}`}
+                aria-label={
+                  markMenu === "text" ? "选择字体颜色" : "选择荧光颜色"
+                }
+              >
+                {combinedMarks && (
+                  <div className="mark-kind-switch">
+                    <button
+                      type="button"
+                      aria-pressed={markMenu === "text"}
+                      onClick={() => setMarkMenu("text")}
+                    >
+                      字体颜色
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={markMenu === "highlight"}
+                      onClick={() => setMarkMenu("highlight")}
+                    >
+                      荧光标注
+                    </button>
+                  </div>
+                )}
+                <div className="mark-swatch-row">
+                  {(markMenu === "text" ? TEXT_COLORS : HIGHLIGHT_COLORS).map(
+                    (item) => (
+                      <button
+                        key={item}
+                        type="button"
+                        aria-label={`${markMenu === "text" ? "字体色" : "荧光色"} ${item}`}
+                        style={{ "--swatch": item } as CSSProperties}
+                        onClick={() => {
+                          const command = editor
+                            .chain()
+                            .focus(undefined, { scrollIntoView: !compact });
+                          if (markMenu === "text") command.setColor(item).run();
+                          else command.setHighlight({ color: item }).run();
+                          setMarkMenu(null);
+                        }}
+                      />
+                    ),
+                  )}
                   <button
-                    key={item}
                     type="button"
-                    aria-label={`荧光色 ${item}`}
-                    style={{ "--swatch": item } as CSSProperties}
+                    className="clear-mark"
+                    aria-label={
+                      markMenu === "text" ? "清除字体颜色" : "清除荧光标注"
+                    }
                     onClick={() => {
-                      editor
+                      const command = editor
                         .chain()
-                        .focus(undefined, { scrollIntoView: !compact })
-                        .setHighlight({ color: item })
-                        .run();
+                        .focus(undefined, { scrollIntoView: !compact });
+                      if (markMenu === "text") command.unsetColor().run();
+                      else command.unsetHighlight().run();
                       setMarkMenu(null);
                     }}
-                  />
-                ))}
-                <button
-                  type="button"
-                  className="clear-mark"
-                  aria-label="清除荧光标注"
-                  onClick={() => {
-                    editor
-                      .chain()
-                      .focus(undefined, { scrollIntoView: !compact })
-                      .unsetHighlight()
-                      .run();
-                    setMarkMenu(null);
-                  }}
-                >
-                  ×
-                </button>
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
             )}
           </div>

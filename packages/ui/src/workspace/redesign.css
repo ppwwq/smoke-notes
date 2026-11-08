@@ -1042,7 +1042,16 @@
 }
 .workspace-app[data-web-background] .web-background-option:has(input:checked) {
   border-color: #6d5fa3;
-  background: #ece8ff;
+}
+.workspace-app[data-web-background] .background-selected {
+  margin-inline-start: auto;
+  color: #5c498f;
+  visibility: hidden;
+}
+.workspace-app[data-web-background]
+  .web-background-option:has(input:checked)
+  .background-selected {
+  visibility: visible;
 }
 .workspace-app[data-web-background] .background-preview-default {
   background: #fbfaf8;
@@ -2166,11 +2175,6 @@
   background: var(--lime);
   border-color: var(--lime);
 }
-.workspace-app .filter-bar .arrange-todos {
-  margin-left: auto;
-  border: 1px solid var(--line);
-  white-space: nowrap;
-}
 .workspace-app .todo-row {
   grid-template-columns: 44px minmax(0, 1fr) 44px;
 }
@@ -2196,21 +2200,18 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  min-height: 92px;
-  padding: 20px;
+  min-height: 72px;
+  padding: 16px;
   border: 0;
-  border-radius: 22px;
+  border-radius: 14px;
   text-align: left;
   background: var(--surface-soft);
   color: var(--ink);
 }
-.workspace-app .settings-entry:first-child {
-  background: var(--lilac);
-}
 .workspace-app .settings-entry > span {
   flex: 1;
   display: grid;
-  gap: 7px;
+  gap: 4px;
 }
 .workspace-app .settings-entry strong {
   font-size: 16px;

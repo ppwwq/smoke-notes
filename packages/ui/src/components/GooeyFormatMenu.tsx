@@ -69,7 +69,6 @@ export function GooeyFormatMenu({
         </button>
         {children}
       </div>
-      <span className="gooey-format-hint">自动保存到本机</span>
     </div>
   );
 }

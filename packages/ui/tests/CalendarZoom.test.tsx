@@ -29,6 +29,7 @@ function setup() {
     );
   }
   const host = render(<Harness />);
+  fireEvent.click(screen.getByText(/时间轴缩放 ·/, { selector: "summary" }));
   const node = host.container.querySelector<HTMLDivElement>(
     ".calendar-timeline-scroll",
   )!;

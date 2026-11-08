@@ -20,7 +20,7 @@ export function TodoComposer({
   defaultDate?: string | undefined;
   active?: boolean;
   onCreate(text: string, options?: TodoCreateOptions): Promise<void>;
-  onShowTodos?(): void;
+  onShowTodos?(date: string): void;
 }) {
   const [text, setText] = useState("");
   const [date, setDate] = useState("");
@@ -30,7 +30,10 @@ export function TodoComposer({
   const [customDate, setCustomDate] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [feedback, setFeedback] = useState("");
+  const [feedback, setFeedback] = useState<{
+    date: string;
+    message: string;
+  } | null>(null);
   const revision = useRef(0);
   const pending = useRef(false);
   const input = useRef<HTMLInputElement>(null);
@@ -46,7 +49,7 @@ export function TodoComposer({
     pending.current = true;
     setBusy(true);
     setError("");
-    setFeedback("");
+    setFeedback(null);
     const savedRevision = revision.current;
     try {
       await onCreate(text, {
@@ -67,9 +70,10 @@ export function TodoComposer({
         setDraftDate("");
         setDate("");
       }
-      setFeedback(
-        `已添加到${chosenDate === today ? "今天" : chosenDate === addTodoDays(today, 1) ? "明天" : chosenDate}${repeat === "once" ? "" : "，将按规则重复"}。`,
-      );
+      setFeedback({
+        date: chosenDate,
+        message: `已添加到${chosenDate === today ? "今天" : chosenDate === addTodoDays(today, 1) ? "明天" : chosenDate}${repeat === "once" ? "" : "，将按规则重复"}。`,
+      });
       // Do not steal focus back if the panel was closed while the write finished.
       if (
         input.current?.getClientRects().length &&
@@ -214,9 +218,9 @@ export function TodoComposer({
       <div className="create-result" role="status" aria-label="新建待办反馈">
         {feedback && (
           <>
-            <span>{feedback}</span>
+            <span>{feedback.message}</span>
             {onShowTodos && (
-              <button type="button" onClick={onShowTodos}>
+              <button type="button" onClick={() => onShowTodos(feedback.date)}>
                 查看待办
               </button>
             )}

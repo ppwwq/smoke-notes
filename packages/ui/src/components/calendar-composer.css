@@ -75,8 +75,22 @@
   cursor: pointer;
 }
 .calendar-event-editor.calendar-composer > header > .calendar-composer-save {
+  flex-basis: auto;
+  width: auto;
+  padding-inline: 12px;
+  border-radius: 12px;
   background: var(--ink);
   color: var(--canvas);
+}
+.calendar-composer-options > summary {
+  padding: 12px 0;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+}
+.calendar-composer-extra-fields {
+  display: grid;
+  gap: 16px;
 }
 .calendar-event-editor.calendar-composer
   > header
