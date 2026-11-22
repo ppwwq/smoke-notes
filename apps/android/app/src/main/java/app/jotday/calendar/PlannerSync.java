@@ -77,15 +77,7 @@ final class PlannerSync {
                 after=rows.getJSONObject(rows.length()-1).getString("id");
             }
         }
-        // Existing dated todos use their established contract. Display bodies and
-        // planning unchanged; calendar links supply label/time metadata.
-        String after="00000000-0000-0000-0000-000000000000";
-        while(true) {
-            JSONArray rows=(JSONArray)cloud.get("todos?workspace_id=eq."+store.workspace+"&id=gt."+after+"&order=id&limit=500");
-            if(rows.length()==0) break;
-            for(int i=0;i<rows.length();i++) store.put("todo",rows.getJSONObject(i));
-            after=rows.getJSONObject(rows.length()-1).getString("id");
-        }
+        // Editable todos are synchronized by WorkspaceSync; never overwrite its queue.
         scan();
     }
 }

@@ -30,6 +30,9 @@ public class MainActivity extends Activity {
     private boolean syncing,foreground;
     private String syncText="仅在本机保存";
     private float zoom=1f;
+    private String tab="notes";
+    private String calendarView="month",calendarQuery="";
+    private WorkspaceScreens screens;
     private final Runnable tick=new Runnable() { public void run() { if(foreground) { synchronize();handler.postDelayed(this,15000); } } };
 
     @Override public void onCreate(Bundle saved) {
@@ -37,12 +40,14 @@ public class MainActivity extends Activity {
         String workspace=prefs.getString("workspace",null);
         if(workspace==null) {workspace=UUID.randomUUID().toString();prefs.edit().putString("workspace",workspace).commit();}
         store=new PlannerStore(this,workspace);zoom=prefs.getFloat("month-zoom",1f);
+        new WorkspaceSync(store,cloud).scan();
+        tab=saved==null?prefs.getString("tab","notes"):saved.getString("tab","notes");screens=new WorkspaceScreens(this);
         if(saved!=null) {selected=LocalDate.parse(saved.getString("selected",selected.toString()));month=YearMonth.parse(saved.getString("month",month.toString()));}
-        build();
+        handleIntent(getIntent());build();handleQuickAction(getIntent());
     }
     @Override protected void onResume() {super.onResume();foreground=true;handler.post(tick);}
     @Override protected void onPause() {super.onPause();foreground=false;handler.removeCallbacks(tick);}
-    @Override protected void onSaveInstanceState(Bundle out) {out.putString("selected",selected.toString());out.putString("month",month.toString());super.onSaveInstanceState(out);}
+    @Override protected void onSaveInstanceState(Bundle out) {out.putString("tab",tab);out.putString("selected",selected.toString());out.putString("month",month.toString());super.onSaveInstanceState(out);}
     @Override protected void onDestroy() {handler.removeCallbacksAndMessages(null);network.shutdown();super.onDestroy();}
     private int dp(float n){return Math.round(n*getResources().getDisplayMetrics().density);}
     private TextView text(String value,float size,int color) {TextView v=new TextView(this);v.setText(value);v.setTextSize(size);v.setTextColor(color);v.setGravity(Gravity.CENTER_VERTICAL);return v;}
@@ -59,10 +64,14 @@ public class MainActivity extends Activity {
         if(Build.VERSION.SDK_INT>=30) root.setOnApplyWindowInsetsListener((v,insets)-> {android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.ime());v.setPadding(bars.left,bars.top,bars.right,bars.bottom);return insets;});
         if(Build.VERSION.SDK_INT<30) root.setFitsSystemWindows(true);
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setClipToPadding(false);
-        content=column();content.setPadding(dp(16),dp(8),dp(16),dp(32));scroll.addView(content);root.addView(scroll,new LinearLayout.LayoutParams(-1,-1));setContentView(root);
+        content=column();content.setPadding(dp(16),dp(8),dp(16),dp(24));scroll.addView(content);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout dock=row();dock.setPadding(dp(8),dp(6),dp(8),dp(6));dock.setBackgroundColor(0xfffffcf6);
+        for(String[] item:new String[][]{{"notes","便签"},{"todos","待办"},{"calendar","日历"},{"settings","设置"}}){TextView button=action(item[1],"导航："+item[1],()->{tab=item[0];prefs.edit().putString("tab",tab).apply();build();});button.setTextSize(15);if(tab.equals(item[0]))button.setBackground(background(0xffe6dff1,18));dock.addView(button,new LinearLayout.LayoutParams(0,dp(50),1));}root.addView(dock);setContentView(root);
         LinearLayout brand=row();TextView name=text("Jotday",16,INK);name.setTypeface(null,Typeface.BOLD);brand.addView(name,new LinearLayout.LayoutParams(0,dp(40),1));
         status=text(syncText,11,MUTED);status.setMaxLines(2);status.setPadding(dp(8),0,dp(8),0);status.setOnClickListener(v->synchronize());brand.addView(status,new LinearLayout.LayoutParams(dp(170),-2));
         brand.addView(action("⋯","更多选项",this::menu));content.addView(brand);
+        if(!tab.equals("calendar")){screens.render(content,tab);return;}
+        LinearLayout modes=row();for(String[] mode:new String[][]{{"day","日"},{"week","周"},{"month","月"},{"year","年"}}){TextView b=action(mode[1],"日历视图："+mode[1],()->{calendarView=mode[0];build();});b.setTextSize(14);if(calendarView.equals(mode[0]))b.setBackground(background(0xffe6dff1,14));modes.addView(b,new LinearLayout.LayoutParams(0,dp(44),1));}modes.addView(action("⌕","搜索日程",this::searchCalendar));content.addView(modes);
         LinearLayout heading=row();monthTitle=text("",27,INK);monthTitle.setTypeface(null,Typeface.BOLD);monthTitle.setMaxLines(1);monthTitle.setAutoSizeTextTypeUniformWithConfiguration(14,27,1,android.util.TypedValue.COMPLEX_UNIT_SP);monthTitle.setOnClickListener(v->jump());monthTitle.setMinHeight(dp(56));monthTitle.setContentDescription("选择年月");heading.addView(monthTitle,new LinearLayout.LayoutParams(0,-2,1));
         heading.addView(action("‹","上个月",()->changeMonth(-1)));heading.addView(action("›","下个月",()->changeMonth(1)));heading.addView(action("＋","新增日程",()->edit(null,"all",null)));content.addView(heading);
         grid=new MonthGrid(this,new MonthGrid.Listener() {
@@ -75,18 +84,25 @@ public class MainActivity extends Activity {
     }
     private List<CalendarProjector.Occurrence> occurrences(LocalDate from,LocalDate to) {
         List<CalendarProjector.Occurrence> events=CalendarProjector.project(store.all("event"),from,to);
-        events.addAll(CalendarProjector.reminders(store,from,to));events.sort(Comparator.comparing((CalendarProjector.Occurrence o)->!o.allDay()).thenComparing(o->o.start));return events;
+        if(prefs.getBoolean("show-reminders",true))events.addAll(CalendarProjector.reminders(store,from,to));events.sort(Comparator.comparing((CalendarProjector.Occurrence o)->!o.allDay()).thenComparing(o->o.start));return events;
     }
     private void render() {
+        JotdayWidget.refresh(this);
+        if(!tab.equals("calendar")){build();return;}
         monthTitle.setText(month.getYear()+"年 "+month.getMonthValue()+"月");
         Set<LocalDate> busy=new HashSet<>();for(CalendarProjector.Occurrence o:occurrences(month.atDay(1).minusDays(7),month.atEndOfMonth().plusDays(7))) {
             LocalDate start=o.start.toLocalDate(),end=o.end.minusNanos(1).toLocalDate();
             for(LocalDate day=start.isBefore(month.atDay(1).minusDays(7))?month.atDay(1).minusDays(7):start;!day.isAfter(end)&&!day.isAfter(month.atEndOfMonth().plusDays(7));day=day.plusDays(1))busy.add(day);
         }
-        grid.render(month,selected,busy,zoom);agenda.removeAllViews();
+        grid.render(month,selected,busy,zoom);grid.setVisibility(calendarView.equals("month")?View.VISIBLE:View.GONE);agenda.removeAllViews();
+        if(calendarView.equals("year")){for(int r=0;r<4;r++){LinearLayout months=row();for(int c=0;c<3;c++){int m=r*3+c+1;months.addView(action(m+"月","打开 "+m+" 月",()->{month=YearMonth.of(selected.getYear(),m);selected=month.atDay(1);calendarView="month";build();}),new LinearLayout.LayoutParams(0,dp(60),1));}agenda.addView(months);}}
         LinearLayout heading=row();TextView date=text(selected.format(DateTimeFormatter.ofPattern("M月d日 · EEEE",Locale.SIMPLIFIED_CHINESE)),18,INK);date.setTypeface(null,Typeface.BOLD);heading.addView(date,new LinearLayout.LayoutParams(0,dp(48),1));
         heading.addView(action("↶","回到今天",()-> {selected=LocalDate.now(CalendarProjector.ZONE);month=YearMonth.from(selected);render();}));agenda.addView(heading);
-        List<CalendarProjector.Occurrence> events=occurrences(selected,selected);
+        LocalDate from=calendarView.equals("week")?selected.minusDays(selected.getDayOfWeek().getValue()-1):selected;
+        LocalDate to=calendarView.equals("week")?from.plusDays(6):selected;
+        if(!calendarQuery.isEmpty()){from=selected.minusYears(1);to=selected.plusYears(1);}
+        List<CalendarProjector.Occurrence> events=occurrences(from,to);if(!calendarQuery.isEmpty())events.removeIf(o->!(o.title()+o.source.optString("notes")+o.source.optString("location")).toLowerCase(Locale.ROOT).contains(calendarQuery.toLowerCase(Locale.ROOT)));
+        if(!calendarQuery.isEmpty())agenda.addView(action("搜索："+calendarQuery+" · 清除","清除日历搜索",()->{calendarQuery="";render();}));events.sort(Comparator.comparing((CalendarProjector.Occurrence o)->o.start.toLocalDate()).thenComparing(o->!o.allDay()).thenComparing(o->o.start));
         if(events.isEmpty()) {TextView empty=text("今天留点空白也很好。",15,MUTED);empty.setPadding(dp(4),dp(24),0,dp(16));agenda.addView(empty);agenda.addView(action("＋ 添加安排","添加当天安排",()->edit(null,"all",null)));}
         for(CalendarProjector.Occurrence o:events) {
             LinearLayout item=row();item.setPadding(dp(12),dp(15),dp(12),dp(15));item.setBackground(background(0xfffffcf6,18));
@@ -94,6 +110,7 @@ public class MainActivity extends Activity {
             View strip=new View(this);strip.setBackground(background(color(o.source.optString("color","purple")),3));LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(dp(3),dp(34));sp.setMargins(0,0,dp(12),0);item.addView(strip,sp);
             LinearLayout detail=column();TextView title=text(o.title(),17,INK);title.setLineSpacing(dp(3),1);detail.addView(title);
             String meta=o.reminder?(o.event.optBoolean("completed")?"待办 · 已完成":"待办"):(o.allDay()?"全天安排":o.end.toLocalDate().equals(selected)?"至 "+o.end.toLocalTime():"至 "+o.end.format(DateTimeFormatter.ofPattern("M月d日 HH:mm")));
+            if(calendarView.equals("week")||!calendarQuery.isEmpty())meta=o.start.format(DateTimeFormatter.ofPattern("M月d日"))+" · "+meta;
             String location=Json.str(o.source,"location");if(!location.isEmpty())meta+=" · "+location;
             TextView subtitle=text(meta,12,MUTED);subtitle.setPadding(0,dp(6),0,0);detail.addView(subtitle);item.addView(detail,new LinearLayout.LayoutParams(0,-2,1));
             item.setOnClickListener(v-> {if(o.reminder) reminder(o);else chooseScope(o,false);});item.setFocusable(true);item.setContentDescription(o.title()+"，"+meta);
@@ -107,16 +124,19 @@ public class MainActivity extends Activity {
     private int color(String value) {
         switch(value) {case "green":case "sage":return 0xff94aa8c;case "blue":case "sky":case "mist":return 0xff9fb5c7;case "orange":case "amber":case "peach":return 0xffd4a471;case "rose":case "dustyrose":case "clay":return 0xffc19594;default:return 0xffb19bc4;}
     }
-    private void changeMonth(int delta) {month=month.plusMonths(delta);selected=month.atDay(Math.min(selected.getDayOfMonth(),month.lengthOfMonth()));render();}
+    private void changeMonth(int delta) {if(calendarView.equals("day"))selected=selected.plusDays(delta);else if(calendarView.equals("week"))selected=selected.plusWeeks(delta);else if(calendarView.equals("year"))selected=selected.plusYears(delta);else{month=month.plusMonths(delta);selected=month.atDay(Math.min(selected.getDayOfMonth(),month.lengthOfMonth()));}month=YearMonth.from(selected);render();}
+    private void searchCalendar(){EditText input=input("搜索前后一年内的日程与待办");input.setText(calendarQuery);new AlertDialog.Builder(this).setTitle("搜索日历").setView(input).setNegativeButton("取消",null).setPositiveButton("搜索",(d,w)->{calendarQuery=input.getText().toString().trim();render();}).show();}
     private void jump() {new DatePickerDialog(this,(v,y,m,d)-> {selected=LocalDate.of(y,m+1,d);month=YearMonth.from(selected);render();},selected.getYear(),selected.getMonthValue()-1,selected.getDayOfMonth()).show();}
     private void menu() {
-        String[] choices={"与网页版配对","生成配对码","立即同步","月历恢复默认大小","放大月历","缩小月历","同步冲突记录","关于 Jotday"};
+        String[] choices={"与网页版配对","生成配对码","立即同步","月历恢复默认大小","放大月历","缩小月历","同步冲突记录","导入日程与待办","显示日历待办："+(prefs.getBoolean("show-reminders",true)?"开":"关"),"关于 Jotday"};
         new AlertDialog.Builder(this).setTitle("Jotday").setItems(choices,(dialog,index)-> {
             switch(index) {
                 case 0:pair();break;case 1:createPairing();break;case 2:synchronize();break;
                 case 3:case 4:case 5:zoom=index==3?1f:Math.max(.85f,Math.min(1.5f,zoom+(index==4?.1f:-.1f)));prefs.edit().putFloat("month-zoom",zoom).apply();render();break;
                 case 6:showConflicts();break;
-                default:new AlertDialog.Builder(this).setTitle("Jotday 0.1.0").setMessage("双指捏合调整月历大小，左右滑动切换月份。\n\n内容先保存在手机，打开应用并联网时自动同步。网页与手机需加入同一个工作区。\n\n显示时区：香港。日程保留原始时区。\n网页待办在日历中显示，完整编辑请使用网页版。").setPositiveButton("知道了",null).show();
+                case 7:importCalendar();break;
+                case 8:prefs.edit().putBoolean("show-reminders",!prefs.getBoolean("show-reminders",true)).apply();render();break;
+                default:new AlertDialog.Builder(this).setTitle("Jotday "+BuildConfig.VERSION_NAME).setMessage("原生便签、便签本、待办和日历。双指捏合调整月历大小，左右滑动切换月份。\n\n内容先保存在手机，打开应用并联网时自动同步。网页与手机需加入同一个工作区。\n\n显示时区：香港。日程保留原始时区。").setPositiveButton("知道了",null).show();
             }
         }).show();
     }
@@ -124,26 +144,27 @@ public class MainActivity extends Activity {
         if(syncing || !prefs.getBoolean("paired",false))return;
         syncing=true;PlannerStore target=store;syncText="正在同步…";status.setText(syncText);
         network.execute(()-> {
-            String message;
-            try {PlannerSync sync=new PlannerSync(target,cloud);sync.run();int pending=sync.pending();message=pending>0?pending+" 项待同步":"已同步 · "+LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));}
+            String message;String before=workspaceFingerprint(target);
+            try {WorkspaceSync workspaceSync=new WorkspaceSync(target,cloud);workspaceSync.run();PlannerSync sync=new PlannerSync(target,cloud);sync.run();int pending=sync.pending()+workspaceSync.pending();message=pending>0?pending+" 项待同步":"已同步 · "+LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));}
             catch(Exception e) {message=e.getMessage()==null?"暂时离线，内容已保留":e.getMessage();}
-            String result=message;handler.post(()-> {syncing=false;if(isDestroyed()||target!=store)return;syncText=result;status.setText(result);render();});
+            String result=message;boolean changed=!before.equals(workspaceFingerprint(target));handler.post(()-> {syncing=false;if(isDestroyed()||target!=store)return;syncText=result;status.setText(result);if(changed)render();});
         });
     }
+    private String workspaceFingerprint(PlannerStore target){StringBuilder value=new StringBuilder();for(String kind:new String[]{"notebook","note","todo","event","type","link"})for(JSONObject row:target.all(kind))value.append(Json.canonical(Arrays.asList(WorkspaceRecords.KINDS).contains(kind)?WorkspaceRecords.payload(kind,row):row));return value.toString();}
     private void pair() {
         EditText code=input("6 位配对码");code.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);code.setFilters(new InputFilter[]{new InputFilter.LengthFilter(6)});
         LinearLayout body=column();body.setPadding(dp(24),dp(8),dp(24),0);body.addView(text("在网页版设置中生成配对码。",14,MUTED));body.addView(code);
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle("连接网页版").setView(body).setNegativeButton("取消",null).setPositiveButton("连接",null).create();
         dialog.setOnShowListener(v->dialog.getButton(-1).setOnClickListener(button-> {
             String value=code.getText().toString();if(!value.matches("[0-9]{6}")){code.setError("请输入 6 位数字");return;}
-            dialog.getButton(-1).setEnabled(false);PlannerStore previous=store;boolean local=!prefs.getBoolean("paired",false);
+            dialog.getButton(-1).setEnabled(false);dialog.getButton(-2).setEnabled(false);dialog.setCancelable(false);PlannerStore previous=store;boolean local=!prefs.getBoolean("paired",false);
             network.execute(()-> {
                 try {
                     String workspace=cloud.redeem(value);PlannerStore next=new PlannerStore(this,workspace);
                     if(local&&!previous.workspace.equals(workspace))next.adoptFrom(previous);
                     prefs.edit().putString("workspace",workspace).putBoolean("paired",true).commit();
-                    handler.post(()-> {store=next;dialog.dismiss();syncing=false;render();synchronize();});
-                }catch(Exception e){handler.post(()-> {dialog.getButton(-1).setEnabled(true);code.setError(e.getMessage());});}
+                    handler.post(()-> {store=next;screens=new WorkspaceScreens(this);dialog.dismiss();syncing=false;render();synchronize();});
+                }catch(Exception e){handler.post(()-> {dialog.getButton(-1).setEnabled(true);dialog.getButton(-2).setEnabled(true);dialog.setCancelable(true);code.setError(e.getMessage());});}
             });
         }));dialog.show();
     }
@@ -165,8 +186,26 @@ public class MainActivity extends Activity {
         }).setPositiveButton("完成",null).show();
     }
     private void reminder(CalendarProjector.Occurrence o) {
-        new AlertDialog.Builder(this).setTitle(o.title()).setMessage(o.source.optString("notes")+"\n\n这是网页版待办，完成状态与原记录同步。完整编辑请使用网页版。").setPositiveButton("关闭",null).show();
+        screens.editTodo(o.event);
     }
+    PlannerStore workspaceStore(){return store;}
+    void refreshWorkspace(){render();}
+    void localChanged(){JotdayWidget.refresh(this);render();synchronize();}
+    void message(String value){toast(value);}
+    void openSyncMenu(){menu();}
+    void pinWidget(){android.appwidget.AppWidgetManager manager=android.appwidget.AppWidgetManager.getInstance(this);if(manager.isRequestPinAppWidgetSupported())manager.requestPinAppWidget(new ComponentName(this,JotdayWidget.class),null,null);else toast("长按手机桌面，选择小组件 → Jotday");}
+    void exportBackup(){Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/json").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"Jotday-"+LocalDate.now()+".json");startActivityForResult(intent,501);}
+    void importCalendar(){startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),502);}
+    @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==502&&result==RESULT_OK&&data!=null&&data.getData()!=null){PlannerStore target=store;android.net.Uri uri=data.getData();network.execute(()->{try{
+        java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();try(java.io.InputStream input=getContentResolver().openInputStream(uri)){if(input==null)throw new java.io.IOException("无法读取文件");byte[] buffer=new byte[8192];int n;while((n=input.read(buffer))!=-1){if(bytes.size()+n>2_000_000)throw new IllegalArgumentException("文件不得超过 2 MB");bytes.write(buffer,0,n);}}
+        CalendarImport.Plan plan=CalendarImport.parse(bytes.toString("UTF-8"));handler.post(()->{if(isDestroyed()||target!=store)return;new AlertDialog.Builder(this).setTitle("导入 "+plan.items.size()+" 项安排？").setMessage("已有来源标识的安排将跳过。\n"+String.join("\n",plan.warnings)).setNegativeButton("取消",null).setPositiveButton("导入",(d,w)->{try{int[] counts=CalendarImport.apply(store,plan);toast("已导入 "+counts[0]+" 项，跳过 "+counts[1]+" 项");localChanged();}catch(Exception e){toast("导入失败："+e.getMessage());}}).show();});
+    }catch(Exception e){handler.post(()->toast("无法导入："+e.getMessage()));}});return;}if(request==501&&result==RESULT_OK&&data!=null&&data.getData()!=null){try{
+        JSONObject backup=Json.obj("format","jotday-android-backup","version",1,"createdAt",Instant.now().toString());for(String kind:new String[]{"notebook","note","todo","event","type","link"}){JSONArray values=new JSONArray();for(JSONObject row:store.all(kind))values.put(row);Json.put(backup,kind,values);}Json.put(backup,"conflicts",store.conflicts());
+        try(java.io.OutputStream out=getContentResolver().openOutputStream(data.getData())){if(out==null)throw new java.io.IOException("无法写入");out.write(backup.toString(2).getBytes(java.nio.charset.StandardCharsets.UTF_8));}toast("备份已导出");
+    }catch(Exception e){toast("导出失败："+e.getMessage());}}}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);handleIntent(intent);build();handleQuickAction(intent);}
+    private void handleIntent(Intent intent){String requested=intent.getStringExtra("tab");if(Arrays.asList("notes","todos","calendar","settings").contains(requested))tab=requested;String date=intent.getStringExtra("date");if(date!=null)try{selected=LocalDate.parse(date);month=YearMonth.from(selected);}catch(Exception ignored){}}
+    private void handleQuickAction(Intent intent){String action=intent.getStringExtra("quick");intent.removeExtra("quick");if("note".equals(action))handler.post(()->screens.editNote(null));if("todo".equals(action))handler.post(()->screens.editTodo(null));}
     private void chooseScope(CalendarProjector.Occurrence o,boolean deleting) {
         if(!o.recurring()){if(deleting)delete(o,"all");else edit(o,"all",null);return;}
         new AlertDialog.Builder(this).setTitle(deleting?"删除重复日程":"编辑重复日程").setItems(new String[]{"仅这一次","这次及以后的日程","整个系列"},(d,index)-> {
@@ -210,17 +249,15 @@ public class MainActivity extends Activity {
         TextView more=action("更多选项  ⌄","标签、重复、地点及备注",()-> {extra.setVisibility(extra.getVisibility()==View.VISIBLE?View.GONE:View.VISIBLE);});more.setTextSize(14);fields.addView(more);fields.addView(extra);
         List<JSONObject> types=store.all("type");List<String> typeNames=new ArrayList<>();typeNames.add("无分类");int typeIndex=0;for(int i=0;i<types.size();i++){typeNames.add(types.get(i).optString("name"));if(types.get(i).optString("id").equals(Json.str(seedValue,"typeId")))typeIndex=i+1;}
         Spinner type=new Spinner(this);type.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,typeNames));type.setSelection(typeIndex);extra.addView(text("分类",12,MUTED));extra.addView(type,new LinearLayout.LayoutParams(-1,dp(48)));
-        Spinner repeat=new Spinner(this);String[] repeatNames=seedValue.optJSONObject("repeat")==null?new String[]{"不重复","每天","每周","每月","每年"}:new String[]{"保留现有重复规则","不重复","每天","每周","每月","每年"};
-        repeat.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,repeatNames));repeat.setEnabled(!editScope.equals("one"));extra.addView(text(editScope.equals("one")?"仅编辑本次，不改重复规则":"重复",12,MUTED));extra.addView(repeat,new LinearLayout.LayoutParams(-1,dp(48)));
+        RepeatEditor repeat=new RepeatEditor(this,seedValue.optJSONObject("repeat"),times[0].toLocalDate());extra.addView(text(editScope.equals("one")?"仅编辑本次，不改重复规则":"重复",12,MUTED));if(!editScope.equals("one"))extra.addView(repeat);
         EditText location=input("地点"),notes=input("备注"),url=input("链接（可选）");location.setText(seedValue.optString("location"));notes.setText(seedValue.optString("notes"));url.setText(seedValue.optString("url"));notes.setMinLines(2);extra.addView(location);extra.addView(notes);extra.addView(url);
-        extra.addView(text("时区："+seedValue.optString("timeZone","Asia/Hong_Kong"),12,MUTED));
+        extra.addView(text("日程所在时区",12,MUTED));AutoCompleteTextView zone=new AutoCompleteTextView(this);zone.setText(seedValue.optString("timeZone","Asia/Hong_Kong"));zone.setThreshold(0);zone.setTextSize(15);zone.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_dropdown_item_1line,new ArrayList<>(new TreeSet<>(ZoneId.getAvailableZoneIds()))));zone.setOnClickListener(v->zone.showDropDown());extra.addView(zone,new LinearLayout.LayoutParams(-1,dp(48)));
         boolean[] finished={false},initializing={true};
         java.util.function.Supplier<JSONObject> value=()-> {
             JSONObject v=Json.obj();if(seedValue.optJSONObject("repeat")!=null)Json.put(v,"repeat",Json.copy(seedValue.optJSONObject("repeat")));Json.put(v,"title",title.getText().toString().trim());Json.put(v,"start",CalendarProjector.stamp(times[0]));Json.put(v,"end",CalendarProjector.stamp(times[1]));Json.put(v,"allDay",allDay.isChecked());
-            Json.put(v,"notes",notes.getText().toString());Json.put(v,"location",location.getText().toString());Json.put(v,"url",url.getText().toString());Json.put(v,"timeZone",seedValue.optString("timeZone","Asia/Hong_Kong"));
+            Json.put(v,"notes",notes.getText().toString());Json.put(v,"location",location.getText().toString());Json.put(v,"url",url.getText().toString());Json.put(v,"timeZone",zone.getText().toString().trim());
             int ti=type.getSelectedItemPosition();JSONObject label=ti>0?types.get(ti-1):null;Json.put(v,"typeId",label==null?null:label.optString("id"));Json.put(v,"color",label==null?seedValue.optString("color","purple"):label.optString("color"));
-            int ri=repeat.getSelectedItemPosition()-(seedValue.optJSONObject("repeat")==null?0:1);
-            if(editScope.equals("one")||ri==0)v.remove("repeat");else if(ri>0){JSONObject r=Json.obj("frequency",new String[]{"daily","weekly","monthly","yearly"}[ri-1],"interval",1);if(ri==2)Json.put(r,"weekdays",new JSONArray().put(times[0].getDayOfWeek().getValue()%7));Json.put(v,"repeat",r);}
+            JSONObject rule=repeat.value();if(editScope.equals("one")||rule==null)v.remove("repeat");else Json.put(v,"repeat",rule);
             return v;
         };
         Runnable saveDraft=()-> {if(!finished[0]&&!initializing[0]&&(!title.getText().toString().trim().isEmpty()||!notes.getText().toString().isEmpty()||!location.getText().toString().isEmpty()))store.draft(Json.obj("eventId",editId,"scope",editScope,"occurrenceDate",occurrenceDate,"baseline",baseline,"value",value.get()));};
@@ -236,8 +273,8 @@ public class MainActivity extends Activity {
         start.setOnClickListener(v->pick.accept(0));end.setOnClickListener(v->pick.accept(1));
         allDay.setOnCheckedChangeListener((v,checked)-> {if(checked){times[0]=times[0].toLocalDate().atStartOfDay();times[1]=times[1].toLocalDate().plusDays(times[1].toLocalTime().equals(LocalTime.MIDNIGHT)?0:1).atStartOfDay();if(!times[1].isAfter(times[0]))times[1]=times[0].plusDays(1);}else {times[0]=times[0].withHour(9);times[1]=times[0].plusHours(1);}refreshTimes.run();});
         TextWatcher watcher=new TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){saveDraft.run();}public void afterTextChanged(Editable e){}};
-        for(EditText field:new EditText[]{title,location,notes,url})field.addTextChangedListener(watcher);
-        AdapterView.OnItemSelectedListener changed=new AdapterView.OnItemSelectedListener(){public void onItemSelected(AdapterView<?> a,View v,int pos,long id){saveDraft.run();}public void onNothingSelected(AdapterView<?> a){}};type.setOnItemSelectedListener(changed);repeat.setOnItemSelectedListener(changed);
+        for(EditText field:new EditText[]{title,location,notes,url,zone})field.addTextChangedListener(watcher);
+        AdapterView.OnItemSelectedListener changed=new AdapterView.OnItemSelectedListener(){public void onItemSelected(AdapterView<?> a,View v,int pos,long id){saveDraft.run();}public void onNothingSelected(AdapterView<?> a){}};type.setOnItemSelectedListener(changed);repeat.onChanged(saveDraft);
         save.setOnClickListener(view-> {
             JSONObject v=value.get();String error=validate(v);if(error!=null){toast(error);return;}
             JSONObject current=editId.isEmpty()?null:store.get("event",editId);
@@ -251,7 +288,9 @@ public class MainActivity extends Activity {
     }
     private String validate(JSONObject v) {
         if(v.optString("title").trim().isEmpty())return "请填写日程名称";
+        if(!ZoneId.getAvailableZoneIds().contains(v.optString("timeZone")))return "请选择有效时区";
         LocalDateTime start=LocalDateTime.parse(v.optString("start")),end=LocalDateTime.parse(v.optString("end"));
+        String recurrenceError=RepeatEditor.validate(v.optJSONObject("repeat"),start.toLocalDate());if(recurrenceError!=null)return recurrenceError;
         if(!end.isAfter(start))return "结束时间必须晚于开始时间";
         if(Duration.between(start,end).compareTo(Duration.ofDays(366))>0)return "单个日程不能超过一年";
         if(v.optString("notes").length()>4000||v.optString("location").length()>500||v.optString("url").length()>2000)return "备注、地点或链接过长";

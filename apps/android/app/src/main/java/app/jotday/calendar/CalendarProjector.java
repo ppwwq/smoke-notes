@@ -88,11 +88,14 @@ final class CalendarProjector {
         }
     }
     static String todoId(String series,String day) {
+        return stableId("smoke-notes:todo-occurrence:"+series+":"+day);
+    }
+    static String stableId(String name) {
         try {
             java.security.MessageDigest sha=java.security.MessageDigest.getInstance("SHA-1");
             java.nio.ByteBuffer namespace=java.nio.ByteBuffer.allocate(16);
             UUID dns=UUID.fromString("6ba7b810-9dad-11d1-80b4-00c04fd430c8");namespace.putLong(dns.getMostSignificantBits()).putLong(dns.getLeastSignificantBits());
-            sha.update(namespace.array());byte[] bytes=sha.digest(("smoke-notes:todo-occurrence:"+series+":"+day).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            sha.update(namespace.array());byte[] bytes=sha.digest(name.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             bytes[6]=(byte)((bytes[6]&15)|0x50);bytes[8]=(byte)((bytes[8]&63)|0x80);
             java.nio.ByteBuffer b=java.nio.ByteBuffer.wrap(bytes);return new UUID(b.getLong(),b.getLong()).toString();
         }catch(Exception e){throw new IllegalStateException(e);}

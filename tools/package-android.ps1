@@ -28,7 +28,10 @@ try {
         if ($LASTEXITCODE) { throw 'Signing key creation failed.' }
     }
     $aligned = Join-Path $out 'jotday-aligned.apk'
-    $apk = Join-Path $out 'Jotday-0.1.0-android.apk'
+    $metadata = Get-Content -Raw -LiteralPath (Join-Path $root 'apps/android/app/build/outputs/apk/release/output-metadata.json') | ConvertFrom-Json
+    $version = $metadata.elements[0].versionName
+    if ($version -notmatch '^\d+\.\d+\.\d+([-.][A-Za-z0-9.]+)?$') { throw 'Invalid APK version.' }
+    $apk = Join-Path $out "Jotday-$version-android.apk"
     & "$BuildTools/zipalign.exe" -f -p 4 $unsigned $aligned
     if ($LASTEXITCODE) { throw 'APK alignment failed.' }
     & "$BuildTools/apksigner.bat" sign --ks $keystore --ks-key-alias jotday --ks-pass env:JOTDAY_SIGNING_PASSWORD --out $apk $aligned

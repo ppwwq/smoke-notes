@@ -9,7 +9,8 @@ import java.util.*;
 
 /** Runs only in the isolated test app; no account or network is required. */
 public class NativeChecks extends Instrumentation {
-    @Override public void onCreate(Bundle arguments) { super.onCreate(arguments);start(); }
+    private Bundle arguments;
+    @Override public void onCreate(Bundle arguments) { super.onCreate(arguments);this.arguments=arguments;start(); }
     private void check(boolean ok,String message) {if(!ok)throw new AssertionError(message);}
     private View find(View v,String description) {
         if(description.contentEquals(v.getContentDescription()==null?"":v.getContentDescription()))return v;
@@ -28,9 +29,11 @@ public class NativeChecks extends Instrumentation {
     @Override public void onStart() {
         Bundle result=new Bundle();Activity activity=null;
         try {
+            if(arguments!=null&&"true".equals(arguments.getString("cloud"))){result.putString("stream",CloudChecks.run(getTargetContext())+"\n");finish(Activity.RESULT_OK,result);return;}
             Context context=getTargetContext();SharedPreferences prefs=context.getSharedPreferences("calendar",0);
             check(!prefs.getBoolean("paired",false),"Tests require an unpaired synthetic device");
-            prefs.edit().putFloat("month-zoom",1f).commit();
+            WorkspaceChecks.run(this);
+            prefs.edit().putFloat("month-zoom",1f).putString("tab","calendar").commit();
             activity=startActivitySync(new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));waitForIdleSync();
             Activity first=activity;String[] selection={null};
             runOnMainSync(()-> {
@@ -53,7 +56,7 @@ public class NativeChecks extends Instrumentation {
             getUiAutomation().waitForIdle(500,5000);
             android.view.accessibility.AccessibilityNodeInfo root=getUiAutomation().getRootInActiveWindow();
             check(root!=null&&!root.findAccessibilityNodeInfosByText("保存").isEmpty(),"compact editor exposes save action");
-            result.putString("stream","PASS: native pinch, selection isolation, persisted scale after activity restart, editor save visibility\n");finish(Activity.RESULT_OK,result);
+            result.putString("stream","PASS: workspace persistence, immutable retry after restart, pending edit protection, conflicts, tombstones, adoption, native rich document roundtrip, widget RemoteViews, native pinch, selection isolation, persisted scale after activity restart, editor save visibility\n");finish(Activity.RESULT_OK,result);
         }catch(Throwable error){result.putString("stream","FAIL: "+error+"\n");finish(Activity.RESULT_CANCELED,result);}
     }
     private String selected(View view) {

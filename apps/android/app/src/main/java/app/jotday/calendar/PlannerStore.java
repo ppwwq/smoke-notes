@@ -8,7 +8,8 @@ import java.util.*;
 
 final class PlannerStore extends SQLiteOpenHelper {
     final String workspace;
-    PlannerStore(Context context, String workspace) { super(context, "planner-"+workspace+".db",null,1); this.workspace=workspace; }
+    PlannerStore(Context context, String workspace) { this(context,workspace,"planner-"+workspace+".db"); }
+    PlannerStore(Context context,String workspace,String filename){super(context,filename,null,1);this.workspace=workspace;}
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE records(kind TEXT NOT NULL,id TEXT NOT NULL,body TEXT NOT NULL,PRIMARY KEY(kind,id))");
         db.execSQL("CREATE TABLE states(kind TEXT NOT NULL,id TEXT NOT NULL,body TEXT NOT NULL,PRIMARY KEY(kind,id))");
@@ -56,10 +57,14 @@ final class PlannerStore extends SQLiteOpenHelper {
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();try { task.run();db.setTransactionSuccessful(); } finally { db.endTransaction(); }
     }
     synchronized void adoptFrom(PlannerStore source) {
-        transaction(()-> { for(String kind:new String[]{"type","event","link"}) for(JSONObject value:source.all(kind)) {
+        transaction(()-> { for(String kind:new String[]{"type","event","link","notebook","note","todo"}) for(JSONObject value:source.all(kind)) {
             JSONObject copy=Json.copy(value);Json.put(copy,"workspaceId",workspace);
+            if(Arrays.asList(WorkspaceRecords.KINDS).contains(kind)){Json.put(copy,"version",0);if(!kind.equals("note"))Json.put(copy,"workspace_id",workspace);}
             if(kind.equals("link")) Json.put(copy,"id",workspace+":"+copy.optString("todoId"));
             put(kind,copy);
         }});
     }
+    synchronized void draft(String id,JSONObject body){saveSingle("drafts",id,body);}
+    synchronized JSONObject draft(String id){try(Cursor c=getReadableDatabase().query("drafts",new String[]{"body"},"id=?",new String[]{id},null,null,null)){return c.moveToFirst()?Json.object(c.getString(0)):null;}}
+    synchronized void clearDraft(String id){getWritableDatabase().delete("drafts","id=?",new String[]{id});}
 }
