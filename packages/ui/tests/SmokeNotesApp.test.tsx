@@ -956,9 +956,6 @@ describe("SmokeNotesApp", () => {
       ).toHaveFocus(),
     );
     await user.tab();
-    expect(document.activeElement?.tagName).toBe("SUMMARY");
-    await user.keyboard("{Enter}");
-    await user.tab();
     expect(
       screen.getByRole("combobox", { name: "新便签所属便签本" }),
     ).toHaveFocus();

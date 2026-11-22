@@ -166,23 +166,18 @@
   opacity: 1;
 }
 .workspace-app .create-destination {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
   margin: 8px 0 12px;
-}
-.workspace-app .create-destination summary {
-  padding: 12px 0;
-  min-height: 44px;
   font-size: 12px;
   color: var(--muted);
-  cursor: pointer;
-  overflow-wrap: anywhere;
 }
-.workspace-app .create-destination summary span {
-  margin-left: 10px;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.workspace-app .create-destination .create-notebook-field {
-  margin: 8px 0 14px;
+.workspace-app .create-destination .workspace-select-trigger {
+  min-height: 44px;
+  padding: 8px 12px;
+  background: transparent;
 }
 .workspace-app[data-web-background] .settings-entry small {
   color: #504b43;
@@ -203,7 +198,6 @@
   :is(
     .note-result,
     .note-search button,
-    .create-destination summary,
     .quick-note-label textarea
   ):focus-visible {
   outline: 2px solid var(--ink);

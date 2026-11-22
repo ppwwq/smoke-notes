@@ -110,13 +110,29 @@ it("creates tomorrow's task once, clears only the submitted draft and offers its
   expect(callbacks.onShowTodos).toHaveBeenCalledExactlyOnceWith("2026-10-24");
 });
 
+it("closes the custom calendar and returns focus to the selected date", async () => {
+  setup();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "新建待办" }));
+  const trigger = screen.getByRole("button", { name: "选日期" });
+  await user.click(trigger);
+  const calendar = screen.getByRole("application", { name: "新待办日期" });
+  const day = within(calendar).getByRole("button", { name: /10月26日/ });
+  await user.click(day);
+  expect(calendar).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+  expect(trigger).toHaveTextContent("10-26");
+  expect(trigger).toHaveAttribute("data-selected", "true");
+  await user.click(screen.getByRole("button", { name: "今天" }));
+  expect(trigger).not.toHaveAttribute("data-selected");
+});
+
 it("creates a checklist note in the chosen notebook without creating a daily task", async () => {
   const callbacks = setup("note", [
     book,
     { ...book, id: "book-2", name: "工作" },
   ]);
   fireEvent.click(screen.getByRole("button", { name: "新建便签" }));
-  fireEvent.click(screen.getByText(/保存到「日常」/));
   await userEvent
     .setup()
     .click(screen.getByRole("combobox", { name: "新便签所属便签本" }));

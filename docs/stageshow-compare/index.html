@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-Hans">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jotday 新建面板 · 改前与改后</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0 auto; max-width: 850px; padding: 32px 20px 64px; color: #29271f; background: #fcfaf6; font: 16px/1.65 system-ui, sans-serif; }
+  h1 { font-size: clamp(24px, 4vw, 36px); margin: 0; }
+  h2 { font-size: 21px; margin: 32px 0 4px; }
+  p { margin: 4px 0 14px; }
+  fieldset { border: 1px solid #c7c1b5; border-radius: 12px; width: fit-content; }
+  label { display: inline-block; cursor: pointer; padding: 8px; }
+  .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+  figure { margin: 0; }
+  figcaption { font-weight: 600; margin-bottom: 6px; }
+  img { display: block; width: 100%; max-width: 352px; height: auto; border-radius: 12px; }
+  @media(max-width: 550px) { .pair { grid-template-columns: 1fr; } }
+</style>
+<h1>Jotday 新建面板 · 改前与改后</h1>
+<p>同一组本地示例数据，截取实际面板区域。点击图片可查看原图。</p>
+<fieldset><legend>截图视口</legend>
+  <label><input type="radio" name="size" value="390" checked> 手机 390 × 844</label>
+  <label><input type="radio" name="size" value="1440"> 桌面 1440 × 900</label>
+</fieldset>
+<main></main>
+<script>
+  const states = [
+    ['note', '新建便签', '输入框上方由「先记下来，稍后再整理」改为「便签内容」。保存位置从「更换 → 打开选择器」缩短为直接打开当前便签本，按 Tab 也可直接到达。'],
+    ['draft', '已输入的便签', '「保存并继续写」保留为主按钮。原来等高的清单卡片收成一行，保留勾选图标和用途说明，移除重复箭头。'],
+    ['book', '新建便签本', '「给这个空间起个名字」改为「便签本名称」，并在类型切换器与表单之间留出 20 像素间距。'],
+    ['todo', '新增待办', '原有的日期与重复规则说明换成与输入框关联的「待办内容」标签。三个日期按钮的最小高度由 40 增至 44 像素。'],
+    ['date', '选好待办日期', '原来选完日期后需要手动收起日历，自选日期也没有选中底色。现在选定后自动收起，焦点回到日期按钮，自选日期与「今天」「明天」使用相同的深色选中态。']
+  ];
+  const main = document.querySelector('main');
+  for (const [key, title, description] of states) {
+    const section = document.createElement('section');
+    const heading = document.createElement('h2');
+    heading.textContent = title;
+    const paragraph = document.createElement('p');
+    paragraph.textContent = description;
+    const pair = document.createElement('div');
+    pair.className = 'pair';
+    for (const [side, label] of [['before','改前'],['after','改后']]) {
+      const figure = document.createElement('figure');
+      const caption = document.createElement('figcaption');
+      caption.textContent = label;
+      const link = document.createElement('a');
+      const img = document.createElement('img');
+      img.alt = title + ' · ' + label;
+      img.dataset.prefix = side + '-' + key;
+      link.append(img);
+      figure.append(caption, link);
+      pair.append(figure);
+    }
+    section.append(heading, paragraph, pair);
+    main.append(section);
+  }
+  function showSize() {
+    const width = document.querySelector('input:checked').value;
+    for (const img of main.querySelectorAll('img')) {
+      img.src = img.dataset.prefix + '-' + width + '.png';
+      img.parentElement.href = img.src;
+    }
+  }
+  document.querySelector('fieldset').addEventListener('change', showSize);
+  showSize();
+</script>
+</html>

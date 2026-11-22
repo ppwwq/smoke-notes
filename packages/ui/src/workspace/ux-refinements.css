@@ -178,7 +178,9 @@
 .workspace-app .notes-board-scroll {
   padding-bottom: 100px;
 }
-.workspace-app .create-date-chips button[aria-pressed="true"] {
+.workspace-app
+  .create-date-chips
+  button:is([aria-pressed="true"], [data-selected]) {
   color: var(--surface);
   background: var(--ink);
   border-color: var(--ink);

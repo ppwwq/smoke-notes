@@ -132,7 +132,7 @@ export function WorkspaceCreate({
           className="create-note-options"
         >
           <label className="quick-note-label">
-            先记下来，稍后再整理
+            便签内容
             <textarea
               aria-label="快速记录内容"
               placeholder="这一刻，想记下什么？"
@@ -155,24 +155,19 @@ export function WorkspaceCreate({
             />
           </label>
           {selected ? (
-            <details className="create-destination">
-              <summary>
-                保存到「{selected.name}」<span>更换</span>
-              </summary>
-              <label className="create-notebook-field">
-                保存到便签本
-                <WorkspaceSelect<string>
-                  label="新便签所属便签本"
-                  value={selected.id}
-                  disabled={busy}
-                  onChange={setTargetId}
-                  options={notebooks.map((book) => ({
-                    value: book.id,
-                    label: book.name,
-                  }))}
-                />
-              </label>
-            </details>
+            <div className="create-destination">
+              <span>保存到</span>
+              <WorkspaceSelect<string>
+                label="新便签所属便签本"
+                value={selected.id}
+                disabled={busy}
+                onChange={setTargetId}
+                options={notebooks.map((book) => ({
+                  value: book.id,
+                  label: book.name,
+                }))}
+              />
+            </div>
           ) : (
             <p className="create-footnote">保存时会自动建立便签本。</p>
           )}
@@ -207,14 +202,9 @@ export function WorkspaceCreate({
             disabled={busy}
             onClick={() => void create("todo")}
           >
-            <span className="create-kind-icon">
-              <CheckSquare2 size={23} />
-            </span>
-            <span>
-              <strong>清单便签</strong>
-              <small>保存在便签本里的勾选清单</small>
-            </span>
-            <ArrowUpRight size={18} />
+            <CheckSquare2 size={18} aria-hidden="true" />
+            <strong>清单便签</strong>
+            <small>在本内逐项勾选</small>
           </button>
           {error && (
             <p className="create-error" role="alert">
@@ -248,7 +238,7 @@ export function WorkspaceCreate({
             }}
           >
             <label>
-              给这个空间起个名字
+              便签本名称
               <input
                 aria-label="新便签本名称"
                 data-create-focus={mode === "notebook" ? "" : undefined}

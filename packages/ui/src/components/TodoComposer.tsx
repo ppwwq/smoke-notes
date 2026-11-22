@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import {
   addTodoDays,
   RecordValidationError,
@@ -37,9 +37,13 @@ export function TodoComposer({
   const revision = useRef(0);
   const pending = useRef(false);
   const input = useRef<HTMLInputElement>(null);
+  const inputId = useId();
+  const dateTrigger = useRef<HTMLButtonElement>(null);
   // Capture the suggested date when a draft starts; changing the calendar must not move that draft.
   const [draftDate, setDraftDate] = useState("");
   const chosenDate = date || draftDate || defaultDate || today;
+  const tomorrow = addTodoDays(today, 1);
+  const otherDate = chosenDate !== today && chosenDate !== tomorrow;
   async function add() {
     if (!text.trim() || pending.current) return;
     if (repeat === "weekly" && !days.length) {
@@ -99,8 +103,11 @@ export function TodoComposer({
         void add();
       }}
     >
-      <p className="create-description">按日期安排的一件事，也可以定期重复。</p>
+      <label className="create-task-label" htmlFor={inputId}>
+        待办内容
+      </label>
       <input
+        id={inputId}
         ref={input}
         data-create-focus={active ? "" : undefined}
         className="create-task-input"
@@ -135,10 +142,10 @@ export function TodoComposer({
         </button>
         <button
           type="button"
-          aria-pressed={chosenDate === addTodoDays(today, 1)}
+          aria-pressed={chosenDate === tomorrow}
           onClick={() => {
             revision.current++;
-            setDate(addTodoDays(today, 1));
+            setDate(tomorrow);
             setCustomDate(false);
           }}
         >
@@ -146,13 +153,13 @@ export function TodoComposer({
         </button>
         <button
           type="button"
+          ref={dateTrigger}
+          data-selected={otherDate || undefined}
           aria-expanded={customDate}
           onClick={() => setCustomDate(!customDate)}
         >
           <CalendarDays size={15} />
-          {chosenDate !== today && chosenDate !== addTodoDays(today, 1)
-            ? chosenDate.slice(5)
-            : "选日期"}
+          {otherDate ? chosenDate.slice(5) : "选日期"}
         </button>
       </div>
       {customDate && (
@@ -164,6 +171,8 @@ export function TodoComposer({
             onChange={(value) => {
               revision.current++;
               setDate(value);
+              setCustomDate(false);
+              dateTrigger.current?.focus();
             }}
           />
         </div>
