@@ -80,12 +80,6 @@
     monospace;
   letter-spacing: 0.16em;
 }
-.workspace-app[data-web-background] :is(.sidebar-shell, .sidebar) {
-  background: transparent;
-}
-.workspace-app[data-web-background] .sidebar-shell {
-  border-right: 1px solid var(--line);
-}
 .workspace-app[data-web-background] .sidebar {
   padding: 36px 20px 26px;
 }
@@ -1089,7 +1083,26 @@
   border-color: var(--line);
   gap: 12px;
 }
+.workspace-app .trash-kind {
+  flex: none;
+  border-radius: 8px;
+  padding: 2px 7px;
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+.workspace-app .trash-clear {
+  margin-top: 12px;
+}
+@media (max-width: 420px) {
+  .workspace-app[data-web-background] .trash-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    justify-items: start;
+    align-items: center;
+  }
+}
 .workspace-app[data-web-background] .trash-row > span {
+  flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -1144,6 +1157,9 @@
   border-radius: 999px;
   background: #111;
   box-shadow: 0 8px 20px #11111115;
+}
+.workspace-app .undo-toast[aria-hidden="true"] {
+  visibility: hidden;
 }
 .workspace-app[data-web-background] .undo-toast button {
   color: #d4e73e;
@@ -1259,10 +1275,6 @@
 @media (max-width: 760px) {
   .workspace-app[data-web-background] {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .workspace-app[data-web-background] .sidebar-shell {
-    border: 0;
-    background: transparent;
   }
   .workspace-app[data-web-background] .sidebar {
     width: min(320px, 88vw);
@@ -1578,7 +1590,7 @@
     font-size: 27px;
   }
   .workspace-app[data-web-background] .undo-toast {
-    bottom: calc(94px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(158px + env(safe-area-inset-bottom, 0px));
     padding: 10px 17px;
     border-radius: 20px;
     font-size: 12px;
@@ -1994,9 +2006,6 @@
 .workspace-app[data-web-background]:has(.compact-editing) {
   grid-template-columns: minmax(0, 1fr);
 }
-.workspace-app[data-web-background]:has(.compact-editing) .sidebar-shell {
-  display: none;
-}
 .workspace-app[data-web-background] .mobile-note-screen.compact-editing {
   inset: 0;
   border: 0;
@@ -2142,11 +2151,6 @@
   .notes-board:not(.arranging)
   .sticky-card-grid
   > .sortable-row
-  > .drag-handle,
-.workspace-app
-  .todo-workspace:not(.arranging)
-  .todo-stack
-  > .sortable-row
   > .drag-handle {
   display: none;
 }
@@ -2255,9 +2259,6 @@
 }
 .workspace-app[data-web-background].web-editing {
   grid-template-columns: minmax(0, 1fr);
-}
-.workspace-app[data-web-background].web-editing .sidebar-shell {
-  display: none;
 }
 .workspace-app[data-web-background].web-editing .mobile-note-screen {
   inset: 24px auto;
@@ -2520,45 +2521,4 @@
 .workspace-app .appearance-panel {
   position: relative;
   isolation: isolate;
-}
-
-/* Notebook management is opened from the collection, never a permanent rail. */
-.workspace-app[data-web-background] .sidebar-shell:not(.mobile-open) {
-  display: none;
-}
-.workspace-app .sidebar .primary-nav,
-.workspace-app .sidebar .settings-link {
-  display: none;
-}
-@media (min-width: 761px) {
-  .workspace-app[data-web-background] .sidebar-shell.mobile-open {
-    position: fixed;
-    inset: 0;
-    z-index: 80;
-    display: grid;
-    place-items: center;
-    border: 0;
-    background: transparent;
-  }
-  .workspace-app .sidebar-shell.mobile-open .mobile-scrim {
-    display: block;
-    position: absolute;
-    inset: 0;
-    border: 0;
-    background: #11111155;
-  }
-  .workspace-app[data-web-background] .sidebar-shell.mobile-open .sidebar {
-    position: relative;
-    z-index: 2;
-    width: min(480px, calc(100vw - 48px));
-    height: min(600px, calc(100dvh - 48px));
-    padding: 28px 24px;
-    border: 1px solid var(--line);
-    border-radius: 24px;
-    background: var(--surface);
-    box-shadow: 0 18px 50px #11111118;
-  }
-  .workspace-app .sidebar-shell.mobile-open .brand-block {
-    padding: 8px 8px 16px;
-  }
 }

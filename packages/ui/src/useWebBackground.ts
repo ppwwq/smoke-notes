@@ -66,7 +66,7 @@ export function useWebBackground(enabled: boolean) {
       localStorage.setItem(storageKey, value);
       setNotice("");
     } catch {
-      setNotice("背景已应用，本次有效；浏览器暂时无法记住选择。");
+      setNotice("背景已应用，本次有效；暂时无法保存此设置。");
     }
   }
   function changeReduceTransparency(value: boolean) {
@@ -76,7 +76,7 @@ export function useWebBackground(enabled: boolean) {
       localStorage.setItem(reducedKey, String(value));
       setNotice("");
     } catch {
-      setNotice("外观已应用，本次有效；浏览器暂时无法记住选择。");
+      setNotice("外观已应用，本次有效；暂时无法保存此设置。");
     }
   }
   return {

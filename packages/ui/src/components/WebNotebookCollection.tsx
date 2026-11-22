@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Layers, X } from "../icons";
+import { X } from "../icons";
 import {
   RecordValidationError,
   TEXT_LIMITS,
@@ -10,9 +10,10 @@ import { SortableStack } from "./SortableStack";
 import { useNotebookTones } from "./useNotebookTones";
 import { RecordActions } from "./RecordActions";
 import { WebDialog } from "./glass/WebDialog";
-import "./notebook-collection.css";
+import { NoteStack } from "./NoteStacks";
 
 interface Props {
+  activeNotebookId?: string | null;
   notebooks: Notebook[];
   notebookNotes?: Record<string, Note[]>;
   onSelect(id: string): void;
@@ -27,6 +28,7 @@ interface Props {
 export function WebNotebookCollection({
   notebooks,
   notebookNotes = {},
+  activeNotebookId = null,
   onSelect,
   onRename,
   onTrash,
@@ -38,91 +40,38 @@ export function WebNotebookCollection({
   const [error, setError] = useState("");
   const pending = useRef(false);
   const tones = useNotebookTones(notebooks);
-  function cover(notebook: Notebook) {
-    const notes = notebookNotes[notebook.id] ?? [];
-    const updatedAt = notes.reduce(
-      (latest, note) => (note.updatedAt > latest ? note.updatedAt : latest),
-      notebook.updatedAt,
-    );
-    return (
-      <>
-        <strong>{notebook.name}</strong>
-        <span className="collection-card-bottom">
-          {notes.length} 张便签
-          <time dateTime={updatedAt}>
-            更新于{" "}
-            {new Date(updatedAt).toLocaleDateString("zh-CN", {
-              month: "short",
-              day: "numeric",
-            })}
-          </time>
-        </span>
-      </>
-    );
-  }
   return (
-    <main className="web-notebook-collection">
-      <header className="notes-board-header">
-        <div>
-          <h1>便签本</h1>
-          <span>{notebooks.length} 个便签本</span>
-        </div>
-      </header>
-      <h2 className="sr-only">全部便签本</h2>
-      {notebooks.length > 1 && (
-        <p className="collection-hint">长按便签本可调整顺序</p>
-      )}
-      <div id="notebook-collection-cards">
-        <SortableStack
-          wholeCard
-          layout="stack"
-          itemKind="便签本"
-          items={notebooks}
-          label={(book) => book.name}
-          onMove={onMove}
-          renderDragOverlay={(notebook) => (
-            <div className="collection-drag-overlay" aria-hidden="true" inert>
-              <div
-                className={`collection-card collection-tone-${tones[notebook.id]}`}
-              >
-                {cover(notebook)}
-              </div>
-            </div>
-          )}
-          className="collection-cards"
-          renderItem={(notebook) => (
-            <div className="collection-card-shell">
-              <button
-                type="button"
-                data-sortable-open
-                className={`collection-card collection-tone-${tones[notebook.id]}`}
-                aria-label={`进入便签本：${notebook.name}`}
-                onClick={() => onSelect(notebook.id)}
-              >
-                {cover(notebook)}
-              </button>
-              <RecordActions
-                kind="便签本"
-                name={notebook.name}
-                renameLabel="编辑便签本"
-                onRename={() => {
-                  setName(notebook.name);
-                  setEditing(notebook);
-                  setError("");
-                }}
-                onTrash={() => onTrash(notebook.id)}
-              />
-            </div>
-          )}
-        />
-      </div>
-      {!notebooks.length && (
-        <div className="collection-empty">
-          <Layers size={32} />
-          <h2>还没有便签本</h2>
-          <p>点「新建便签本」为记录分类。</p>
-        </div>
-      )}
+    <>
+      <SortableStack
+        wholeCard
+        itemKind="便签本"
+        items={notebooks}
+        label={(book) => book.name}
+        onMove={onMove}
+        className="note-stacks"
+        renderItem={(notebook) => (
+          <div className="notebook-stack-shell">
+            <NoteStack
+              notebook={notebook}
+              notes={notebookNotes[notebook.id] ?? []}
+              tone={tones[notebook.id]}
+              activeNotebookId={activeNotebookId}
+              onExpand={onSelect}
+            />
+            <RecordActions
+              kind="便签本"
+              name={notebook.name}
+              renameLabel="编辑便签本"
+              onRename={() => {
+                setName(notebook.name);
+                setEditing(notebook);
+                setError("");
+              }}
+              onTrash={() => onTrash(notebook.id)}
+            />
+          </div>
+        )}
+      />
       {editing && (
         <WebDialog
           web
@@ -191,6 +140,6 @@ export function WebNotebookCollection({
           </form>
         </WebDialog>
       )}
-    </main>
+    </>
   );
 }

@@ -62,7 +62,7 @@
 }
 .workspace-app[data-web-background] .web-dock.rubber-segment {
   --rs-h: 64px !important;
-  width: 368px;
+  width: 280px;
 }
 .workspace-app .app-segments.rubber-segment > .rubber-segment__item,
 .workspace-app .app-segments .rubber-segment__copy,
@@ -196,5 +196,11 @@
   }
   .workspace-app[data-web-background] .web-dock .rubber-segment__item > span {
     font-size: 10px;
+  }
+}
+
+@media (pointer: coarse) {
+  .workspace-app .todo-stack .whole-card-sort > .drag-handle {
+    display: none;
   }
 }

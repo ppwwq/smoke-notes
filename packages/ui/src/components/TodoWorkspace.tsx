@@ -15,14 +15,7 @@ import {
   getTodoStatus,
   projectTodoRange,
 } from "@smoke-notes/core";
-import {
-  Check,
-  GripVertical,
-  SlidersHorizontal,
-  Repeat2,
-  Sun,
-  Plus,
-} from "lucide-react";
+import { SlidersHorizontal, Repeat2, Sun, Plus } from "lucide-react";
 import { RepeatFields, type RepeatChoice } from "./TodoRepeatFields";
 import { SortableStack } from "./SortableStack";
 import { RecordActions } from "./RecordActions";
@@ -341,12 +334,11 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
       return props.onPrepareTodo?.(todo);
   }
 
-  const [arranging, setArranging] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [lastViewRequest, setLastViewRequest] = useState(props.viewRequest);
   const [actionError, setActionError] = useState("");
   const [errorId, setErrorId] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState("");
+  const [feedback, setFeedback] = useState<{ message: string } | null>(null);
   const pending = useRef(new Set<string>());
   const [busyIds, setBusyIds] = useState<string[]>([]);
   const [leaving, setLeaving] = useState<Todo[]>([]);
@@ -355,6 +347,14 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
     status: TodoStatus;
     text: string;
   } | null>(null);
+  useEffect(() => {
+    if (!feedback) return;
+    const timer = setTimeout(() => {
+      setFeedback(null);
+      setUndo(null);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [feedback]);
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
   useEffect(
     () => () => {
@@ -417,7 +417,8 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
       const preparation = prepareTodo(id);
       if (preparation) await preparation;
       await action();
-      setFeedback(message);
+      setUndo(null);
+      setFeedback({ message });
       return true;
     } catch (error) {
       setErrorId(id);
@@ -503,6 +504,7 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
             props.onSavePlannerTodo ? (
               <button
                 type="button"
+                data-sortable-open
                 className="planner-todo-open"
                 aria-label={`编辑待办：${todo.text}`}
                 onClick={() => setEditingTodo(todo)}
@@ -647,6 +649,9 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
   function list(items: Todo[], past = false) {
     return (
       <SortableStack
+        wholeCard={view !== "calendar"}
+        showHandle
+        itemKind="待办"
         items={items}
         label={(todo) => todo.text}
         onMove={async (id, previous, next) => {
@@ -661,7 +666,7 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
 
   return (
     <main
-      className={`todo-workspace todo-planner${view === "calendar" ? " calendar-view" : ""}${props.web && arranging ? " arranging" : ""}`}
+      className={`todo-workspace todo-planner${view === "calendar" ? " calendar-view" : ""}`}
     >
       {editingTodo && props.onSavePlannerTodo && (
         <CalendarTodoEditor
@@ -764,7 +769,7 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
           aria-label="待办操作反馈"
           aria-live="polite"
         >
-          {feedback}
+          {feedback?.message}
         </p>
         {undo && (
           <button
@@ -854,21 +859,6 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
                 {view === "today" ? "今天的事" : "全部事项"}{" "}
                 <span>· {visible.length}</span>
               </h2>
-              {props.web && visible.length > 1 && (
-                <button
-                  type="button"
-                  className="arrange-todos"
-                  aria-pressed={arranging}
-                  onClick={() => setArranging(!arranging)}
-                >
-                  {arranging ? (
-                    <Check size={16} aria-hidden="true" />
-                  ) : (
-                    <GripVertical size={16} aria-hidden="true" />
-                  )}
-                  {arranging ? "完成整理" : "整理待办"}
-                </button>
-              )}
             </div>
             {list(visible)}
           </section>
@@ -908,7 +898,7 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
             今天的事项已安排妥当。休息一下，也很好。
           </p>
         )}
-        {(props.series?.length ?? 0) > 0 && (
+        {view !== "calendar" && (props.series?.length ?? 0) > 0 && (
           <details
             className="planner-series planner-disclosure"
             aria-label="重复计划"
@@ -988,7 +978,7 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
                     )}
                     {rule?.stopped && (
                       <p className="planner-help">
-                        历史仍可在「历史」按日期查看；删除历史需要单独移入最近删除，可以恢复。
+                        历史记录仍可在「日历」或「全部」中查看；删除历史需要单独移入最近删除，可以恢复。
                       </p>
                     )}
                   </div>

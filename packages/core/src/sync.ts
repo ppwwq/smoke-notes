@@ -4,6 +4,7 @@ import { mergeNoteChanges, sameNoteContent } from "./note-merge";
 import { SmokeNotesDatabase } from "./database";
 import { mergeTodoChanges, sameTodoContent } from "./todo-merge";
 import type { Note, Notebook, SyncEntity, SyncOperation, Todo } from "./types";
+import { isPurged } from "./types";
 
 export type RemoteRecord = Notebook | Note | Todo;
 
@@ -265,11 +266,43 @@ export class SyncEngine {
           if (hasPendingLocalChange) return;
           const current = await table.get(change.record.id);
           if (current && current.version > change.record.version) return;
-          await table.put(change.record);
+          if (current && isPurged(current) && !isPurged(change.record)) {
+            await this.rebasePurge(
+              change.entity,
+              current,
+              change.record.version,
+            );
+          } else await table.put(change.record);
         },
       );
     }
     return response.cursor;
+  }
+
+  private async rebasePurge(
+    entity: SyncEntity,
+    local: RemoteRecord,
+    baseVersion: number,
+  ) {
+    const now = this.now().toISOString();
+    const updated = {
+      ...local,
+      version: baseVersion + 1,
+      updatedAt: now,
+    };
+    await this.tableFor(entity).put(updated);
+    await this.database.operations.add({
+      id: this.createId(),
+      deviceId: this.context.deviceId,
+      entity,
+      entityId: updated.id,
+      action: "delete",
+      baseVersion,
+      payload: { ...updated },
+      attempts: 0,
+      createdAt: now,
+      nextAttemptAt: now,
+    });
   }
 
   private async preserveConflict(
@@ -277,6 +310,29 @@ export class SyncEngine {
     serverRecord: RemoteRecord,
   ): Promise<boolean> {
     const table = this.tableFor(operation.entity);
+    // A permanent deletion wins over stale edits and must not create a conflict copy.
+    const handledPurge = await this.database.transaction(
+      "rw",
+      table,
+      this.database.operations,
+      async () => {
+        const local = await table.get(operation.entityId);
+        if (!isPurged(serverRecord) && !(local && isPurged(local)))
+          return false;
+        if (!(await this.database.operations.get(operation.id))) return true;
+        await this.database.operations
+          .where("entityId")
+          .equals(operation.entityId)
+          .delete();
+        if (isPurged(serverRecord)) {
+          await table.put(serverRecord);
+        } else if (local) {
+          await this.rebasePurge(operation.entity, local, serverRecord.version);
+        }
+        return true;
+      },
+    );
+    if (handledPurge) return false;
     if (
       operation.entity === "todo" &&
       (operation.payload.planning || (serverRecord as Todo).planning)

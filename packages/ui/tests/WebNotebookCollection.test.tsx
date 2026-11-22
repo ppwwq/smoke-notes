@@ -22,7 +22,7 @@ const notebooks: Notebook[] = [
   },
 ];
 
-it("shows all notebooks without management or expansion controls and opens the original identity", () => {
+it("opens the notebook from its sortable stack", () => {
   const select = vi.fn();
   render(
     <WebNotebookCollection
@@ -34,7 +34,7 @@ it("shows all notebooks without management or expansion controls and opens the o
     />,
   );
   expect(
-    screen.getByRole("heading", { name: "全部便签本" }),
+    screen.getByRole("group", { name: "移动便签本：工作" }),
   ).toBeInTheDocument();
   expect(screen.queryByText("我的收藏")).not.toBeInTheDocument();
   expect(
@@ -43,7 +43,7 @@ it("shows all notebooks without management or expansion controls and opens the o
   expect(
     screen.queryByRole("button", { name: "展开卡片" }),
   ).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "进入便签本：工作" }));
+  fireEvent.click(screen.getByRole("button", { name: /^展开便签本：工作/ }));
   expect(select).toHaveBeenCalledWith("one");
 });
 
@@ -112,7 +112,9 @@ it("keeps each notebook cover through sorting, rename, new notebooks and remount
     <WebNotebookCollection notebooks={books} {...callbacks} />,
   );
   const cover = (name: string) =>
-    screen.getByRole("button", { name: `进入便签本：${name}` }).className;
+    screen
+      .getByRole("button", { name: `展开便签本：${name}，0 张便签` })
+      .querySelector(".stack-empty")!.className;
   expect(cover("four")).toContain("collection-tone-3");
   const reordered = [
     books[3],

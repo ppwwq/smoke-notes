@@ -475,6 +475,56 @@ describe("LocalRepository", () => {
     ).toEqual(["子便签"]);
   });
 
+  it("purges notebook contents and task history while preserving active and newly trashed items", async () => {
+    const book = await repository.createNotebook("旧本");
+    const note = await repository.createNote(book.id, {
+      title: "旧标题",
+      body: "旧正文",
+    });
+    const task = await repository.createTodo("旧待办");
+    const other = await repository.createTodo("保留");
+    await repository.trashNotebook(book.id);
+    await repository.trashTodo(task.id);
+    const snapshot = (await repository.listTrash()).filter(
+      (item) => item.entity !== "note",
+    );
+    await repository.trashTodo(other.id);
+    await repository.purgeTrash(snapshot);
+    await repository.purgeTrash(snapshot);
+    expect(
+      (await repository.listTrash()).map((item) => item.record.id),
+    ).toEqual([other.id]);
+    expect(await database.notes.get(note.id)).toMatchObject({
+      title: "",
+      body: "",
+    });
+    expect((await database.todos.get(task.id))?.text).not.toBe(task.text);
+    await expect(repository.restore("note", note.id)).rejects.toThrow(
+      "彻底删除",
+    );
+    await expect(repository.restore("todo", task.id)).rejects.toThrow(
+      "彻底删除",
+    );
+    await expect(repository.restore("notebook", book.id)).rejects.toThrow(
+      "彻底删除",
+    );
+  });
+  it("rolls back the whole confirmed batch when an item has since been restored", async () => {
+    const first = await repository.createTodo("一");
+    const second = await repository.createTodo("二");
+    await repository.trashTodo(first.id);
+    await repository.trashTodo(second.id);
+    const snapshot = await repository.listTrash();
+    await repository.restore("todo", second.id);
+    await expect(repository.purgeTrash(snapshot)).rejects.toThrow("变更");
+    expect(
+      (await repository.listTrash()).map((item) => item.record.id),
+    ).toEqual([first.id]);
+    expect((await repository.listTodos()).map((item) => item.id)).toEqual([
+      second.id,
+    ]);
+  });
+
   it("restores only notes deleted with their notebook", async () => {
     const notebook = await repository.createNotebook("部分已删除");
     const oldTrash = await repository.createNote(notebook.id, {

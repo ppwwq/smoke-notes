@@ -141,7 +141,13 @@ export default function FamilyButton({
               const editor = document.querySelector<HTMLElement>(
                 ".mobile-note-screen .rich-note-title",
               );
-              return editor ?? trigger.current;
+              return (
+                document.querySelector<HTMLElement>(
+                  ".calendar-composer-panel input[autofocus], .calendar-composer-panel input",
+                ) ??
+                editor ??
+                trigger.current
+              );
             }}
           >
             <header className="family-heading">

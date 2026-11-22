@@ -123,15 +123,21 @@ it("creates a checklist note in the chosen notebook without creating a daily tas
   await userEvent
     .setup()
     .click(await screen.findByRole("option", { name: "工作" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "快速记录内容" }), {
+    target: { value: "读课文\n做练习" },
+  });
   fireEvent.click(screen.getByRole("button", { name: /清单便签/ }));
   await waitFor(() =>
     expect(callbacks.onCreateNote).toHaveBeenCalledExactlyOnceWith(
       "todo",
       "book-2",
+      "读课文\n做练习",
     ),
   );
   expect(callbacks.onCreateTodo).not.toHaveBeenCalled();
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  fireEvent.click(screen.getByRole("button", { name: "新建便签" }));
+  expect(screen.getByRole("textbox", { name: "快速记录内容" })).toHaveValue("");
 });
 
 it("keeps a quick note draft after closing and after a failed save, then submits it once", async () => {

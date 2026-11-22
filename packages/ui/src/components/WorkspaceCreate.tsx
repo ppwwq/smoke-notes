@@ -20,7 +20,6 @@ export function WorkspaceCreate({
   defaultMode,
   triggerLabel,
   triggerText,
-  quickTodoOnly = false,
   hidden,
   notebooks,
   selectedNotebookId,
@@ -41,7 +40,6 @@ export function WorkspaceCreate({
   hidden: boolean;
   triggerLabel?: string;
   triggerText?: string;
-  quickTodoOnly?: boolean;
   allowNotebook?: boolean;
   notebooks: Notebook[];
   selectedNotebookId: string | null;
@@ -73,12 +71,12 @@ export function WorkspaceCreate({
     setBusy(true);
     setError("");
     try {
-      if (kind === "note" && draft.trim()) {
+      if (draft.trim()) {
         await onCreateNote(kind, selected?.id ?? null, draft);
-        setDraft("");
       } else {
         await onCreateNote(kind, selected?.id ?? null);
       }
+      setDraft("");
       onOpenChange(false);
     } catch {
       setError("新建失败，已有内容已保留，请重试。");
@@ -112,23 +110,22 @@ export function WorkspaceCreate({
           onOpenChange(next);
         }}
       >
-        {!quickTodoOnly && (
-          <SegmentedControl
-            label="新建类型"
-            value={mode}
-            onChange={(next) => {
-              if (next === "todo" && onArrange) onArrange();
-              else onModeChange(next);
-            }}
-            options={[
-              { value: "note", label: "便签" },
-              { value: "todo", label: onArrange ? "安排" : "待办" },
-              ...(allowNotebook
-                ? [{ value: "notebook" as const, label: "便签本" }]
-                : []),
-            ]}
-          />
-        )}
+        <SegmentedControl
+          label="新建类型"
+          value={mode}
+          onChange={(next) => {
+            if (next === "event") onArrange?.();
+            else onModeChange(next);
+          }}
+          options={[
+            { value: "note", label: "便签" },
+            { value: "todo", label: "待办" },
+            ...(onArrange ? [{ value: "event" as const, label: "日程" }] : []),
+            ...(allowNotebook
+              ? [{ value: "notebook" as const, label: "便签本" }]
+              : []),
+          ]}
+        />
         <section
           hidden={mode !== "note"}
           aria-label="新建便签内容"

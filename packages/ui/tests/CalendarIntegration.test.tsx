@@ -67,7 +67,9 @@ it("opens calendar creation from the arrangement entry beside notes", async () =
     expect(within(choices).getByRole("button", { name: "便签" })).toBeVisible(),
   );
   expect(screen.getByRole("button", { name: /清单便签/ })).toBeVisible();
-  fireEvent.click(within(choices).getByRole("button", { name: "安排" }));
+  fireEvent.click(within(choices).getByRole("button", { name: "待办" }));
+  expect(screen.getByRole("textbox", { name: "新待办内容" })).toBeVisible();
+  fireEvent.click(within(choices).getByRole("button", { name: "日程" }));
   expect(
     await screen.findByRole("textbox", { name: "日程标题" }),
   ).toBeVisible();
@@ -75,7 +77,7 @@ it("opens calendar creation from the arrangement entry beside notes", async () =
   expect(screen.getByRole("button", { name: "新建便签" })).toBeVisible();
   expect(screen.queryByRole("searchbox", { name: "搜索日历" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "新建便签" }));
-  fireEvent.click(screen.getByRole("button", { name: "安排" }));
+  fireEvent.click(screen.getByRole("button", { name: "日程" }));
   expect(screen.getByRole("dialog", { name: "新建安排" })).toBeVisible();
   const types = screen.getByRole("group", { name: "安排类型" });
   expect(within(types).getByRole("button", { name: "日程" })).toBeVisible();
@@ -421,7 +423,15 @@ it("renames and removes a type from an existing event without deleting the event
 it("creates a one-off task on the selected date through the unified editor and keeps the calendar", async () => {
   await openCalendar();
   fireEvent.click(screen.getByRole("button", { name: /2026年10月23日/ }));
-  fireEvent.click(screen.getByRole("button", { name: "添加待办到2026-10-23" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "为 2026-10-23 新建安排" }),
+  );
+  fireEvent.click(
+    within(screen.getByRole("group", { name: "安排类型" })).getByRole(
+      "button",
+      { name: "待办" },
+    ),
+  );
   fireEvent.change(screen.getByRole("textbox", { name: "待办内容" }), {
     target: { value: "周五交材料" },
   });

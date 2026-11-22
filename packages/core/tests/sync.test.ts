@@ -74,6 +74,78 @@ describe("SyncEngine", () => {
     expect(await repository.listPendingOperations()).toEqual([]);
   });
 
+  it("rebases an offline purge over a stale edit and keeps the remote tombstone out of trash", async () => {
+    const task = await repository.createTodo("内容", { notes: "私人备注" });
+    await repository.trashTodo(task.id);
+    await repository.purgeTrash(await repository.listTrash());
+    const remote = { ...task, text: "另一设备的编辑", version: 5 };
+    const push = vi
+      .fn<RemoteSyncAdapter["push"]>()
+      .mockResolvedValueOnce({ status: "conflict", record: remote })
+      .mockResolvedValue({ status: "applied" });
+    const engine = new SyncEngine(
+      database,
+      { push, pull: async () => ({ changes: [], cursor: "1" }) },
+      { deviceId: "device" },
+    );
+    await engine.flush();
+    await engine.flush();
+    expect(push).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        baseVersion: 5,
+        action: "delete",
+        payload: expect.objectContaining({
+          text: "已彻底删除",
+          planning: { version: 1, kind: "task" },
+        }),
+      }),
+    );
+    const purged = (await database.todos.get(task.id))!;
+    const peer = new SmokeNotesDatabase("peer-" + crypto.randomUUID());
+    try {
+      const repo = new LocalRepository(peer, {
+        workspaceId: task.workspaceId,
+        deviceId: "peer",
+      });
+      await new SyncEngine(
+        peer,
+        {
+          push,
+          pull: async () => ({
+            changes: [
+              {
+                entity: "todo",
+                record: { ...purged, deletedAt: "1970-01-01T00:00:00+00:00" },
+              },
+            ],
+            cursor: "2",
+          }),
+        },
+        { deviceId: "peer" },
+      ).pull(null);
+      expect(await repo.listTrash()).toEqual([]);
+      await expect(repo.restore("todo", task.id)).rejects.toThrow("彻底删除");
+      const legacyRestore = { ...task, version: purged.version + 1 };
+      await new SyncEngine(
+        peer,
+        {
+          push,
+          pull: async () => ({
+            changes: [{ entity: "todo", record: legacyRestore }],
+            cursor: "3",
+          }),
+        },
+        { deviceId: "peer" },
+      ).pull("2");
+      expect(await repo.listTodos()).toEqual([]);
+      expect(await repo.listPendingOperations()).toMatchObject([
+        { action: "delete", baseVersion: legacyRestore.version },
+      ]);
+    } finally {
+      await peer.delete();
+    }
+  });
+
   it("serializes uploads from separate engines connected to the same database", async () => {
     await repository.createTodo("只上传一次");
     const otherDatabase = new SmokeNotesDatabase(database.name);

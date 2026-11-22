@@ -1,10 +1,9 @@
-import { CheckCircle2, Library, NotebookPen, Settings2 } from "../icons";
+import { CheckCircle2, NotebookPen, Settings2 } from "../icons";
 import RubberSegment from "./rubber-segment/RubberSegment";
 
 const destinations = [
   { label: "便签", text: "便签", Icon: NotebookPen },
   { label: "待办", text: "待办", Icon: CheckCircle2 },
-  { label: "浏览便签本", text: "便签本", Icon: Library },
   { label: "打开设置", text: "设置", Icon: Settings2 },
 ];
 

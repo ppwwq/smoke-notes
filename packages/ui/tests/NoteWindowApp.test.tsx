@@ -620,7 +620,7 @@ describe("NoteWindowApp", () => {
     await screen.findByDisplayValue("桌面便签");
 
     await user.click(screen.getByRole("button", { name: "新建便签" }));
-    await user.click(screen.getByRole("menuitem", { name: "普通便签" }));
+    await user.click(screen.getByRole("menuitem", { name: "文字便签" }));
 
     await waitFor(() => expect(bridge.switchNote).toHaveBeenCalledOnce());
     expect(bridge.openNote).not.toHaveBeenCalled();
@@ -635,7 +635,7 @@ describe("NoteWindowApp", () => {
     await screen.findByDisplayValue("桌面便签");
 
     await user.click(screen.getByRole("button", { name: "新建便签" }));
-    await user.click(screen.getByRole("menuitem", { name: "待办便签" }));
+    await user.click(screen.getByRole("menuitem", { name: "清单便签" }));
 
     await waitFor(() => expect(bridge.switchNote).toHaveBeenCalledOnce());
     expect(bridge.openNote).not.toHaveBeenCalled();
@@ -670,7 +670,7 @@ describe("NoteWindowApp", () => {
     const title = await screen.findByRole("textbox", { name: "便签标题" });
     fireEvent.change(title, { target: { value: "必须保存" } });
     fireEvent.click(screen.getByRole("button", { name: "新建便签" }));
-    const create = screen.getByRole("menuitem", { name: "普通便签" });
+    const create = screen.getByRole("menuitem", { name: "文字便签" });
     fireEvent.click(create);
     fireEvent.click(create);
     expect(await screen.findByRole("alert")).toHaveTextContent("新便签已创建");
@@ -695,7 +695,7 @@ describe("NoteWindowApp", () => {
     const title = await screen.findByRole("textbox", { name: "便签标题" });
     fireEvent.change(title, { target: { value: "保留草稿" } });
     fireEvent.click(screen.getByRole("button", { name: "新建便签" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "待办便签" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "清单便签" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "当前草稿已保留",
     );
@@ -716,7 +716,7 @@ describe("NoteWindowApp", () => {
     const createButton = screen.getByRole("button", { name: "新建便签" });
 
     await user.click(createButton);
-    const regularItem = screen.getByRole("menuitem", { name: "普通便签" });
+    const regularItem = screen.getByRole("menuitem", { name: "文字便签" });
     expect(regularItem.querySelector("svg")).toHaveAttribute("width", "12");
     await user.click(document.body);
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();

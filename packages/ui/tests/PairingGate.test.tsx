@@ -66,6 +66,6 @@ it("does not redeem while confirming IME text", () => {
 
 it("explains that a web preview without a controller cannot display a code", () => {
   render(<PairingDialog web onClose={vi.fn()} />);
-  expect(screen.getByText(/网页暂时不能出示配对码/)).toBeInTheDocument();
+  expect(screen.getByText(/设备暂时不能出示配对码/)).toBeInTheDocument();
   expect(screen.queryByText(/在电脑端打开/)).toBeNull();
 });

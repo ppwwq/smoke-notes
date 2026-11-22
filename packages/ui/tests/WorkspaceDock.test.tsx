@@ -18,10 +18,10 @@ beforeEach(() => {
       ).indexOf(this);
       return {
         left: index < 0 ? 0 : 8 + index * 88,
-        right: index < 0 ? 368 : 96 + index * 88,
+        right: index < 0 ? 280 : 96 + index * 88,
         top: 0,
         bottom: 64,
-        width: index < 0 ? 368 : 88,
+        width: index < 0 ? 280 : 88,
         height: 64,
         x: 0,
         y: 0,
@@ -73,9 +73,9 @@ describe("WorkspaceDock / RubberSegment", () => {
     const nav = screen.getByRole("navigation", { name: "主导航" });
     const thumb = nav.querySelector<HTMLElement>(".rubber-segment__thumb")!;
     await waitFor(() => {
-      expect(thumb.style.clipPath).toBe("inset(0 88px 0 176px round 32px)");
+      expect(thumb.style.clipPath).toBe("inset(0 0px 0 176px round 32px)");
     });
-    expect(screen.getByRole("button", { name: "浏览便签本" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "打开设置" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -85,7 +85,7 @@ describe("WorkspaceDock / RubberSegment", () => {
     await userEvent.click(buttons[1]);
     expect(selected).toHaveBeenCalledExactlyOnceWith(1);
     expect(buttons[1]).toHaveAttribute("aria-current", "page");
-    expect(screen.getAllByRole("button")).toHaveLength(4);
+    expect(screen.getAllByRole("button")).toHaveLength(3);
   });
   it("supports arrows, Home, End and keyboard activation", async () => {
     const { buttons } = setup();
@@ -94,7 +94,7 @@ describe("WorkspaceDock / RubberSegment", () => {
     expect(buttons[1]).toHaveFocus();
     expect(buttons[1]).toHaveAttribute("aria-current", "page");
     await userEvent.keyboard("{End}");
-    expect(buttons[3]).toHaveFocus();
+    expect(buttons[2]).toHaveFocus();
     await userEvent.keyboard("{Home}");
     expect(buttons[0]).toHaveFocus();
     buttons[2].focus();
@@ -105,10 +105,10 @@ describe("WorkspaceDock / RubberSegment", () => {
     const { nav, buttons, pointer, selected } = setup();
     pointer("pointerdown", 52);
     pointer("pointermove", 60);
-    pointer("pointermove", 290);
+    pointer("pointermove", 230);
     expect(selected).not.toHaveBeenCalled();
     expect(nav).toHaveAttribute("data-held");
-    pointer("pointerup", 290);
+    pointer("pointerup", 230);
     expect(selected).toHaveBeenCalledTimes(1);
     expect(nav).not.toHaveAttribute("data-held");
     fireEvent.click(buttons[0], { detail: 1 });

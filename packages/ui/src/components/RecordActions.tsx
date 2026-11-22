@@ -97,7 +97,7 @@ export function RecordActions({
                   if (!trigger.current?.isConnected) {
                     document
                       .querySelector<HTMLElement>(
-                        '.sidebar-shell.mobile-open .sidebar-close, .web-dock [aria-current="page"]',
+                        '.web-dock [aria-current="page"]',
                       )
                       ?.focus();
                   }

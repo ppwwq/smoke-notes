@@ -203,9 +203,6 @@ body[data-web-background="paper"] #root {
   :is(.sidebar, .note-index, .mobile-bottom-nav) {
   background: var(--paper-inset);
 }
-.workspace-app[data-web-background="paper"] .sidebar-shell {
-  background: transparent;
-}
 .workspace-app[data-web-background="paper"]
   :is(.mobile-note-screen, .editor-pane, .empty-workspace, .todo-workspace) {
   background: var(--paper);

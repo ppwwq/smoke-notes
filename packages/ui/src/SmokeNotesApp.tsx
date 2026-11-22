@@ -23,7 +23,7 @@ import type {
   SyncStatus,
   TodoSettings,
 } from "@smoke-notes/core";
-import { getTodoDay } from "@smoke-notes/core";
+import { getTodoDay, isPurged } from "@smoke-notes/core";
 import {
   ArrowLeft,
   ExternalLink,
@@ -40,7 +40,6 @@ import { CalendarEventEditor } from "./components/CalendarEventEditor";
 import type { PlannerTypeActions } from "./components/PlannerTypeField";
 import { WorkspaceCreate } from "./components/WorkspaceCreate";
 import { WorkspaceDock } from "./components/WorkspaceDock";
-import { Sidebar } from "./components/Sidebar";
 import { WebNotebookCollection } from "./components/WebNotebookCollection";
 import { NotesWorkspace } from "./components/NotesWorkspace";
 import { TodoWorkspace, type TodoFilter } from "./components/TodoWorkspace";
@@ -50,7 +49,6 @@ import type { RichNoteEditorHandle } from "./components/RichNoteEditor";
 import { SyncIndicator } from "./components/SyncIndicator";
 import { LoadingStatus } from "./components/LoadingStatus";
 import { DiamondGrid } from "./components/diamond-grid/DiamondGrid";
-import { useMobileSidebar } from "./useMobileSidebar";
 const RichNoteEditor = lazy(() =>
   import("./components/RichNoteEditor").then((module) => ({
     default: module.RichNoteEditor,
@@ -122,20 +120,12 @@ export function SmokeNotesApp({
   );
   const selectedNotebookIdRef = useRef<string | null>(null);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
-  const [notebookCollectionOpen, setNotebookCollectionOpen] = useState(false);
   const [todoFilter, setTodoFilter] = useState<TodoFilter>("all");
   const workspaceRef = useRef<HTMLDivElement>(null);
   const lastOpenedNote = useRef<string | null>(null);
   const wasEditing = useRef(false);
   const browsePositions = useRef(new Map<string, Map<string, number>>());
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
-  const { mobile, panelRef } = useMobileSidebar(
-    mobileNavOpen,
-    closeMobileNav,
-    true,
-  );
   const [pairingOpen, setPairingOpen] = useState(false);
   const [lastTrashed, setLastTrashed] = useState<LastTrashed | null>(null);
   const [online, setOnline] = useState(
@@ -235,7 +225,7 @@ export function SmokeNotesApp({
       ] = await Promise.all([
         repository.listNotebooks(),
         repository.listTodos(),
-        repository.listTrash(),
+        repository.listTrash(true),
         repository.listTodoSeries(),
         repository.getTodoSettings(),
         repository.listCalendarEvents(),
@@ -398,7 +388,6 @@ export function SmokeNotesApp({
   async function showTodos() {
     if (!(await saveBeforeLeaving())) return;
     setView("todos");
-    setMobileNavOpen(false);
   }
 
   async function selectNotebook(id: string) {
@@ -407,7 +396,7 @@ export function SmokeNotesApp({
     setView("notes");
     selectedNotebookIdRef.current = id;
     setSelectedNoteId(null);
-    setMobileNavOpen(false);
+
     await refresh(id);
     transitionWorkspace(() => setNotesExpanded(true), true);
   }
@@ -446,9 +435,8 @@ export function SmokeNotesApp({
   }, [platform, saveStatus]);
 
   const webEditing = view === "notes" && !!selectedNote;
-  const browseKey = notebookCollectionOpen
-    ? "notebooks"
-    : view === "todos"
+  const browseKey =
+    view === "todos"
       ? `todos:${todoFilter}`
       : noteQuery.trim()
         ? `note-find:${noteQuery}`
@@ -462,7 +450,7 @@ export function SmokeNotesApp({
     const positions = browsePositions.current.get(browseKey);
     workspaceRef.current
       ?.querySelectorAll<HTMLElement>(
-        ".notes-board, .notes-board-scroll, .todo-workspace, .web-notebook-collection",
+        ".notes-board, .notes-board-scroll, .todo-workspace",
       )
       .forEach((element) => {
         element.scrollTop = positions?.get(element.classList[0]) ?? 0;
@@ -517,16 +505,6 @@ export function SmokeNotesApp({
     };
   }, [editorMenu, closeEditorMenu]);
 
-  async function createNotebook(name: string) {
-    if (!(await saveBeforeLeaving())) return;
-    const created = await repository.createNotebook(name);
-    setNotebookCollectionOpen(false);
-    setView("notes");
-    await refreshAfterMutation(created.id);
-    setMobileNavOpen(false);
-    setNotesExpanded(true);
-  }
-
   async function createWorkspaceNote(
     kind: NoteKind,
     notebookId: string | null,
@@ -543,7 +521,7 @@ export function SmokeNotesApp({
       });
       await refreshAfterMutation(note.notebookId);
       setView("notes");
-      setNotebookCollectionOpen(false);
+
       setNotesExpanded(true);
       setNoteQuery("");
       transitionWorkspace(() => setSelectedNoteId(note.id));
@@ -635,73 +613,15 @@ export function SmokeNotesApp({
           </header>
         )}
         <div
-          id="notebook-sidebar"
-          ref={panelRef}
-          className={`sidebar-shell${mobileNavOpen ? " mobile-open" : ""}`}
-          inert={mobile && !mobileNavOpen}
-          aria-hidden={mobile && !mobileNavOpen ? true : undefined}
-          role={mobile && mobileNavOpen ? "dialog" : undefined}
-          aria-modal={mobile && mobileNavOpen ? true : undefined}
-          aria-label={mobile && mobileNavOpen ? "便签本导航" : undefined}
-        >
-          <button
-            type="button"
-            className="mobile-scrim"
-            aria-label="关闭便签本"
-            onClick={() => setMobileNavOpen(false)}
-          />
-          <Sidebar
-            web
-            onClose={closeMobileNav}
-            notebooks={notebooks}
-            selectedNotebookId={selectedNotebookId}
-            view={view}
-            onSelectNotebook={(id) => {
-              setNotebookCollectionOpen(false);
-              void selectNotebook(id);
-            }}
-            onShowTodos={() => {
-              setNotebookCollectionOpen(false);
-              void showTodos();
-            }}
-            onCreateNotebook={createNotebook}
-            onMoveNotebook={async (id, previous, next) => {
-              await repository.moveNotebook(id, previous, next);
-              await refreshAfterMutation(selectedNotebookId);
-            }}
-            onRenameNotebook={async (id, name) => {
-              await repository.renameNotebook(id, name);
-              await refreshAfterMutation(selectedNotebookId);
-            }}
-            onTrashNotebook={async (id) => {
-              if (!(await saveBeforeLeaving())) return;
-              const notebook = notebooks.find((item) => item.id === id);
-              await repository.trashNotebook(id);
-              setLastTrashed({
-                entity: "notebook",
-                id,
-                label: notebook?.name ?? "便签本",
-              });
-              await refreshAfterMutation(null);
-            }}
-            onOpenSettings={() => {
-              setMobileNavOpen(false);
-              setSettingsOpen(true);
-            }}
-          />
-        </div>
-
-        <div
           ref={workspaceRef}
           className={`workspace-shell${syncStatus ? " has-sync-status" : ""}`}
-          inert={mobile && mobileNavOpen}
           onScrollCapture={(event) => {
             if (webEditing) return;
             const element = event.target;
             if (
               !(element instanceof HTMLElement) ||
               !element.matches(
-                ".notes-board, .notes-board-scroll, .todo-workspace, .web-notebook-collection",
+                ".notes-board, .notes-board-scroll, .todo-workspace",
               )
             )
               return;
@@ -768,34 +688,7 @@ export function SmokeNotesApp({
               </span>
             </div>
           )}
-          {notebookCollectionOpen ? (
-            <WebNotebookCollection
-              notebooks={notebooks}
-              notebookNotes={notebookNotes}
-              onSelect={(id) => {
-                setNotebookCollectionOpen(false);
-                void selectNotebook(id);
-              }}
-              onRename={async (id, name) => {
-                await repository.renameNotebook(id, name);
-                await refreshAfterMutation(selectedNotebookId);
-              }}
-              onMove={async (id, previous, next) => {
-                await repository.moveNotebook(id, previous, next);
-                await refreshAfterMutation(selectedNotebookId);
-              }}
-              onTrash={async (id) => {
-                const book = notebooks.find((item) => item.id === id);
-                await repository.trashNotebook(id);
-                setLastTrashed({
-                  entity: "notebook",
-                  id,
-                  label: book?.name ?? "便签本",
-                });
-                await refreshAfterMutation(selectedNotebookId);
-              }}
-            />
-          ) : view === "todos" ? (
+          {view === "todos" ? (
             <TodoWorkspace
               {...plannerActions}
               onEditorOpenChange={setCalendarEditorOpen}
@@ -1089,7 +982,7 @@ export function SmokeNotesApp({
                             setLastTrashed({
                               entity: "note",
                               id: selectedNote.id,
-                              label: selectedNote.title,
+                              label: selectedNote.title.trim() || "无标题便签",
                             });
                             setSelectedNoteId(null);
                             await refreshAfterMutation(selectedNotebookId);
@@ -1189,9 +1082,34 @@ export function SmokeNotesApp({
                 notes: notebookNotes[notebook.id] ?? [],
               }))}
               expanded={notesExpanded}
-              onExpandNotebook={(id) => {
-                void selectNotebook(id);
-              }}
+              collection={
+                <WebNotebookCollection
+                  activeNotebookId={selectedNotebookId}
+                  notebooks={notebooks}
+                  notebookNotes={notebookNotes}
+                  onSelect={(id) => {
+                    void selectNotebook(id);
+                  }}
+                  onRename={async (id, name) => {
+                    await repository.renameNotebook(id, name);
+                    await refreshAfterMutation(selectedNotebookId);
+                  }}
+                  onMove={async (id, previous, next) => {
+                    await repository.moveNotebook(id, previous, next);
+                    await refreshAfterMutation(selectedNotebookId);
+                  }}
+                  onTrash={async (id) => {
+                    const book = notebooks.find((item) => item.id === id);
+                    await repository.trashNotebook(id);
+                    setLastTrashed({
+                      entity: "notebook",
+                      id,
+                      label: book?.name ?? "便签本",
+                    });
+                    await refreshAfterMutation(selectedNotebookId);
+                  }}
+                />
+              }
               onCollapse={() =>
                 transitionWorkspace(() => setNotesExpanded(false), true)
               }
@@ -1220,7 +1138,7 @@ export function SmokeNotesApp({
                 setLastTrashed({
                   entity: "note",
                   id,
-                  label: note?.title ?? "便签",
+                  label: note?.title.trim() || "无标题便签",
                 });
                 await refreshAfterMutation(selectedNotebookId);
               }}
@@ -1232,78 +1150,54 @@ export function SmokeNotesApp({
           )}
         </div>
 
-        <div style={{ display: "contents" }} inert={mobile && mobileNavOpen}>
-          {!webEditing && (
-            <WorkspaceDock
-              selected={
-                settingsOpen
-                  ? 3
-                  : notebookCollectionOpen
-                    ? 2
-                    : view === "todos"
-                      ? 1
-                      : 0
+        {!webEditing && (
+          <WorkspaceDock
+            selected={settingsOpen ? 2 : view === "todos" ? 1 : 0}
+            onSelect={(index) => {
+              if (index === 2) {
+                setSettingsOpen(true);
+                return;
               }
-              onSelect={(index) => {
-                if (index === 3) {
-                  setSettingsOpen(true);
-                  return;
-                }
-                setNotebookCollectionOpen(index === 2);
-                if (index === 0) setView("notes");
-                if (index === 1) {
-                  setTodoViewRequest(null);
-                  void showTodos();
-                }
-              }}
-            />
-          )}
-        </div>
+
+              if (index === 0) setView("notes");
+              if (index === 1) {
+                setTodoViewRequest(null);
+                void showTodos();
+              }
+            }}
+          />
+        )}
         <WorkspaceCreate
           hidden={
             webEditing ||
             settingsOpen ||
             pairingOpen ||
-            mobileNavOpen ||
             !!plannerCreateDate ||
             calendarEditorOpen
           }
           open={createOpen}
           onOpenChange={(open) => {
-            if (
-              open &&
-              !notebookCollectionOpen &&
-              view === "todos" &&
-              calendarCreateDate
-            )
+            if (open && view === "todos" && calendarCreateDate)
               setPlannerCreateDate(calendarCreateDate);
             else setCreateOpen(open);
           }}
           onArrange={() => {
             setCreateOpen(false);
-            setPlannerCreateDate(calendarCreateDate ?? todoToday);
+            setPlannerCreateDate(
+              (view === "todos" && calendarCreateDate) || todoToday,
+            );
           }}
           triggerLabel={
-            !notebookCollectionOpen && view === "todos"
+            view === "todos"
               ? calendarCreateDate
                 ? "新建安排"
                 : "新增待办"
               : undefined
           }
-          triggerText={notebookCollectionOpen ? "新建便签本" : undefined}
-          quickTodoOnly={
-            !notebookCollectionOpen && view === "todos" && !calendarCreateDate
-          }
           mode={createMode}
           onModeChange={setCreateMode}
-          allowNotebook={notebookCollectionOpen}
-          defaultMode={
-            notebookCollectionOpen
-              ? "notebook"
-              : view === "todos"
-                ? "todo"
-                : "note"
-          }
+          allowNotebook={view === "notes"}
+          defaultMode={view === "todos" ? "todo" : "note"}
           notebooks={notebooks}
           selectedNotebookId={selectedNotebookId}
           today={todoToday}
@@ -1321,7 +1215,6 @@ export function SmokeNotesApp({
             await refreshAfterMutation(selectedNotebookId);
           }}
           onShowTodos={(date) => {
-            setNotebookCollectionOpen(false);
             setTodoFilter("all");
             if (!calendarCreateDate || view !== "todos")
               setTodoViewRequest({
@@ -1345,6 +1238,7 @@ export function SmokeNotesApp({
         )}
         {settingsOpen && (
           <SettingsPanel
+            platform={platform}
             bridge={desktopBridge}
             webBackground={background}
             onWebBackgroundChange={changeBackground}
@@ -1374,7 +1268,12 @@ export function SmokeNotesApp({
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
               });
             }}
-            trash={trash}
+            trash={trash.filter((item) => !isPurged(item.record))}
+            onPurge={async (items) => {
+              await repository.purgeTrash(items);
+              setLastTrashed(null);
+              await refreshAfterMutation(selectedNotebookId);
+            }}
             onClose={() => setSettingsOpen(false)}
             onOpenPairing={() => {
               setSettingsOpen(false);
@@ -1387,6 +1286,11 @@ export function SmokeNotesApp({
               else if (item.entity === "note")
                 await repository.restore("note", item.record.id);
               else await repository.restore("todo", item.record.id);
+              setLastTrashed((current) =>
+                current?.entity === item.entity && current.id === item.record.id
+                  ? null
+                  : current,
+              );
               await refreshAfterMutation(selectedNotebookId);
             }}
           />

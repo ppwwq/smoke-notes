@@ -1,5 +1,6 @@
 import userEvent from "@testing-library/user-event";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -51,9 +52,12 @@ it("keeps today's progress in the header of both todo lists", () => {
   ]) {
     fireEvent.click(screen.getByRole("button", { name: tab }));
     const heading = screen.getByRole("heading", { name: title });
-    const progress = within(heading.closest("header")!).getByRole("progressbar", {
-      name: "今天完成进度",
-    });
+    const progress = within(heading.closest("header")!).getByRole(
+      "progressbar",
+      {
+        name: "今天完成进度",
+      },
+    );
     expect(progress).toHaveAttribute("value", "1");
     expect(progress).toHaveAttribute("max", "2");
   }
@@ -560,4 +564,39 @@ it("places legacy unfinished records in overdue and legacy completions on their 
   expect(oldOpen.updatedAt).toBe(originalDate);
   expect(oldCompleted.updatedAt).toBe(originalDate);
   expect(callbacks.onUpdate).not.toHaveBeenCalled();
+});
+
+it("gives each completed task six seconds of feedback and undo", async () => {
+  vi.useFakeTimers();
+  try {
+    render(
+      <TodoWorkspace
+        today="2026-09-24"
+        todos={[todo, { ...todo, id: "two", text: "第二件" }]}
+        {...handlers()}
+      />,
+    );
+    for (const text of ["旧文字", "第二件"]) {
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole("checkbox", { name: "完成：" + text }),
+        );
+      });
+      act(() => {
+        vi.advanceTimersByTime(4000);
+      });
+      expect(
+        screen.getByRole("button", { name: "撤销：" + text }),
+      ).toBeVisible();
+    }
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(screen.queryByRole("button", { name: /^撤销：/ })).toBeNull();
+    expect(
+      screen.getByRole("status", { name: "待办操作反馈" }),
+    ).toBeEmptyDOMElement();
+  } finally {
+    vi.useRealTimers();
+  }
 });

@@ -12,6 +12,7 @@ export function WebDialog({
   onClose,
   children,
   placement = "center",
+  fallbackFocus,
 }: {
   web: boolean;
   kind: "settings" | "pairing" | "actions" | "appearance";
@@ -19,6 +20,7 @@ export function WebDialog({
   onClose: () => void;
   children: ReactNode;
   placement?: "center" | "top-end";
+  fallbackFocus?: () => HTMLElement | null;
 }) {
   const portalHost = useRef<HTMLDivElement>(null);
   const { style: viewportStyle } = useWebViewport(placement === "top-end");
@@ -50,11 +52,15 @@ export function WebDialog({
             className={`${panel}${web ? " web-dialog" : ""}${placement === "top-end" ? " calendar-composer-panel" : ""}`}
             aria-label={label}
             finalFocus={() =>
-              !returnTarget?.isConnected || returnTarget.closest("[inert]")
-                ? document.querySelector<HTMLElement>(
-                    '.sidebar-shell.mobile-open .sidebar-close, .mobile-note-header [aria-label="更多操作"], .web-dock button, [aria-label="打开便签本"]',
-                  )
-                : returnTarget
+              returnTarget?.closest(".family-popup")
+                ? document.querySelector<HTMLElement>(".family-trigger")
+                : !returnTarget?.isConnected ||
+                    returnTarget.closest("[inert], [hidden]")
+                  ? (fallbackFocus?.() ??
+                    document.querySelector<HTMLElement>(
+                      '.mobile-note-header [aria-label="更多操作"], .web-dock button, [aria-label="打开便签本"]',
+                    ))
+                  : returnTarget
             }
           >
             {web && <GlassSurface kind="dialog" />}

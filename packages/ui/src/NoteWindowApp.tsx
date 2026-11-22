@@ -340,7 +340,7 @@ export function NoteWindowApp({
                 onClick={() => void createNote("note")}
               >
                 <StickyNote size={12} />
-                普通便签
+                文字便签
               </button>
               <button
                 type="button"
@@ -348,7 +348,7 @@ export function NoteWindowApp({
                 onClick={() => void createNote("todo")}
               >
                 <CheckSquare2 size={12} />
-                待办便签
+                清单便签
               </button>
             </div>
           )}

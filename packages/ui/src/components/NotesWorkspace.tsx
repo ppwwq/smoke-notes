@@ -2,7 +2,7 @@ import type { Note, Notebook } from "@smoke-notes/core";
 import { ArrowLeft, ExternalLink, FilePlus2, Trash2 } from "../icons";
 import { SortableStack } from "./SortableStack";
 import { RecordActions } from "./RecordActions";
-import { NoteStacks, type NotebookNotes } from "./NoteStacks";
+import type { NotebookNotes } from "./NoteStacks";
 import { NoteFinderToolbar, NoteFinderResults } from "./NoteFinder";
 
 interface NotesWorkspaceProps {
@@ -11,7 +11,7 @@ interface NotesWorkspaceProps {
   notes: Note[];
   groups?: NotebookNotes[];
   expanded?: boolean;
-  onExpandNotebook?(id: string): void;
+  collection: React.ReactNode;
   onCollapse?(): void;
   openOnSingleClick: boolean;
   returnNoteId?: string | null;
@@ -65,9 +65,7 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
         </div>
       </header>
       {collapsed && !finding && (
-        <p className="stack-context">
-          点开一叠继续记录。分类、重命名与整理在「便签本」。
-        </p>
+        <p className="stack-context">点开便签本继续记录。长按可调整顺序。</p>
       )}
       {props.web && props.groups && props.onQueryChange && (
         <NoteFinderToolbar
@@ -83,7 +81,13 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
       )}
       <section
         className="notes-board-scroll"
-        aria-label={finding ? "查找便签结果" : `${props.notebook.name}便签列表`}
+        aria-label={
+          finding
+            ? "查找便签结果"
+            : collapsed
+              ? "便签本列表"
+              : `${props.notebook.name}便签列表`
+        }
       >
         {finding ? (
           <NoteFinderResults
@@ -93,11 +97,7 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
             onOpen={props.onOpenNote}
           />
         ) : collapsed ? (
-          <NoteStacks
-            groups={props.groups!}
-            activeNotebookId={props.notebook.id}
-            onExpand={(id) => props.onExpandNotebook?.(id)}
-          />
+          props.collection
         ) : (
           <>
             {props.notes.length === 0 ? (
@@ -115,11 +115,11 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
                 animateChanges
                 wholeCard
                 items={props.notes}
-                label={(note) => note.title || "无标题便签"}
+                label={(note) => note.title.trim() || "无标题便签"}
                 onMove={props.onMoveNote}
                 className="sticky-card-grid"
                 renderItem={(note, index) => {
-                  const displayTitle = note.title || "无标题便签";
+                  const displayTitle = note.title.trim() || "无标题便签";
                   return (
                     <div className="note-card-shell">
                       <article
@@ -144,16 +144,16 @@ export function NotesWorkspace(props: NotesWorkspaceProps) {
                           {note.kind === "todo" && (
                             <span
                               className="note-kind-marker"
-                              aria-label={`待办便签：${displayTitle}`}
+                              aria-label={`清单便签：${displayTitle}`}
                             >
-                              清单
+                              清单便签
                             </span>
                           )}
                           <strong>{displayTitle}</strong>
                           <p>{note.body || "空白便签"}</p>
                           <time>
                             {new Date(note.updatedAt).toLocaleDateString(
-                              "zh-HK",
+                              "zh-CN",
                               {
                                 month: "short",
                                 day: "numeric",

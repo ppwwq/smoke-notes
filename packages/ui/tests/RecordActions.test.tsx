@@ -52,12 +52,14 @@ it("exposes existing restore and pairing paths through settings sections and ret
     .mockRejectedValueOnce(new Error("disk full"))
     .mockResolvedValue(undefined);
   const pairing = vi.fn();
+  const purge = vi.fn().mockResolvedValue(undefined);
   render(
     <SettingsPanel
       webBackground="default"
       onClose={vi.fn()}
       onOpenPairing={pairing}
       onRestore={restore}
+      onPurge={purge}
       trash={[
         {
           entity: "todo",
@@ -79,6 +81,19 @@ it("exposes existing restore and pairing paths through settings sections and ret
     screen.queryByRole("button", { name: "恢复" }),
   ).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /最近删除/ }));
+  fireEvent.click(screen.getByRole("button", { name: "彻底删除" }));
+  expect(
+    await screen.findByRole("dialog", { name: /彻底删除“可恢复待办”/ }),
+  ).toBeVisible();
+  expect(purge).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "取消" }));
+  fireEvent.click(screen.getByRole("button", { name: "清空最近删除" }));
+  fireEvent.click(await screen.findByRole("button", { name: "确认删除" }));
+  await waitFor(() =>
+    expect(purge).toHaveBeenCalledWith([
+      expect.objectContaining({ entity: "todo" }),
+    ]),
+  );
   fireEvent.click(screen.getByRole("button", { name: "恢复" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("恢复失败");
   expect(screen.getByText("可恢复待办")).toBeVisible();

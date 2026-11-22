@@ -932,7 +932,7 @@ export function CalendarTodoView({
             {todos.length} 项待办
           </p>
           {!occurrences.length && !todos.length && (
-            <p>这段时间还没有安排，点击右上角添加。</p>
+            <p>这段时间还没有安排，点击右下角「新建安排」或选择日期添加。</p>
           )}
           {[
             ...new Set([
@@ -1179,31 +1179,16 @@ export function CalendarTodoView({
                   项待办
                 </p>
                 <div className="calendar-agenda-actions">
-                  {onSaveEvent && (
+                  {(onSaveEvent || onCreate) && (
                     <button
                       className="calendar-add"
-                      onClick={() => create(date, "09:00")}
-                    >
-                      <Plus size={17} />
-                      添加日程
-                    </button>
-                  )}
-                  {onCreate && (
-                    <button
-                      className="calendar-add calendar-add-todo"
-                      aria-label={`添加待办到${date}`}
+                      aria-label={`为 ${date} 新建安排`}
                       onClick={() =>
-                        onSavePlannerTodo && onSaveEvent
-                          ? setEditor({
-                              date,
-                              time: "09:00",
-                              initialKind: "todo",
-                            })
-                          : onCreate?.()
+                        onSaveEvent ? create(date, "09:00") : onCreate?.()
                       }
                     >
                       <Plus size={17} />
-                      添加待办
+                      新建安排
                     </button>
                   )}
                 </div>
@@ -1245,7 +1230,7 @@ export function CalendarTodoView({
         </DndContext>
       )}
       <p className="calendar-local-hint">
-        日程保存在本机 · {timeZone} · 长按提起后拖动改期；长按日程后松开可复制
+        {timeZone} · 长按提起后拖动改期；长按日程后松开可复制
       </p>
       {notice && (
         <p role="status" className="calendar-local-hint">

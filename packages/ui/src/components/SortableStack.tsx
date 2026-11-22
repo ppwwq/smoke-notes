@@ -45,6 +45,7 @@ interface SortableStackProps<T extends RankedItem> {
   ) => Promise<void>;
   className?: string;
   wholeCard?: boolean;
+  showHandle?: boolean;
   itemKind?: string;
   layout?: "grid" | "stack";
   renderDragOverlay?: (item: T, index: number) => ReactNode;
@@ -56,6 +57,7 @@ function SortableRow<T extends RankedItem>({
   label,
   children,
   wholeCard,
+  showHandle,
   itemKind,
   disabled,
 }: {
@@ -63,6 +65,7 @@ function SortableRow<T extends RankedItem>({
   label: string;
   children: ReactNode;
   wholeCard: boolean;
+  showHandle: boolean;
   itemKind: string;
   disabled: boolean;
 }) {
@@ -126,7 +129,7 @@ function SortableRow<T extends RankedItem>({
       }
       onContextMenu={wholeCard ? (event) => event.preventDefault() : undefined}
     >
-      {!wholeCard && (
+      {(!wholeCard || showHandle) && (
         <button
           type="button"
           className="drag-handle"
@@ -149,6 +152,7 @@ export function SortableStack<T extends RankedItem>({
   onMove,
   className = "",
   wholeCard = false,
+  showHandle = false,
   itemKind = "便签",
   layout = "grid",
   renderDragOverlay,
@@ -229,6 +233,9 @@ export function SortableStack<T extends RankedItem>({
   );
   const cardSensors = useSensors(
     useSensor(MouseSensor, {
+      bypassActivationConstraint: ({ event }) =>
+        event.target instanceof Element &&
+        !!event.target.closest(".drag-handle"),
       activationConstraint: { delay: 300, tolerance: 6 },
     }),
     useSensor(TouchSensor, {
@@ -303,6 +310,7 @@ export function SortableStack<T extends RankedItem>({
               item={item}
               label={label(item)}
               wholeCard={wholeCard}
+              showHandle={showHandle}
               itemKind={itemKind}
               disabled={previewOrder !== null}
             >

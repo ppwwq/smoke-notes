@@ -13,10 +13,11 @@ import {
   ChevronRight,
   Appearance as Palette,
 } from "../icons";
-import type { DesktopBridge } from "../types";
+import type { AppPlatform, DesktopBridge } from "../types";
 import type { WebBackground } from "../useWebBackground";
 
 interface SettingsPanelProps {
+  platform?: AppPlatform;
   bridge?: DesktopBridge;
   webBackground?: WebBackground;
   onWebBackgroundChange?: (value: WebBackground) => void;
@@ -27,6 +28,7 @@ interface SettingsPanelProps {
   trash: TrashRecord[];
   onClose: () => void;
   onRestore: (item: TrashRecord) => Promise<void>;
+  onPurge: (items: TrashRecord[]) => Promise<void>;
   onOpenPairing: () => void;
   onBackgroundOpacityChange?: (value: number) => void;
   todoBoundaryHour?: 0 | 4;
@@ -39,6 +41,7 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({
   bridge,
+  platform = bridge ? "desktop" : "web",
   webBackground,
   onWebBackgroundChange,
   backgroundNotice,
@@ -48,6 +51,7 @@ export function SettingsPanel({
   trash,
   onClose,
   onRestore,
+  onPurge,
   onOpenPairing,
   onBackgroundOpacityChange,
   todoBoundaryHour = 0,
@@ -68,6 +72,11 @@ export function SettingsPanel({
   const [restoreBusy, setRestoreBusy] = useState(false);
   const restorePending = useRef(false);
   const [restoreError, setRestoreError] = useState("");
+  const [confirmation, setConfirmation] = useState<{
+    items: TrashRecord[];
+    label: string;
+  } | null>(null);
+  const trashHeading = useRef<HTMLHeadingElement>(null);
   const [boundaryBusy, setBoundaryBusy] = useState(false);
   const [boundaryError, setBoundaryError] = useState("");
   const web = webBackground !== undefined;
@@ -119,7 +128,7 @@ export function SettingsPanel({
               设置
             </button>
           )}
-          <h2>
+          <h2 ref={trashHeading} tabIndex={-1}>
             {web
               ? {
                   overview: "设置",
@@ -233,7 +242,11 @@ export function SettingsPanel({
             </button>
           </label>
           {systemReduced && <p>已跟随系统使用清晰实底。</p>}
-          <p>应用于整个网页界面，记住此浏览器的选择。</p>
+          <p>
+            {platform === "desktop"
+              ? "应用于桌面界面，设置保存在这台电脑上。"
+              : "应用于整个网页界面，记住此浏览器的选择。"}
+          </p>
           {backgroundNotice && <p role="status">{backgroundNotice}</p>}
         </div>
       )}
@@ -273,7 +286,11 @@ export function SettingsPanel({
               />
             </label>
             <p>每次打开会补算日期；电脑不必一直开着。历史记录会保留。</p>
-            <p>关闭网页后不会发送通知。</p>
+            <p>
+              {platform === "desktop"
+                ? "退出应用后不会发送通知。"
+                : "关闭网页后不会发送通知。"}
+            </p>
             {boundaryError && <p role="alert">{boundaryError}</p>}
           </div>
         </details>
@@ -297,12 +314,15 @@ export function SettingsPanel({
             </p>
             <p>
               <strong>本机与同步：</strong>
-              未配对时仅在当前浏览器保存。清除网站数据会移除本机记录；跨设备继续使用，请到「手机与同步」配对。
+              {platform === "desktop"
+                ? "未配对时，记录保存在这台电脑上。"
+                : "未配对时仅在当前浏览器保存。清除网站数据会移除本机记录。"}
+              跨设备继续使用，请到「手机与同步」配对。
             </p>
           </div>
         </details>
       )}
-      {bridge && (
+      {bridge && section === "overview" && (
         <div className="settings-group">
           <h3>
             <SlidersHorizontal size={16} />
@@ -436,11 +456,18 @@ export function SettingsPanel({
         ) : (
           trash.map((item) => (
             <div className="trash-row" key={`${item.entity}-${item.record.id}`}>
+              <small className="trash-kind">
+                {
+                  { note: "便签", notebook: "便签本", todo: "待办" }[
+                    item.entity
+                  ]
+                }
+              </small>
               <span>
                 {"name" in item.record
                   ? item.record.name
                   : "title" in item.record
-                    ? item.record.title
+                    ? item.record.title.trim() || "无标题便签"
                     : item.record.text}
               </span>
               <button
@@ -463,11 +490,91 @@ export function SettingsPanel({
               >
                 恢复
               </button>
+              <button
+                type="button"
+                disabled={restoreBusy}
+                onClick={() => {
+                  const label =
+                    item.entity === "notebook"
+                      ? item.record.name
+                      : item.entity === "todo"
+                        ? item.record.text
+                        : item.record.title.trim() || "无标题便签";
+                  setConfirmation({
+                    items: [item],
+                    label: `彻底删除“${label}”`,
+                  });
+                }}
+              >
+                彻底删除
+              </button>
             </div>
           ))
         )}
+        {trash.length > 0 && (
+          <button
+            className="trash-clear"
+            type="button"
+            disabled={restoreBusy}
+            onClick={() =>
+              setConfirmation({
+                items: [...trash],
+                label: `清空最近删除中的 ${trash.length} 项内容`,
+              })
+            }
+          >
+            清空最近删除
+          </button>
+        )}
         {restoreError && <p role="alert">{restoreError}</p>}
       </div>
+      {confirmation && (
+        <WebDialog
+          web={web}
+          kind="actions"
+          label={confirmation.label}
+          onClose={() => {
+            if (!restorePending.current) setConfirmation(null);
+          }}
+          fallbackFocus={() => trashHeading.current}
+        >
+          <h3>{confirmation.label}？</h3>
+          <p>
+            {confirmation.items.some((item) => item.entity === "notebook")
+              ? "便签本内的便签也会一并删除。"
+              : ""}
+            删除后无法恢复。
+          </p>
+          <button
+            type="button"
+            disabled={restoreBusy}
+            onClick={() => setConfirmation(null)}
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            disabled={restoreBusy}
+            onClick={async () => {
+              if (restorePending.current) return;
+              restorePending.current = true;
+              setRestoreBusy(true);
+              setRestoreError("");
+              try {
+                await onPurge(confirmation.items);
+              } catch {
+                setRestoreError("删除失败，内容可能已变更。请重新检查后再试。");
+              } finally {
+                restorePending.current = false;
+                setRestoreBusy(false);
+                setConfirmation(null);
+              }
+            }}
+          >
+            确认删除
+          </button>
+        </WebDialog>
+      )}
     </WebDialog>
   );
 }

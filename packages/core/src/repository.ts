@@ -22,6 +22,7 @@ import {
   RANK_GAP,
 } from "./domain";
 import type { Note, Notebook, SyncEntity, SyncOperation, Todo } from "./types";
+import { isPurged, PURGED_AT } from "./types";
 import { SmokeNotesDatabase } from "./database";
 import { mergeNoteChanges, sameNoteContent } from "./note-merge";
 import {
@@ -1422,7 +1423,71 @@ export class LocalRepository {
     }));
   }
 
-  async listTrash(): Promise<TrashRecord[]> {
+  async purgeTrash(items: TrashRecord[]): Promise<void> {
+    await this.database.transaction(
+      "rw",
+      this.database.notebooks,
+      this.database.notes,
+      this.database.todos,
+      this.database.operations,
+      async () => {
+        // Verify the confirmation snapshot before changing any member of the batch.
+        const records = new Map<string, TrashRecord>();
+        for (const item of items) {
+          const current = await this.tableFor(item.entity).get(item.record.id);
+          if (!current || isPurged(current)) continue;
+          if (!current.deletedAt || current.version !== item.record.version)
+            throw new Error("内容已变更，请重新打开最近删除。");
+          records.set(item.entity + ":" + current.id, item);
+          if (item.entity === "notebook") {
+            for (const note of await this.database.notes
+              .where("notebookId")
+              .equals(current.id)
+              .toArray()) {
+              if (!isPurged(note))
+                records.set("note:" + note.id, {
+                  entity: "note",
+                  record: note,
+                });
+            }
+          }
+        }
+        for (const item of records.values()) {
+          const record = item.record;
+          const changes =
+            item.entity === "note"
+              ? {
+                  title: "",
+                  body: "",
+                  contentJson: normalizeRichTextDocument(null, ""),
+                  conflictOf: null,
+                }
+              : item.entity === "notebook"
+                ? { name: "已彻底删除" }
+                : {
+                    text: "已彻底删除",
+                    completed: false,
+                    ...(item.record.planning
+                      ? {
+                          planning: {
+                            kind: "task" as const,
+                            version: 1 as const,
+                          },
+                        }
+                      : {}),
+                  };
+          const updated = this.updatedRecord<Notebook | Note | Todo>(record, {
+            ...changes,
+            deletedAt: PURGED_AT,
+          });
+          await this.tableFor(item.entity).put(updated);
+          await this.enqueue(item.entity, updated, record.version, "delete");
+        }
+      },
+    );
+  }
+
+  async listTrash(includePurgedTodos = false): Promise<TrashRecord[]> {
     const [notebooks, notes, todos] = await Promise.all([
       this.database.notebooks.toArray(),
       this.database.notes.toArray(),
@@ -1438,7 +1503,13 @@ export class LocalRepository {
       ...todos
         .filter((record) => record.deletedAt)
         .map((record) => ({ entity: "todo" as const, record })),
-    ].sort((a, b) => b.record.updatedAt.localeCompare(a.record.updatedAt));
+    ]
+      .filter(
+        (item) =>
+          !isPurged(item.record) ||
+          (includePurgedTodos && item.entity === "todo"),
+      )
+      .sort((a, b) => b.record.updatedAt.localeCompare(a.record.updatedAt));
   }
 
   async purgeExpiredTrash(): Promise<number> {
@@ -1484,12 +1555,13 @@ export class LocalRepository {
     };
   }
 
-  private async requireRecord<T>(
+  private async requireRecord<T extends { deletedAt: string | null }>(
     table: Table<T, string>,
     id: string,
   ): Promise<T> {
     const record = await table.get(id);
     if (!record) throw new Error(`Record ${id} was not found`);
+    if (isPurged(record)) throw new Error("内容已彻底删除。");
     return record;
   }
 

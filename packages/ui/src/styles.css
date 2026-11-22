@@ -122,16 +122,11 @@ button {
   color: var(--ink);
   background: rgba(255, 255, 255, 0.065);
 }
-.sidebar-shell,
 .workspace-shell {
   position: relative;
   z-index: 1;
   min-width: 0;
   min-height: 0;
-}
-.sidebar-shell {
-  border-right: 1px solid var(--line);
-  background: rgba(7, 9, 11, 0.36);
 }
 .sidebar {
   display: flex;
@@ -1285,8 +1280,7 @@ button {
 }
 
 .mobile-menu,
-.mobile-bottom-nav,
-.mobile-scrim {
+.mobile-bottom-nav {
   display: none;
 }
 
@@ -1316,14 +1310,6 @@ button {
     color: var(--muted);
     background: rgba(16, 19, 22, 0.75);
   }
-  .sidebar-shell {
-    position: absolute;
-    inset: 0;
-    z-index: 30;
-    pointer-events: none;
-    border: 0;
-    background: transparent;
-  }
   .sidebar {
     position: absolute;
     top: 0;
@@ -1334,22 +1320,6 @@ button {
     transform: translateX(-102%);
     background: rgba(15, 18, 21, 0.98);
     transition: transform 0.24s ease;
-  }
-  .mobile-scrim {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    border: 0;
-    background: rgba(0, 0, 0, 0.56);
-  }
-  .sidebar-shell.mobile-open {
-    pointer-events: auto;
-  }
-  .sidebar-shell.mobile-open .sidebar {
-    transform: translateX(0);
-  }
-  .sidebar-shell.mobile-open .mobile-scrim {
-    display: block;
   }
   .workspace-shell {
     padding-bottom: 65px;

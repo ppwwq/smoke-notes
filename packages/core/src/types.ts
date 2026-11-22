@@ -2,6 +2,13 @@ import type { TodoPlanning } from "./todo-planning";
 
 export type EntityId = string;
 
+// The existing sync protocol carries deletedAt on every platform. Reserve the
+// Unix epoch for a scrubbed, non-restorable row, including recurring task IDs.
+export const PURGED_AT = "1970-01-01T00:00:00.000Z";
+export function isPurged(record: { deletedAt: string | null }): boolean {
+  return record.deletedAt !== null && Date.parse(record.deletedAt) === 0;
+}
+
 export interface SyncFields {
   id: EntityId;
   version: number;
