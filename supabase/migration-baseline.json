@@ -1,0 +1,14 @@
+{
+  "project_ref": "koundrkjeambrcodxkdd",
+  "source_commit": "5e669b2278a42733baaf3126b0b9c4472b8b732e",
+  "status": "Schema reference only; production history repair is pending approval and full comparison.",
+  "migrations": {
+    "202608280001_smoke_notes.sql": "af2c98c0e1f9cf91c70eaf59bf2cd30b78b135a3f0e2831ef40245f92262eef5",
+    "202608280002_rich_notes.sql": "4971850322a39a042f8436fca7089e8ab0d85aa76fe926e57574e3017407e629",
+    "202608290001_note_kinds.sql": "816f9038fa1a403af8c5df737a4e40ab7fb4d5ebd0b8f2ffaea660a1513665a0",
+    "202609050001_pairing_hardening.sql": "bb0c51be836a70040f0ec2580bc3cbfc8d8d93cafbe2701465b8c39d782b717f",
+    "202609050002_enroll_local_workspace.sql": "1a2163e300bea0d62a717c2a127953234885b9e6fca600c2b80fb96374da728c",
+    "202610150001_atomic_mutations.sql": "ae3ecd0703091d6ec450475c92e06dba345549dbe1fe173a1e10888aad8089a4",
+    "202610150002_atomic_pairing_and_bootstrap.sql": "473d86f67a1af28c13c01567062817faf255c27a722120ec0cbfefd5177d939f"
+  }
+}
