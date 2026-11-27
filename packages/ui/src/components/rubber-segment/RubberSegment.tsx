@@ -19,6 +19,7 @@ import {
   useTransform,
   type MotionValue,
 } from "motion/react";
+import { getNativeActions } from "../../android-host";
 
 import "./RubberSegment.css";
 
@@ -253,6 +254,11 @@ const RubberSegment: React.FC<RubberSegmentProps> = ({
   const commit = (i: number) => {
     committed.current = i;
     if (i === index) return;
+    try {
+      getNativeActions()?.haptic?.("light");
+    } catch {
+      // Navigation still works if the native bridge is unavailable.
+    }
     if (value === undefined) setInner(list[i].value);
     itemRefs.current[i]?.focus({ preventScroll: true });
     onChange?.(list[i].value, i);

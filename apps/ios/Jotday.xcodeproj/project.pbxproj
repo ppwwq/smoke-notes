@@ -1,0 +1,197 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B00000000000000000000001 /* JotdayApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000011 /* JotdayApp.swift */; };
+		B00000000000000000000002 /* LocalAssetServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000012 /* LocalAssetServer.swift */; };
+		B00000000000000000000003 /* Web in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000013 /* Web */; };
+		B00000000000000000000004 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000014 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		B00000000000000000000011 /* JotdayApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JotdayApp.swift; sourceTree = "<group>"; };
+		B00000000000000000000012 /* LocalAssetServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAssetServer.swift; sourceTree = "<group>"; };
+		B00000000000000000000013 /* Web */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Web; sourceTree = "<group>"; };
+		B00000000000000000000014 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B00000000000000000000015 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B00000000000000000000016 /* Jotday.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Jotday.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B00000000000000000000021 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = ();
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		B00000000000000000000031 = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000032 /* Jotday */,
+				B00000000000000000000033 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		B00000000000000000000032 /* Jotday */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000011 /* JotdayApp.swift */,
+				B00000000000000000000012 /* LocalAssetServer.swift */,
+				B00000000000000000000014 /* Assets.xcassets */,
+				B00000000000000000000015 /* Info.plist */,
+				B00000000000000000000013 /* Web */,
+			);
+			name = Jotday;
+			path = Sources/Jotday;
+			sourceTree = "<group>";
+		};
+		B00000000000000000000033 /* Products */ = {
+			isa = PBXGroup;
+			children = (B00000000000000000000016 /* Jotday.app */,);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B00000000000000000000041 /* Jotday */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B00000000000000000000072 /* Build configuration list for PBXNativeTarget "Jotday" */;
+			buildPhases = (
+				B00000000000000000000051 /* Sources */,
+				B00000000000000000000021 /* Frameworks */,
+				B00000000000000000000052 /* Resources */,
+			);
+			buildRules = ();
+			dependencies = ();
+			name = Jotday;
+			productName = Jotday;
+			productReference = B00000000000000000000016 /* Jotday.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B00000000000000000000042 /* Project object */ = {
+			isa = PBXProject;
+			attributes = { LastUpgradeCheck = 1400; };
+			buildConfigurationList = B00000000000000000000071 /* Build configuration list for PBXProject "Jotday" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (en, Base,);
+			mainGroup = B00000000000000000000031;
+			productRefGroup = B00000000000000000000033 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (B00000000000000000000041 /* Jotday */,);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B00000000000000000000051 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B00000000000000000000001 /* JotdayApp.swift in Sources */,
+				B00000000000000000000002 /* LocalAssetServer.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B00000000000000000000052 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B00000000000000000000003 /* Web in Resources */,
+				B00000000000000000000004 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		B00000000000000000000061 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		B00000000000000000000062 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		B00000000000000000000063 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = Sources/Jotday/Info.plist;
+				MARKETING_VERSION = 0.1.17;
+				PRODUCT_BUNDLE_IDENTIFIER = app.jotday.calendar;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B00000000000000000000064 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = Sources/Jotday/Info.plist;
+				MARKETING_VERSION = 0.1.17;
+				PRODUCT_BUNDLE_IDENTIFIER = app.jotday.calendar;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		B00000000000000000000071 /* Build configuration list for PBXProject "Jotday" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (B00000000000000000000061 /* Debug */, B00000000000000000000062 /* Release */,);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B00000000000000000000072 /* Build configuration list for PBXNativeTarget "Jotday" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (B00000000000000000000063 /* Debug */, B00000000000000000000064 /* Release */,);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+	};
+	rootObject = B00000000000000000000042 /* Project object */;
+}

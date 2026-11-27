@@ -39,8 +39,12 @@ describe("web startup while authentication is unavailable", () => {
 
   afterEach(() => {
     window.dispatchEvent(new Event("beforeunload"));
+    delete window.__jotdayNativeAction;
+    delete window.__jotdayPendingAction;
+    delete document.documentElement.dataset.iosApp;
     localStorage.clear();
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
   });
 
   it("renders an existing local workspace before network authentication", async () => {
@@ -62,6 +66,28 @@ describe("web startup while authentication is unavailable", () => {
     expect(gate.props.onRedeem).toBeTypeOf("function");
     expect(startup.authenticate).not.toHaveBeenCalled();
     expect(startup.start).not.toHaveBeenCalled();
+  });
+
+  it("only connects the iOS bridge in the iOS build and accepts a native pairing link", async () => {
+    const postMessage = vi.fn();
+    vi.stubGlobal("webkit", { messageHandlers: { jotday: { postMessage } } });
+    await import("./main");
+    expect(postMessage).not.toHaveBeenCalled();
+    expect(document.documentElement.dataset.iosApp).toBeUndefined();
+
+    vi.resetModules();
+    vi.stubEnv("JOTDAY_IOS_HOST", "true");
+    await import("./main");
+
+    expect(document.documentElement.dataset.iosApp).toBe("true");
+    expect(postMessage).toHaveBeenCalledWith({
+      method: "onAppReady",
+      args: [],
+    });
+    window.__jotdayNativeAction?.({ pairCode: "123456" });
+    const gate = startup.render.mock.lastCall![0].props.children;
+    expect(gate.props.initialCode).toBe("123456");
+    await gate.props.onSkip();
   });
 
   it("skips pairing, remembers local mode and offers pairing in settings without starting sync", async () => {

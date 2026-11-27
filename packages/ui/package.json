@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./app": "./src/SmokeNotesApp.tsx",
+    "./android-host": "./src/android-host.ts",
     "./note-window": "./src/NoteWindowApp.tsx",
     "./styles.css": "./src/styles.css",
     "./pairing": "./src/components/PairingDialog.tsx",

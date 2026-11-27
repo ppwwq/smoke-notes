@@ -28,6 +28,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "../icons";
+import { getNativeActions } from "../android-host";
 
 interface RankedItem {
   id: string;
@@ -285,7 +286,14 @@ export function SortableStack<T extends RankedItem>({
         layout === "stack" ? stackedCardCollision : closestCenter
       }
       onDragEnd={handleDragEnd}
-      onDragStart={({ active }) => setDraggedId(String(active.id))}
+      onDragStart={({ active }) => {
+        setDraggedId(String(active.id));
+        try {
+          getNativeActions()?.haptic?.("longPress");
+        } catch {
+          // Dragging still works if the native bridge is unavailable.
+        }
+      }}
       onDragCancel={() => setDraggedId(null)}
       accessibility={{
         screenReaderInstructions: {

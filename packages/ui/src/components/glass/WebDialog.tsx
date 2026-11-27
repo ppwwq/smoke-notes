@@ -2,6 +2,7 @@ import { useRef, useState, type ReactNode } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { GlassSurface } from "./GlassSurface";
 import { useWebViewport } from "../../useWebViewport";
+import { isAndroidApp } from "../../android-host";
 
 // Base UI owns focus trapping, Escape and focus restoration on both platforms. Theme changes
 // leave the same modal and children mounted inside the existing app overlay.
@@ -23,7 +24,12 @@ export function WebDialog({
   fallbackFocus?: () => HTMLElement | null;
 }) {
   const portalHost = useRef<HTMLDivElement>(null);
-  const { style: viewportStyle } = useWebViewport(placement === "top-end");
+  const popup = useRef<HTMLDivElement>(null);
+  const calendarComposer = placement === "top-end";
+  const androidSheet =
+    web && isAndroidApp() && (calendarComposer || kind === "settings");
+  const measureViewport = calendarComposer || androidSheet;
+  const { style: viewportStyle } = useWebViewport(measureViewport);
   const [returnTarget] = useState(() =>
     document.activeElement instanceof HTMLElement
       ? document.activeElement
@@ -45,12 +51,17 @@ export function WebDialog({
       <div ref={portalHost} style={{ display: "contents" }} />
       <Dialog.Portal container={appRoot ?? portalHost}>
         <div
-          style={placement === "top-end" ? viewportStyle : undefined}
-          className={`${kind}-backdrop${placement === "top-end" ? " calendar-composer-backdrop" : ""}`}
+          style={measureViewport ? viewportStyle : undefined}
+          className={`${kind}-backdrop${calendarComposer ? " calendar-composer-backdrop" : ""}`}
+          data-android-sheet={androidSheet || undefined}
         >
           <Dialog.Popup
-            className={`${panel}${web ? " web-dialog" : ""}${placement === "top-end" ? " calendar-composer-panel" : ""}`}
+            ref={popup}
+            className={`${panel}${web ? " web-dialog" : ""}${calendarComposer ? " calendar-composer-panel" : ""}`}
             aria-label={label}
+            initialFocus={
+              androidSheet ? () => popup.current ?? false : undefined
+            }
             finalFocus={() =>
               returnTarget?.closest(".family-popup")
                 ? document.querySelector<HTMLElement>(".family-trigger")
@@ -63,7 +74,7 @@ export function WebDialog({
                   : returnTarget
             }
           >
-            {web && <GlassSurface kind="dialog" />}
+            {web && !androidSheet && <GlassSurface kind="dialog" />}
             {children}
           </Dialog.Popup>
         </div>

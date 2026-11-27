@@ -1,0 +1,447 @@
+/* Android WebView & portrait mobile refinements; preserves all Jotday themes & desktop behavior. */
+:root {
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--android-safe-top, 0px));
+  --safe-bottom: max(
+    env(safe-area-inset-bottom, 0px),
+    var(--android-safe-bottom, 0px)
+  );
+}
+
+html:is([data-android-app="true"], [data-ios-app="true"]),
+html:is([data-android-app="true"], [data-ios-app="true"]) body {
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html:is([data-android-app="true"], [data-ios-app="true"])
+  .workspace-app :is(button, .note-stack, .sticky-card, .rubber-segment) {
+  -webkit-touch-callout: none;
+}
+
+html[data-android-app="true"] .workspace-app[data-web-background] [data-android-sheet] {
+  --android-sheet-height: calc(
+    var(--web-viewport-height, 100dvh) - var(--safe-top) - var(--safe-bottom) - 20px
+  );
+  position: fixed;
+  inset: var(--web-viewport-top, 0px) 0 auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: var(--web-viewport-height, 100dvh);
+  box-sizing: border-box;
+  padding: calc(var(--safe-top) + 10px) 10px calc(var(--safe-bottom) + 10px);
+  background: #11111138;
+  backdrop-filter: none;
+  animation: android-sheet-fade 160ms ease-out;
+}
+
+html[data-android-app="true"] .workspace-app[data-web-background]
+  [data-android-sheet] > :is(.settings-panel, .calendar-composer-panel) {
+  width: min(100%, 480px);
+  max-width: 100%;
+  max-height: var(--android-sheet-height);
+  height: auto;
+  align-self: flex-end;
+  box-sizing: border-box;
+  margin: 0;
+  border-radius: 26px;
+  background: var(--canvas);
+  backdrop-filter: none;
+  transform-origin: center bottom;
+  animation: android-panel-enter 190ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html[data-android-app="true"] .workspace-app[data-web-background]
+  [data-android-sheet] > .settings-panel {
+  padding: 20px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+html[data-android-app="true"] .workspace-app[data-web-background]
+  [data-android-sheet] .calendar-event-editor.calendar-composer {
+  max-height: min(780px, var(--android-sheet-height));
+}
+
+html[data-android-app="true"] .workspace-app .family-frame[data-expanded] {
+  overflow: visible;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+html[data-android-app="true"] .workspace-app .family-popup[data-open] {
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 30px #29251c24;
+  animation: android-panel-enter 170ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes android-sheet-fade {
+  from { opacity: 0; }
+}
+
+@keyframes android-panel-enter {
+  from { transform: translateY(16px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-android-app="true"] .workspace-app[data-web-background] [data-android-sheet],
+  html[data-android-app="true"] .workspace-app[data-web-background]
+    [data-android-sheet] > :is(.settings-panel, .calendar-composer-panel),
+  html[data-android-app="true"] .workspace-app .family-popup[data-open] {
+    animation: none;
+  }
+}
+
+.android-ime-dismiss {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .pairing-gate:not(.pairing-gate-embedded) {
+    padding: calc(24px + var(--safe-top)) 16px calc(24px + var(--safe-bottom));
+  }
+
+  .workspace-app[data-web-background] .sync-indicator {
+    top: calc(16px + var(--safe-top));
+    right: 18px;
+  }
+
+  .workspace-app[data-web-background] :is(.notes-board, .todo-workspace) {
+    padding: calc(20px + var(--safe-top)) 16px 0;
+  }
+
+  .workspace-app[data-web-background]:not(.web-editing) .workspace-shell {
+    padding-bottom: 0;
+  }
+
+  /* Floating 3-tab dock: leave >= 20px lateral margin so Android edge back never fights dock drag. */
+  .workspace-app[data-web-background] .web-dock.rubber-segment {
+    --rs-h: 64px !important;
+    --dock-padding: 6px;
+    width: min(320px, calc(100vw - 40px));
+    bottom: calc(14px + var(--safe-bottom));
+  }
+
+  /* Bottom-right FamilyButton & expanded create sheet. */
+  .workspace-app .workspace-create,
+  .workspace-app.platform-desktop .workspace-create {
+    --family-trigger-width: 100px;
+    right: 16px;
+    bottom: calc(90px + var(--safe-bottom));
+  }
+
+  .workspace-app .workspace-create:has([data-expanded]) {
+    --family-bottom: calc(90px + var(--safe-bottom));
+    bottom: var(--family-bottom);
+  }
+
+  html[data-android-ime="true"] .workspace-app .workspace-create:has([data-expanded]) {
+    --family-bottom: 8px;
+    bottom: 8px;
+  }
+
+  .workspace-app .family-popup {
+    width: min(calc(var(--family-width) - 2px), calc(100vw - 24px));
+    max-height: calc(100dvh - var(--safe-top) - var(--family-bottom, 90px) - 24px);
+    padding: 18px;
+  }
+
+  html[data-android-ime="true"] .workspace-app .family-popup {
+    max-height: calc(100dvh - var(--safe-top) - 16px);
+  }
+
+  /* Undo toast sits cleanly left of the create FAB without overlapping controls. */
+  .workspace-app[data-web-background] .undo-toast {
+    left: 16px;
+    right: 132px;
+    width: auto;
+    max-width: none;
+    transform: none;
+    bottom: calc(92px + var(--safe-bottom));
+    padding: 10px 14px;
+    border-radius: 20px;
+  }
+
+  /* Bottom scroll clearance for FAB + floating dock. */
+  .workspace-app[data-web-background] .notes-board-scroll {
+    padding-bottom: calc(176px + var(--safe-bottom));
+    scroll-padding-bottom: calc(176px + var(--safe-bottom));
+  }
+
+  .workspace-app[data-web-background] .todo-planner {
+    padding-top: calc(20px + var(--safe-top));
+    padding-bottom: calc(176px + var(--safe-bottom));
+    scroll-padding-bottom: calc(176px + var(--safe-bottom));
+  }
+
+  /* Portrait note stacks: single column with compact stack offset so 360dp never clips. */
+  .workspace-app .note-stacks {
+    grid-template-columns: 1fr;
+    gap: 26px;
+    padding: 8px 4px 20px;
+  }
+
+  .workspace-app .note-stack-papers {
+    height: 166px;
+    margin: 0 10px 14px 0;
+  }
+
+  .workspace-app .stack-paper {
+    inset: 0 0 24px;
+    padding: 18px;
+    gap: 8px;
+    transform: translate(
+        calc(var(--paper-index) * 5px),
+        calc(var(--paper-index) * 13px)
+      )
+      rotate(calc(var(--paper-index) * 1.8deg));
+  }
+
+  .workspace-app .notebook-stack-shell > .record-actions {
+    right: 18px;
+    top: 6px;
+  }
+
+  .workspace-app[data-web-background] .sticky-card-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  /* Full-screen note editor portrait spacing & bottom safe-area. */
+  .workspace-app .mobile-note-screen {
+    padding-top: var(--safe-top);
+  }
+
+  .workspace-app[data-web-background] .progressive-editor .rich-note-title {
+    font-size: 28px;
+    padding: 12px 20px 14px;
+  }
+
+  .workspace-app[data-web-background] .progressive-editor .rich-note-content {
+    padding: 10px 20px 28px;
+    font-size: 17px;
+  }
+
+  .gooey-format-entry {
+    min-height: calc(64px + var(--safe-bottom));
+    padding: 10px 16px calc(10px + var(--safe-bottom));
+  }
+
+  /* Todo hero keeps title and progress card balanced on narrow phones. */
+  .workspace-app[data-web-background] .todo-planner .todo-hero {
+    gap: 12px;
+    padding: 0 0 16px;
+  }
+
+  .workspace-app[data-web-background] .todo-planner .todo-hero h1 {
+    font-size: 28px;
+  }
+
+  .workspace-app .planner-progress-summary {
+    flex: 0 0 clamp(106px, 31vw, 152px);
+    padding: 8px 11px 10px;
+  }
+
+  /* Calendar Studio: compact portrait header + month grid so calendar + agenda fit together. */
+  .workspace-app[data-web-background] .todo-workspace.todo-planner.calendar-view {
+    padding-top: 0;
+    padding-bottom: calc(176px + var(--safe-bottom));
+    scroll-padding-bottom: calc(176px + var(--safe-bottom));
+  }
+
+  .workspace-app .calendar-view .planner-navigation {
+    padding-top: calc(12px + var(--safe-top));
+    margin-bottom: 10px;
+  }
+
+  .workspace-app[data-web-background] .calendar-studio .calendar-studio-top {
+    gap: 6px 4px;
+    margin-bottom: 10px;
+  }
+
+  .workspace-app[data-web-background] .calendar-studio-top .calendar-search {
+    min-height: 38px;
+  }
+
+  .workspace-app[data-web-background] .calendar-studio-top .calendar-search input {
+    padding: 8px 0;
+    font-size: 15px;
+  }
+
+  .workspace-app[data-web-background] .calendar-month-grid {
+    --calendar-month-strip-top: 34px;
+    --calendar-span-row-height: 20px;
+  }
+
+  .workspace-app[data-web-background] .calendar-month-grid.density-comfortable {
+    --calendar-month-strip-top: 38px;
+    --calendar-span-row-height: 24px;
+  }
+
+  html[data-android-app="true"] .workspace-app[data-web-background] .calendar-month-grid {
+    --calendar-span-row-height: 26px;
+  }
+
+  html[data-android-app="true"] .workspace-app[data-web-background] .calendar-month-grid.density-comfortable {
+    --calendar-span-row-height: 30px;
+  }
+
+  .workspace-app[data-web-background] .calendar-month-grid .calendar-week-heading span {
+    padding: 6px 0;
+    font-size: 11px;
+  }
+
+  .workspace-app[data-web-background] .calendar-month-grid .calendar-date-number {
+    width: 30px;
+    height: 30px;
+    font-size: 14px;
+    margin-inline: auto;
+  }
+
+  .workspace-app[data-web-background] .calendar-month-week .calendar-month-cell {
+    min-height: max(44px, var(--calendar-month-cell-height));
+  }
+
+  .workspace-app[data-web-background] .calendar-month-strips .calendar-span-item > button {
+    font-size: 10px;
+    padding-inline: 2px;
+  }
+
+  /* Timeline scroll leaves room for day/week agenda below, and agenda uses full width. */
+  .workspace-app[data-web-background] .calendar-studio .calendar-timeline-scroll {
+    max-height: min(52dvh, 460px);
+    padding-bottom: 24px;
+    scroll-padding-bottom: 24px;
+  }
+
+  .workspace-app[data-web-background] .calendar-studio:is(.scale-day, .scale-week) .calendar-agenda {
+    padding-right: 0;
+    padding-bottom: calc(176px + var(--safe-bottom));
+  }
+
+  /* Year view fits 2 columns on 360dp+ without horizontal overflow. */
+  .workspace-app[data-web-background] .calendar-year-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 10px;
+  }
+
+  .workspace-app[data-web-background] .calendar-mini-month .rdp-month_grid {
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  /* Bottom-sheet dialogs respect safe-top and safe-bottom. */
+  .workspace-app .actions-backdrop,
+  .workspace-app .appearance-backdrop,
+  .workspace-app .settings-backdrop,
+  .workspace-app .pairing-backdrop {
+    align-items: end;
+    padding: calc(12px + var(--safe-top)) 10px calc(10px + var(--safe-bottom));
+  }
+
+  .workspace-app .actions-panel,
+  .workspace-app .appearance-panel,
+  .workspace-app .settings-panel,
+  .workspace-app .pairing-dialog {
+    width: 100%;
+    max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 24px);
+    border-radius: 26px;
+  }
+}
+
+@media (min-width: 521px) and (max-width: 760px) {
+  .workspace-app[data-web-background] .sticky-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+}
+
+@media (max-width: 360px) {
+  .workspace-app[data-web-background] :is(.notes-board-header h1, .todo-planner .todo-hero h1) {
+    font-size: 24px;
+  }
+
+  .calendar-mini-month .rdp-root {
+    --rdp-day-height: 22px;
+    --rdp-day-width: 18px;
+    --rdp-day_button-width: 18px;
+    --rdp-day_button-height: 22px;
+    font-size: 10px;
+  }
+}
+
+/* Soft-keyboard format dock above Android IME. */
+html[data-android-ime="true"] .workspace-app[data-web-background] .web-dock.rubber-segment,
+html[data-android-ime="true"] .workspace-app .workspace-create:not(:has([data-expanded])) {
+  display: none;
+}
+
+html[data-android-ime="true"] .workspace-app .mobile-note-screen {
+  height: 100%;
+}
+
+html[data-android-ime="true"] .workspace-app[data-web-background] .progressive-editor .gooey-format-entry {
+  min-height: 48px;
+  padding: 4px 10px;
+}
+
+html[data-android-ime="true"] .workspace-app[data-web-background] .progressive-editor .gooey-format-control {
+  width: 100%;
+}
+
+html[data-android-ime="true"] .workspace-app[data-web-background] .progressive-editor .gooey-format-trigger {
+  display: none;
+}
+
+html[data-android-ime="true"] .workspace-app[data-web-background] .progressive-editor .gooey-format-control .format-toolbar,
+html[data-android-ime="true"] .workspace-app[data-web-background] .progressive-editor .gooey-format-control .format-toolbar[hidden] {
+  display: flex !important;
+  position: static;
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: visible;
+  width: 100%;
+  max-width: 100%;
+  gap: 2px;
+  padding: 4px 6px;
+  border-radius: 16px;
+  box-shadow: none;
+  animation: none;
+  scrollbar-width: none;
+}
+
+html[data-android-ime="true"] .workspace-app[data-web-background] .progressive-editor .gooey-format-control .format-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+html[data-android-ime="true"] .workspace-app[data-web-background] .progressive-editor .gooey-format-control .format-toolbar > button,
+html[data-android-ime="true"] .workspace-app[data-web-background] .progressive-editor .gooey-format-control .format-toolbar > .mark-control > button {
+  flex: 0 0 40px;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+}
+
+html[data-android-ime="true"] .workspace-app[data-web-background] .progressive-editor .gooey-format-control .format-toolbar > button.android-ime-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  border-left: 1px solid #ffffff26;
+  border-radius: 0 12px 12px 0;
+}
+
+html[data-android-ime="true"] .workspace-app[data-web-background] .progressive-editor .mark-palette {
+  position: fixed;
+  left: auto;
+  right: 12px;
+  bottom: 60px;
+  top: auto;
+  max-height: calc(100dvh - 120px);
+  overflow-y: auto;
+  z-index: 40;
+}

@@ -264,6 +264,122 @@
   outline: 2px solid var(--ink);
   outline-offset: 3px;
 }
+
+[data-android-sheet] .calendar-composer > header {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  grid-template-areas: "close title save";
+  gap: 8px 10px;
+  padding: 12px 16px 6px;
+}
+[data-android-sheet]
+  .calendar-composer
+  > header:has(> .calendar-composer-kind .app-segments) {
+  grid-template-areas:
+    "close title save"
+    "kind kind kind";
+}
+[data-android-sheet] .calendar-composer-heading {
+  grid-area: title;
+  min-width: 0;
+  padding: 0;
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1.25;
+}
+[data-android-sheet]
+  .calendar-composer
+  > header
+  > button:not(.calendar-composer-save) {
+  grid-area: close;
+  width: 44px;
+  height: 44px;
+}
+[data-android-sheet] .calendar-composer > header > .calendar-composer-save {
+  grid-area: save;
+  min-width: 64px;
+  height: auto;
+  min-height: 44px;
+  white-space: nowrap;
+}
+[data-android-sheet] .calendar-composer > header > .calendar-composer-kind {
+  grid-area: kind;
+}
+[data-android-sheet] .calendar-composer-kind:not(:has(.app-segments)) {
+  display: none;
+}
+[data-android-sheet] .calendar-composer-kind .app-segments.rubber-segment {
+  --rs-h: 44px !important;
+}
+[data-android-sheet] .calendar-event-editor.calendar-composer > fieldset {
+  min-height: 0;
+  padding: 6px 16px 16px;
+  gap: 12px;
+  scroll-padding-block: 6px 16px;
+}
+[data-android-sheet] .calendar-composer > fieldset > .calendar-composer-title,
+[data-android-sheet] .calendar-composer .calendar-schedule {
+  margin-top: 0;
+}
+[data-android-sheet]
+  .calendar-composer
+  > fieldset
+  :is(input:not([type="checkbox"]), textarea):focus-visible {
+  outline-offset: -2px;
+}
+[data-android-sheet] .calendar-composer .calendar-composer-options {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+[data-android-sheet] .calendar-composer-options > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: inherit;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  list-style: none;
+}
+[data-android-sheet]
+  .calendar-composer-options
+  > summary::-webkit-details-marker {
+  display: none;
+}
+[data-android-sheet] .calendar-composer-options > summary:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+[data-android-sheet] .calendar-composer-options > summary::after {
+  content: "";
+  flex: 0 0 8px;
+  height: 8px;
+  margin-inline-end: 3px;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 160ms ease-out;
+}
+[data-android-sheet] .calendar-composer-options[open] > summary::after {
+  transform: translateY(2px) rotate(225deg);
+}
+[data-android-sheet]
+  .calendar-composer-options
+  > .calendar-composer-extra-fields {
+  border-top: 1px solid var(--line);
+  padding: 12px 14px 14px;
+  gap: 12px;
+}
+[data-android-sheet] .calendar-composer-extra-fields > label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 @media (max-width: 520px) {
   .workspace-app .actions-backdrop.calendar-composer-backdrop {
     padding: max(10px, env(safe-area-inset-top, 0px)) 10px
@@ -288,6 +404,7 @@
     animation: none;
   }
   .calendar-schedule-summary > svg,
+  [data-android-sheet] .calendar-composer-options > summary::after,
   .calendar-event-editor .calendar-schedule-fields .calendar-toggle input,
   .calendar-event-editor
     .calendar-schedule-fields

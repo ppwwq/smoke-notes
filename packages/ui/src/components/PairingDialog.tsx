@@ -12,6 +12,7 @@ interface PairingDialogProps {
   controller?: PairingController;
   onClose: () => void;
   onRedeem?: (code: string) => Promise<void>;
+  initialCode?: string | null;
 }
 
 export function PairingDialog({
@@ -19,11 +20,12 @@ export function PairingDialog({
   onClose,
   web = false,
   onRedeem,
+  initialCode,
 }: PairingDialogProps) {
   const [details, setDetails] = useState<PairingDetails | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [entering, setEntering] = useState(false);
+  const [entering, setEntering] = useState(!!initialCode);
   const redeem = controller?.redeemPairing?.bind(controller);
 
   const create = useCallback(async () => {
@@ -60,6 +62,7 @@ export function PairingDialog({
         </button>
         <PairingGate
           embedded
+          initialCode={initialCode}
           hint="当前设备暂时不能出示配对码。请在另一台已连接的设备上打开「设置 → 手机与同步 → 配对设备」，在这里输入其 6 位码。"
           onSkip={onClose}
           onRedeem={
@@ -129,6 +132,7 @@ export function PairingDialog({
         (entering ? (
           <PairingGate
             embedded
+            initialCode={initialCode}
             hint="在仍能同步的设备上打开「设置 → 手机与同步 → 配对设备」，输入出现的 6 位码。本机记录会保留，不会被覆盖。"
             onSkip={() => setEntering(false)}
             onRedeem={async (code) => {

@@ -1,4 +1,5 @@
 import { flushSync } from "react-dom";
+import { isAndroidApp } from "./android-host";
 
 let active: ViewTransition | undefined;
 type TransitionKind = boolean | "note-return";
@@ -16,6 +17,7 @@ export function transitionWorkspace(
     return;
   }
   if (
+    isAndroidApp() ||
     !document.startViewTransition ||
     (kind === true &&
       window.CSS?.supports?.("view-transition-class", "paper") === false) ||

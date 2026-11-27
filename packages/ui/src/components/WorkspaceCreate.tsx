@@ -1,5 +1,5 @@
 import { WorkspaceSelect } from "./WorkspaceSelect";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   TEXT_LIMITS,
   RecordValidationError,
@@ -25,6 +25,7 @@ export function WorkspaceCreate({
   selectedNotebookId,
   today,
   todoDate,
+  initialDraft,
   allowNotebook = false,
   onCreateNote,
   onCreateNotebook,
@@ -40,6 +41,7 @@ export function WorkspaceCreate({
   hidden: boolean;
   triggerLabel?: string;
   triggerText?: string;
+  initialDraft?: string;
   allowNotebook?: boolean;
   notebooks: Notebook[];
   selectedNotebookId: string | null;
@@ -61,6 +63,9 @@ export function WorkspaceCreate({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const pending = useRef(false);
+  useEffect(() => {
+    if (initialDraft) setDraft(initialDraft);
+  }, [initialDraft]);
   const selected =
     notebooks.find((book) => book.id === targetId) ??
     notebooks.find((book) => book.id === selectedNotebookId) ??

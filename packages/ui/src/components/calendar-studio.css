@@ -1923,6 +1923,59 @@
   }
 }
 
+.calendar-month-resize {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  html[data-android-app="true"]:has(.calendar-month-resize[data-resizing]) {
+    overflow-anchor: none;
+  }
+  html[data-android-app="true"]
+    .calendar-month-grid
+    .calendar-month-week
+    .calendar-month-cell {
+    min-height: calc(
+      max(44px, var(--calendar-month-cell-height)) +
+        var(--calendar-month-row-extension, 0px)
+    );
+  }
+  html[data-android-app="true"] .calendar-month-resize {
+    display: grid;
+    place-items: center;
+    width: 96px;
+    height: 44px;
+    margin-inline: auto;
+    cursor: ns-resize;
+    touch-action: none;
+    user-select: none;
+  }
+  .calendar-month-resize::after {
+    content: "";
+    width: 38px;
+    height: 4px;
+    border-radius: 99px;
+    background: var(--line-strong);
+    transform: translateY(var(--calendar-month-pull, 0px));
+    transition: transform 180ms cubic-bezier(0.2, 0.8, 0.4, 1);
+  }
+  .calendar-month-resize[data-resizing]::after {
+    background: var(--muted);
+    transition: none;
+  }
+  .calendar-month-resize:focus-visible {
+    border-radius: 12px;
+    outline: 2px solid var(--muted);
+    outline-offset: -4px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .calendar-month-resize::after {
+    transition: none;
+  }
+}
+
 /* Narrow weeks use compact colour bars; full event text remains in the agenda. */
 @media (max-width: 600px) {
   .calendar-studio.scale-week .calendar-timeline {

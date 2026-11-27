@@ -1,0 +1,6 @@
+/Sources/Jotday/Web/
+/Sources/Jotday/Assets.xcassets/AppIcon.appiconset/Jotday.png
+/build/
+/DerivedData/
+xcuserdata/
+*.ipa

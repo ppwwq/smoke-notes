@@ -23,7 +23,13 @@ import type {
   SyncStatus,
   TodoSettings,
 } from "@smoke-notes/core";
-import { getTodoDay, isPurged } from "@smoke-notes/core";
+import {
+  getTodoDay,
+  getTodoStatus,
+  isPurged,
+  projectCalendarEvents,
+  projectTodoRange,
+} from "@smoke-notes/core";
 import {
   ArrowLeft,
   ExternalLink,
@@ -54,7 +60,13 @@ const RichNoteEditor = lazy(() =>
     default: module.RichNoteEditor,
   })),
 );
-import type { AppPlatform, DesktopBridge, PairingController } from "./types";
+import type {
+  AndroidBridge,
+  AndroidNativeAction,
+  AppPlatform,
+  DesktopBridge,
+  PairingController,
+} from "./types";
 import { useWebViewport } from "./useWebViewport";
 import { useWebBackground } from "./useWebBackground";
 import { useDesktopQuit } from "./useDesktopQuit";
@@ -67,6 +79,8 @@ interface SmokeNotesAppProps {
   repository: LocalRepository;
   platform: AppPlatform;
   desktopBridge?: DesktopBridge;
+  androidBridge?: AndroidBridge;
+  onExportBackup?: () => Promise<string>;
   pairingController?: PairingController;
   onRedeemPairing?: (code: string) => Promise<void>;
   syncStatus?: SyncStatus;
@@ -82,6 +96,8 @@ export function SmokeNotesApp({
   repository,
   platform,
   desktopBridge,
+  androidBridge,
+  onExportBackup,
   pairingController,
   onRedeemPairing,
   syncStatus,
@@ -127,6 +143,21 @@ export function SmokeNotesApp({
   const browsePositions = useRef(new Map<string, Map<string, number>>());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pairingOpen, setPairingOpen] = useState(false);
+  const [pairingInitialCode, setPairingInitialCode] = useState<string | null>(
+    null,
+  );
+  const [sharedCreateDraft, setSharedCreateDraft] = useState("");
+  const settingsBackRef = useRef<(() => boolean) | null>(null);
+  const todoBackRef = useRef<(() => boolean) | null>(null);
+  const registerSettingsBack = useCallback(
+    (handler: (() => boolean) | null) => {
+      settingsBackRef.current = handler;
+    },
+    [],
+  );
+  const registerTodoBack = useCallback((handler: (() => boolean) | null) => {
+    todoBackRef.current = handler;
+  }, []);
   const [lastTrashed, setLastTrashed] = useState<LastTrashed | null>(null);
   const [online, setOnline] = useState(
     () => typeof navigator === "undefined" || navigator.onLine,
@@ -171,10 +202,12 @@ export function SmokeNotesApp({
   const [todoTypeIds, setTodoTypeIds] = useState<Record<string, string | null>>(
     {},
   );
-  const [calendarEditorOpen, setCalendarEditorOpen] = useState(false);
+  const [plannerEditorOpen, setPlannerEditorOpen] = useState(false);
   const [plannerCreateDate, setPlannerCreateDate] = useState<string | null>(
     null,
   );
+  const [pendingNativeNavigation, setPendingNativeNavigation] =
+    useState<AndroidNativeAction | null>(null);
   const [calendarUndo, setCalendarUndo] = useState<{
     snapshot: CalendarEvent;
     date?: string;
@@ -184,7 +217,7 @@ export function SmokeNotesApp({
     "note",
   );
   const [todoViewRequest, setTodoViewRequest] = useState<{
-    view: "today" | "all";
+    view: "today" | "all" | "calendar";
   } | null>(null);
   const [calendarCreateDate, setCalendarCreateDate] = useState<string | null>(
     null,
@@ -204,6 +237,63 @@ export function SmokeNotesApp({
   const invalidateRefresh = useCallback(() => {
     ++refreshRevision.current;
   }, []);
+
+  const pushWidgetSnapshot = useCallback(
+    (data: {
+      todos: Todo[];
+      series: Todo[];
+      settings: TodoSettings;
+      events: CalendarEvent[];
+      preferences?: PlannerPreferences;
+    }) => {
+      if (!androidBridge?.updateWidgetSnapshot) return;
+      try {
+        const todayKey = getTodoDay(
+          new Date(),
+          data.settings.dayBoundaryHour,
+        );
+        const timeZone = data.preferences?.timeZone ?? "Asia/Hong_Kong";
+        const projectedTodos = projectTodoRange(
+          [...data.todos, ...data.series],
+          todayKey,
+          todayKey,
+          todayKey,
+        ).filter((todo) => getTodoStatus(todo) !== "skipped");
+        const completedCount = projectedTodos.filter(
+          (todo) => getTodoStatus(todo) === "completed",
+        ).length;
+        const sortedTodos = [...projectedTodos].sort(
+          (a, b) =>
+            Number(getTodoStatus(a) === "completed") -
+            Number(getTodoStatus(b) === "completed"),
+        );
+        const todoLines = sortedTodos.map(
+          (todo) =>
+            `${getTodoStatus(todo) === "completed" ? "✓  " : "○  "}${todo.text}`,
+        );
+        const eventLines = projectCalendarEvents(
+          data.events,
+          todayKey,
+          todayKey,
+          timeZone,
+        ).map(
+          (event) =>
+            `${event.allDay ? "全天" : event.start.slice(0, 10) < todayKey ? "跨天" : event.start.slice(11)}  ${event.title}`,
+        );
+        androidBridge.updateWidgetSnapshot({
+          date: todayKey,
+          dayBoundaryHour: data.settings.dayBoundaryHour,
+          updatedAt: new Date().toISOString(),
+          completedCount,
+          totalCount: projectedTodos.length,
+          lines: [...todoLines, ...eventLines],
+        });
+      } catch {
+        // Widget snapshot updates must never block workspace refresh.
+      }
+    },
+    [androidBridge],
+  );
 
   const refresh = useCallback(
     async (preferredNotebookId?: string | null) => {
@@ -302,8 +392,15 @@ export function SmokeNotesApp({
         if (nextNotes.some((note) => note.id === current)) return current;
         return null;
       });
+      pushWidgetSnapshot({
+        todos: nextTodos,
+        series: nextSeries,
+        settings: nextSettings,
+        events: nextEvents,
+        preferences: nextPlannerPreferences,
+      });
     },
-    [repository],
+    [repository, pushWidgetSnapshot],
   );
 
   const refreshAfterMutation = useCallback(
@@ -376,14 +473,104 @@ export function SmokeNotesApp({
     return () => window.clearTimeout(timer);
   }, [lastTrashed]);
 
-  async function saveBeforeLeaving() {
+  const saveBeforeLeaving = useCallback(async () => {
     try {
       await editorRef.current?.flushSave();
       return true;
     } catch {
       return false;
     }
-  }
+  }, []);
+
+  const applyNativeAction = useCallback(
+    (action: AndroidNativeAction | null | undefined) => {
+      if (!action) return;
+      if (action.pairCode) {
+        setPendingNativeNavigation(null);
+        setSettingsOpen(false);
+        setCreateOpen(false);
+        setPairingInitialCode(action.pairCode);
+        setPairingOpen(true);
+        return;
+      }
+      if (action.sharedText) {
+        setPendingNativeNavigation(null);
+        setSettingsOpen(false);
+        setPairingOpen(false);
+        setSelectedNoteId(null);
+        setView("notes");
+        setSharedCreateDraft(action.sharedText);
+        setCreateMode("note");
+        setCreateOpen(true);
+        return;
+      }
+      if (action.tab || action.quick) setPendingNativeNavigation(action);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    // Planner editors hold an unsubmitted form until the user saves or closes it.
+    if (!pendingNativeNavigation || plannerCreateDate || plannerEditorOpen)
+      return;
+    const action = pendingNativeNavigation;
+    let active = true;
+
+    async function navigate() {
+      const saved = await saveBeforeLeaving();
+      if (!active) return;
+      setPendingNativeNavigation(null);
+      if (!saved) return;
+
+      const { quick } = action;
+      const tab =
+        quick === "note" ? "notes" : quick === "todo" ? "todos" : action.tab;
+      todoBackRef.current?.();
+      setPairingOpen(false);
+      setPairingInitialCode(null);
+      setCalendarCreateDate(null);
+      setSelectedNoteId(null);
+      setSettingsOpen(tab === "settings");
+      setCreateOpen(!!quick);
+      if (quick) setCreateMode(quick);
+
+      if (tab === "calendar" || tab === "todos") {
+        setTodoViewRequest({ view: tab === "calendar" ? "calendar" : "today" });
+        setView("todos");
+      } else if (tab === "notes") {
+        setView("notes");
+      }
+    }
+
+    void navigate();
+    return () => {
+      active = false;
+    };
+  }, [
+    pendingNativeNavigation,
+    plannerCreateDate,
+    plannerEditorOpen,
+    saveBeforeLeaving,
+  ]);
+
+  useEffect(() => {
+    if (!androidBridge) return;
+    const win = window as Window & {
+      __jotdayPendingAction?: AndroidNativeAction | null;
+    };
+    if (win.__jotdayPendingAction) {
+      const pending = win.__jotdayPendingAction;
+      win.__jotdayPendingAction = null;
+      applyNativeAction(pending);
+    }
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<AndroidNativeAction>).detail;
+      win.__jotdayPendingAction = null;
+      applyNativeAction(detail);
+    };
+    window.addEventListener("jotday:native-action", handler);
+    return () => window.removeEventListener("jotday:native-action", handler);
+  }, [androidBridge, applyNativeAction]);
 
   async function showTodos() {
     if (!(await saveBeforeLeaving())) return;
@@ -470,6 +657,105 @@ export function SmokeNotesApp({
   const { style: viewportStyle, compactEditing } = useWebViewport(
     webEditing || createOpen,
   );
+  useEffect(() => {
+    if (!androidBridge?.setSystemBarTheme) return;
+    if (webEditing && selectedNote?.color === "graphite") {
+      androidBridge.setSystemBarTheme("#111111", false);
+    } else if (background === "paper") {
+      androidBridge.setSystemBarTheme("#f5efdf", true);
+    } else if (background === "glass") {
+      androidBridge.setSystemBarTheme("#f1f0f7", true);
+    } else {
+      androidBridge.setSystemBarTheme("#faf3e7", true);
+    }
+  }, [androidBridge, background, webEditing, selectedNote?.color]);
+  useEffect(() => {
+    if (!androidBridge) return;
+    const win = window as Window & { __jotdayHandleBack?: () => boolean };
+    win.__jotdayHandleBack = () => {
+      if (editorMenu !== null) {
+        setEditorMenu(null);
+        return true;
+      }
+      const popup = document.querySelector<HTMLElement>(
+        ".workspace-select-popup, .planner-calendar-popup, .calendar-overflow-popup, .calendar-tools-menu",
+      );
+      if (popup) {
+        (document.activeElement ?? popup).dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+        );
+        return true;
+      }
+      if (settingsOpen) {
+        if (!settingsBackRef.current?.()) setSettingsOpen(false);
+        return true;
+      }
+      if (pairingOpen) {
+        setPairingOpen(false);
+        return true;
+      }
+      if (plannerCreateDate) {
+        setPlannerCreateDate(null);
+        return true;
+      }
+      if (createOpen) {
+        setCreateOpen(false);
+        return true;
+      }
+      if (view === "todos" && todoBackRef.current?.()) {
+        return true;
+      }
+      const innerDialog = document.querySelector<HTMLElement>(
+        ".actions-panel, .appearance-panel",
+      );
+      if (innerDialog) {
+        innerDialog.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+        );
+        return true;
+      }
+      if (selectedNote) {
+        const closingId = selectedNote.id;
+        void saveBeforeLeaving().then((ok) => {
+          if (ok) {
+            transitionWorkspace(() => {
+              setReturnNoteId(closingId);
+              setSelectedNoteId(null);
+            }, "note-return");
+          }
+        });
+        return true;
+      }
+      if (noteQuery.trim()) {
+        setNoteQuery("");
+        return true;
+      }
+      if (view === "notes" && notesExpanded) {
+        transitionWorkspace(() => setNotesExpanded(false), true);
+        return true;
+      }
+      if (view === "todos") {
+        setView("notes");
+        return true;
+      }
+      return false;
+    };
+    return () => {
+      delete win.__jotdayHandleBack;
+    };
+  }, [
+    androidBridge,
+    editorMenu,
+    settingsOpen,
+    pairingOpen,
+    plannerCreateDate,
+    createOpen,
+    view,
+    selectedNote,
+    noteQuery,
+    notesExpanded,
+    saveBeforeLeaving,
+  ]);
   useEffect(() => {
     setEditorMenu(null);
     setEditorActionError("");
@@ -691,7 +977,8 @@ export function SmokeNotesApp({
           {view === "todos" ? (
             <TodoWorkspace
               {...plannerActions}
-              onEditorOpenChange={setCalendarEditorOpen}
+              onRegisterBackHandler={registerTodoBack}
+              onEditorOpenChange={setPlannerEditorOpen}
               events={calendarEvents}
               onImportPlan={async (text, timeZone) => {
                 const result = await repository.importCalendarPlan(
@@ -1026,6 +1313,7 @@ export function SmokeNotesApp({
                   }
                   appearanceOpen={editorMenu === "appearance"}
                   onAppearanceClose={closeEditorMenu}
+                  onHideKeyboard={androidBridge?.hideKeyboard}
                   note={selectedNote}
                   onSaveStatusChange={reportEditorSaveStatus}
                   onSave={async (changes) => {
@@ -1173,14 +1461,18 @@ export function SmokeNotesApp({
             settingsOpen ||
             pairingOpen ||
             !!plannerCreateDate ||
-            calendarEditorOpen
+            plannerEditorOpen
           }
           open={createOpen}
           onOpenChange={(open) => {
             if (open && view === "todos" && calendarCreateDate)
               setPlannerCreateDate(calendarCreateDate);
-            else setCreateOpen(open);
+            else {
+              if (!open) setSharedCreateDraft("");
+              setCreateOpen(open);
+            }
           }}
+          initialDraft={sharedCreateDraft}
           onArrange={() => {
             setCreateOpen(false);
             setPlannerCreateDate(
@@ -1240,6 +1532,9 @@ export function SmokeNotesApp({
           <SettingsPanel
             platform={platform}
             bridge={desktopBridge}
+            androidBridge={androidBridge}
+            onExportBackup={onExportBackup}
+            onRegisterBackHandler={registerSettingsBack}
             webBackground={background}
             onWebBackgroundChange={changeBackground}
             backgroundNotice={backgroundNotice}
@@ -1256,8 +1551,17 @@ export function SmokeNotesApp({
             plannerDuplicateCount={plannerDuplicateCount}
             onExportPlannerConflicts={() => {
               void repository.listPlannerConflicts().then((records) => {
+                const json = JSON.stringify(records, null, 2);
+                if (androidBridge?.saveTextFile) {
+                  androidBridge.saveTextFile(
+                    "jotday-calendar-conflicts.json",
+                    "application/json",
+                    json,
+                  );
+                  return;
+                }
                 const url = URL.createObjectURL(
-                  new Blob([JSON.stringify(records, null, 2)], {
+                  new Blob([json], {
                     type: "application/json",
                   }),
                 );
@@ -1299,8 +1603,12 @@ export function SmokeNotesApp({
           <PairingDialog
             web
             controller={pairingController}
+            initialCode={pairingInitialCode}
             onRedeem={onRedeemPairing}
-            onClose={() => setPairingOpen(false)}
+            onClose={() => {
+              setPairingInitialCode(null);
+              setPairingOpen(false);
+            }}
           />
         )}
         {lastTrashed && (

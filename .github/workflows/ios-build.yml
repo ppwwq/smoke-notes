@@ -1,0 +1,93 @@
+name: Build unsigned Jotday iOS IPA
+
+on:
+  push:
+    branches:
+      - codex/jotday-ios-build
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  build:
+    if: github.repository == 'ppwwq/smoke-notes'
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - name: Link this build to its commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state=pending -f context=jotday-ios-build \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >/dev/null
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22.14.0
+          package-manager-cache: false
+      - name: Build the bundled web app
+        run: |
+          corepack enable
+          corepack prepare "$(node -p 'require("./package.json").packageManager')" --activate
+          pnpm install --frozen-lockfile
+          pnpm --filter @smoke-notes/web build:ios
+      - name: Build Jotday for arm64 iPhone and iPad
+        run: |
+          xcodebuild -version
+          if [ ! -f apps/ios/Sources/Jotday/Assets.xcassets/AppIcon.appiconset/Jotday.png ]; then
+            swift apps/ios/make-app-icon.swift
+          fi
+          xcodebuild -project apps/ios/Jotday.xcodeproj -scheme Jotday \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/jotday-ios-build" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+      - name: Verify and package the unsigned device build
+        shell: bash
+        run: |
+          app="$RUNNER_TEMP/jotday-ios-build/Build/Products/Release-iphoneos/Jotday.app"
+          plist="$app/Info.plist"
+          executable_name=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$plist")
+          executable="$app/$executable_name"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")" = app.jotday.calendar
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleSupportedPlatforms:0' "$plist")" = iPhoneOS
+          test "$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$plist")" = 16.0
+          test "$(/usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$plist")" = 1
+          test "$(/usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:1' "$plist")" = 2
+          test -x "$executable"
+          test "$(xcrun lipo -archs "$executable")" = arm64
+          xcrun vtool -show-build "$executable" | grep -E '^[[:space:]]*platform[[:space:]]+IOS[[:space:]]*$'
+          test -s "$app/Web/index.html"
+          diff -qr apps/ios/Sources/Jotday/Web "$app/Web"
+          test ! -e "$app/_CodeSignature"
+          test ! -e "$app/embedded.mobileprovision"
+
+          mkdir -p "$RUNNER_TEMP/jotday-ipa/Payload"
+          ditto "$app" "$RUNNER_TEMP/jotday-ipa/Payload/Jotday.app"
+          cd "$RUNNER_TEMP/jotday-ipa"
+          ditto -c -k --norsrc --keepParent Payload "$RUNNER_TEMP/Jotday-unsigned.ipa"
+          unzip -tq "$RUNNER_TEMP/Jotday-unsigned.ipa"
+          unzip -p "$RUNNER_TEMP/Jotday-unsigned.ipa" Payload/Jotday.app/Info.plist > packaged-info.plist
+          cmp packaged-info.plist "$plist"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: Jotday-unsigned-iOS
+          path: ${{ runner.temp }}/Jotday-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
+      - name: Record the build result on its commit
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_STATUS: ${{ job.status }}
+        run: |
+          state=failure
+          if [ "$BUILD_STATUS" = success ]; then
+            state=success
+          fi
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f "state=$state" -f context=jotday-ios-build \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >/dev/null

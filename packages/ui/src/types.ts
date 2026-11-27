@@ -33,6 +33,33 @@ export interface DesktopBridge {
 
 export type AppPlatform = "desktop" | "web";
 
+export interface AndroidNativeAction {
+  tab?: "notes" | "todos" | "calendar" | "settings";
+  quick?: "note" | "todo";
+  sharedText?: string;
+  pairCode?: string;
+}
+
+export interface AndroidWidgetSnapshot {
+  date: string;
+  dayBoundaryHour: 0 | 4;
+  updatedAt: string;
+  completedCount: number;
+  totalCount: number;
+  lines: string[];
+}
+
+export interface AndroidBridge {
+  onAppReady?(): void;
+  setSystemBarTheme?(backgroundHex: string, darkIcons: boolean): void;
+  haptic?(kind: "light" | "confirm" | "longPress" | "reject"): void;
+  pinWidget?(): void;
+  saveTextFile?(filename: string, mimeType: string, content: string): void;
+  hideKeyboard?(): void;
+  updateWidgetSnapshot?(snapshot: AndroidWidgetSnapshot): void;
+  openExternalUrl?(url: string): void;
+}
+
 export interface PairingController {
   createPairing(): Promise<PairingDetails>;
   /** Desktop: rejoin the workspace with a code made on another device. */

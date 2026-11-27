@@ -1,7 +1,10 @@
 import { useEffect, useState, type CSSProperties } from "react";
 
 interface WebViewport {
-  style: CSSProperties;
+  style: CSSProperties & {
+    "--web-viewport-height"?: string;
+    "--web-viewport-top"?: string;
+  };
   compactEditing: boolean;
 }
 
@@ -26,19 +29,31 @@ export function useWebViewport(enabled: boolean): WebViewport {
       const insideEditorScreen = !!active?.closest(".mobile-note-screen");
       const layoutHeight =
         document.documentElement.clientHeight || window.innerHeight;
+      const height = viewport.height;
+      const viewportHeight = `${height}px`;
+      const viewportTop = `${viewport.offsetTop}px`;
       const cramped =
         navigator.maxTouchPoints > 0 &&
-        viewport.height <= 500 &&
-        layoutHeight - viewport.height >= 150;
-      setViewportState((previous) => ({
-        style: {
-          "--web-viewport-height": `${viewport.height}px`,
-          "--web-viewport-top": `${viewport.offsetTop}px`,
-        } as CSSProperties,
-        compactEditing:
+        height <= 500 &&
+        layoutHeight - height >= 150;
+      setViewportState((previous) => {
+        const compactEditing =
           cramped &&
-          (editing || (previous.compactEditing && insideEditorScreen)),
-      }));
+          (editing || (previous.compactEditing && insideEditorScreen));
+        if (
+          previous.style["--web-viewport-height"] === viewportHeight &&
+          previous.style["--web-viewport-top"] === viewportTop &&
+          previous.compactEditing === compactEditing
+        )
+          return previous;
+        return {
+          style: {
+            "--web-viewport-height": viewportHeight,
+            "--web-viewport-top": viewportTop,
+          },
+          compactEditing,
+        };
+      });
     };
     // Wait for the next focus target; body is transiently active during focusout.
     const afterBlur = () => queueMicrotask(update);

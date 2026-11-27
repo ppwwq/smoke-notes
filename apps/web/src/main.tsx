@@ -13,8 +13,15 @@ import {
   type SyncStatus,
 } from "@smoke-notes/core";
 import { SmokeNotesApp } from "@smoke-notes/ui/app";
+import { bindIOSNativeActions } from "@smoke-notes/ui/android-host";
 import { PairingGate } from "@smoke-notes/ui/pairing";
 import { adoptLocalWorkspace } from "./local-workspace";
+import {
+  buildAndroidBackupJson,
+  getAndroidBridge,
+  migrateAndroidLegacyData,
+} from "./android-bridge";
+import { getIOSBridge } from "./ios-bridge";
 import "@smoke-notes/ui/workspace.css";
 import "./brand.css";
 
@@ -26,21 +33,45 @@ function persistentId(key: string): string {
   return created;
 }
 
-function cloudConfig(): CloudConfig | null {
+function cloudConfig(isNative: boolean): CloudConfig | null {
   const url = import.meta.env.VITE_SUPABASE_URL;
   const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  const webUrl = import.meta.env.VITE_WEB_APP_URL || window.location.origin;
+  const webUrl =
+    import.meta.env.VITE_WEB_APP_URL ||
+    (isNative
+      ? "https://smoke-notes-philipwwq.pages.dev"
+      : window.location.origin);
   return url && publishableKey ? { url, publishableKey, webUrl } : null;
 }
 
 async function bootstrap() {
   const root = createRoot(document.getElementById("root")!);
-  const config = cloudConfig();
+  const androidBridge = getAndroidBridge();
+  const iosBridge =
+    import.meta.env.JOTDAY_IOS_HOST === "true"
+      ? getIOSBridge(window)
+      : undefined;
+  if (androidBridge) document.documentElement.dataset.androidApp = "true";
+  if (iosBridge) {
+    document.documentElement.dataset.iosApp = "true";
+    bindIOSNativeActions(iosBridge);
+  }
+  const nativeBridge = androidBridge ?? iosBridge;
+  const config = cloudConfig(!!nativeBridge);
   const cloud = config ? new SupabaseCloud(config) : null;
-  let workspaceId = localStorage.getItem("smoke-notes:workspace-id");
-  const linkCode = pairingCodeFromUrl(window.location.href);
   const deviceId = persistentId("smoke-notes:device-id");
   const database = new SmokeNotesDatabase("smoke-notes-web");
+  if (nativeBridge) {
+    window.__jotdayNativeAction = (action) => {
+      window.__jotdayPendingAction = action;
+      window.dispatchEvent(
+        new CustomEvent("jotday:native-action", { detail: action }),
+      );
+    };
+  }
+  if (androidBridge) await migrateAndroidLegacyData(database, cloud, deviceId);
+  let workspaceId = localStorage.getItem("smoke-notes:workspace-id");
+  const linkCode = pairingCodeFromUrl(window.location.href);
   let runtime: ReturnType<typeof createSyncRuntime> | undefined;
   const isLocal = () =>
     !cloud || localStorage.getItem("smoke-notes:local-only") === workspaceId;
@@ -75,11 +106,41 @@ async function bootstrap() {
   }
 
   if (cloud && (!workspaceId || (isLocal() && linkCode))) {
-    root.render(
-      <StrictMode>
-        <PairingGate initialCode={linkCode} onRedeem={redeem} onSkip={skip} />
-      </StrictMode>,
-    );
+    let gateListener: ((event: Event) => void) | null = null;
+    const clearGateListener = () => {
+      if (gateListener) {
+        window.removeEventListener("jotday:native-action", gateListener);
+        gateListener = null;
+      }
+    };
+    const renderGate = (pairCode: string | null) =>
+      root.render(
+        <StrictMode>
+          <PairingGate
+            key={pairCode ?? "gate"}
+            initialCode={pairCode}
+            onRedeem={async (code) => {
+              await redeem(code);
+              clearGateListener();
+            }}
+            onSkip={() => {
+              clearGateListener();
+              return skip();
+            }}
+          />
+        </StrictMode>,
+      );
+    if (nativeBridge) {
+      gateListener = (event: Event) => {
+        const action = (event as CustomEvent<{ pairCode?: string }>).detail;
+        if (action?.pairCode) renderGate(action.pairCode);
+      };
+      window.addEventListener("jotday:native-action", gateListener);
+    }
+    const initialPairCode =
+      linkCode ?? window.__jotdayPendingAction?.pairCode ?? null;
+    renderGate(initialPairCode);
+    nativeBridge?.onAppReady?.();
     return;
   }
 
@@ -96,7 +157,10 @@ async function bootstrap() {
     const repository = new LocalRepository(database, { workspaceId, deviceId });
     const pairingController =
       syncEnabled && cloud
-        ? { createPairing: () => cloud.createPairing(activeWorkspaceId) }
+        ? {
+            createPairing: () => cloud.createPairing(activeWorkspaceId),
+            redeemPairing: redeem,
+          }
         : undefined;
     let syncStatus: SyncStatus | undefined = syncEnabled
       ? {
@@ -112,6 +176,12 @@ async function bootstrap() {
             key={workspaceId}
             repository={repository}
             platform="web"
+            androidBridge={nativeBridge}
+            onExportBackup={
+              nativeBridge
+                ? () => buildAndroidBackupJson(database, activeWorkspaceId)
+                : undefined
+            }
             syncStatus={syncStatus}
             onRedeemPairing={redeem}
             pairingController={pairingController}
@@ -119,6 +189,7 @@ async function bootstrap() {
         </StrictMode>,
       );
     renderApp();
+    nativeBridge?.onAppReady?.();
 
     if (syncEnabled && cloud) {
       const engine = new SyncEngine(database, cloud.syncAdapter, { deviceId });

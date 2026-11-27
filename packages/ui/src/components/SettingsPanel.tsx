@@ -13,12 +13,16 @@ import {
   ChevronRight,
   Appearance as Palette,
 } from "../icons";
-import type { AppPlatform, DesktopBridge } from "../types";
+import type { AndroidBridge, AppPlatform, DesktopBridge } from "../types";
 import type { WebBackground } from "../useWebBackground";
+import { Download, LayoutGrid } from "lucide-react";
 
 interface SettingsPanelProps {
   platform?: AppPlatform;
   bridge?: DesktopBridge;
+  androidBridge?: AndroidBridge;
+  onExportBackup?: () => Promise<string>;
+  onRegisterBackHandler?: (handler: (() => boolean) | null) => void;
   webBackground?: WebBackground;
   onWebBackgroundChange?: (value: WebBackground) => void;
   backgroundNotice?: string;
@@ -41,6 +45,9 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({
   bridge,
+  androidBridge,
+  onExportBackup,
+  onRegisterBackHandler,
   platform = bridge ? "desktop" : "web",
   webBackground,
   onWebBackgroundChange,
@@ -79,7 +86,25 @@ export function SettingsPanel({
   const trashHeading = useRef<HTMLHeadingElement>(null);
   const [boundaryBusy, setBoundaryBusy] = useState(false);
   const [boundaryError, setBoundaryError] = useState("");
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupError, setBackupError] = useState("");
   const web = webBackground !== undefined;
+
+  useEffect(() => {
+    if (!onRegisterBackHandler) return;
+    onRegisterBackHandler(() => {
+      if (confirmation) {
+        if (!restorePending.current) setConfirmation(null);
+        return true;
+      }
+      if (section !== "overview") {
+        setSection("overview");
+        return true;
+      }
+      return false;
+    });
+    return () => onRegisterBackHandler(null);
+  }, [onRegisterBackHandler, confirmation, section]);
 
   useEffect(() => {
     if (!bridge) return;
@@ -189,6 +214,57 @@ export function SettingsPanel({
             </span>
             <ChevronRight size={18} />
           </button>
+          {androidBridge && (
+            <>
+              {androidBridge.pinWidget && (
+                <button
+                  type="button"
+                  className="settings-entry"
+                  onClick={() => androidBridge.pinWidget?.()}
+                >
+                  <LayoutGrid size={22} />
+                  <span>
+                    <strong>添加桌面小组件</strong>
+                    <small>今日安排、月历、快速便签与待办</small>
+                  </span>
+                  <ChevronRight size={18} />
+                </button>
+              )}
+              {onExportBackup && androidBridge.saveTextFile && (
+                <button
+                  type="button"
+                  className="settings-entry"
+                  disabled={backupBusy}
+                  onClick={async () => {
+                    if (backupBusy) return;
+                    setBackupBusy(true);
+                    setBackupError("");
+                    try {
+                      const json = await onExportBackup();
+                      const day = new Date().toISOString().slice(0, 10);
+                      androidBridge.saveTextFile?.(
+                        `Jotday-${day}.json`,
+                        "application/json",
+                        json,
+                      );
+                    } catch {
+                      setBackupError("导出备份失败，请稍后重试。");
+                    } finally {
+                      setBackupBusy(false);
+                    }
+                  }}
+                >
+                  <Download size={22} />
+                  <span>
+                    <strong>{backupBusy ? "正在准备备份…" : "导出本机备份"}</strong>
+                    <small>保存全部便签、待办与日历为 JSON</small>
+                  </span>
+                  <ChevronRight size={18} />
+                </button>
+              )}
+              {backupError && <p role="alert">{backupError}</p>}
+            </>
+          )}
         </div>
       )}
       {webBackground !== undefined && section === "appearance" && (

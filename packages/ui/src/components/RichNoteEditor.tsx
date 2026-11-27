@@ -41,6 +41,7 @@ import {
   Underline as UnderlineIcon,
   X,
 } from "../icons";
+import { ChevronDown } from "lucide-react";
 
 export type NoteEdit = Pick<
   Note,
@@ -59,6 +60,7 @@ interface RichNoteEditorProps {
   onFormatToggle?(): void;
   appearanceOpen?: boolean;
   onAppearanceClose?(): void;
+  onHideKeyboard?(): void;
 }
 
 export interface RichNoteEditorHandle {
@@ -144,6 +146,7 @@ export const RichNoteEditor = forwardRef<
     onFormatToggle,
     appearanceOpen = false,
     onAppearanceClose,
+    onHideKeyboard,
   },
   ref,
 ) {
@@ -783,6 +786,20 @@ export const RichNoteEditor = forwardRef<
           <span className="format-status" aria-live="polite">
             {saveStatus}
           </span>
+          {onHideKeyboard && (
+            <button
+              type="button"
+              className="android-ime-dismiss"
+              aria-label="收起键盘"
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => {
+                (document.activeElement as HTMLElement | null)?.blur?.();
+                onHideKeyboard();
+              }}
+            >
+              <ChevronDown size={18} />
+            </button>
+          )}
         </footer>
       </GooeyFormatMenu>
       {progressive && appearanceOpen && (

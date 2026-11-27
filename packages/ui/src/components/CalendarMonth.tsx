@@ -1,4 +1,9 @@
-import type { CSSProperties } from "react";
+import {
+  useEffect,
+  useRef,
+  type CSSProperties,
+  type PointerEvent,
+} from "react";
 import {
   addTodoDays,
   getTodoDate,
@@ -14,6 +19,11 @@ import {
 import { CalendarDayOverflow } from "./CalendarDayOverflow";
 import { calendarDay, calendarWeekNumber } from "./calendar-dates";
 import { calendarSpanRows } from "./calendar-layout";
+
+const MAX_ROW_EXTENSION = 56;
+const clampRowExtension = (value: number) =>
+  Math.max(0, Math.min(MAX_ROW_EXTENSION, value));
+
 export function CalendarMonth({
   from,
   weeks = 6,
@@ -30,7 +40,10 @@ export function CalendarMonth({
   onOpen,
   onOpenTodo,
   onExpand,
+  onSwipeMonth,
   todoColor,
+  rowExtension,
+  onRowExtensionChange,
 }: {
   from: string;
   weeks?: number;
@@ -47,13 +60,85 @@ export function CalendarMonth({
   onOpen(event: CalendarOccurrence): void;
   onOpenTodo(todo: Todo): void;
   onExpand(day: string): void;
+  onSwipeMonth?(delta: -1 | 1): void;
   todoColor(todo: Todo): string;
+  rowExtension: number;
+  onRowExtensionChange(value: number): void;
 }) {
+  const swipe = useRef<{ x: number; y: number; at: number } | null>(null);
+  const grid = useRef<HTMLDivElement>(null);
+  const grip = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ id: number; y: number; frame: number } | null>(null);
+
+  useEffect(() => () => cancelAnimationFrame(drag.current?.frame ?? 0), []);
+
+  function showHeight(value: number) {
+    grid.current?.style.setProperty(
+      "--calendar-month-row-extension",
+      `${value}px`,
+    );
+  }
+
+  function finishResize(event: PointerEvent<HTMLDivElement>, commit: boolean) {
+    const current = drag.current;
+    if (!current || current.id !== event.pointerId) return;
+    drag.current = null;
+    cancelAnimationFrame(current.frame);
+    delete event.currentTarget.dataset.resizing;
+    event.currentTarget.style.removeProperty("--calendar-month-pull");
+    const value = commit
+      ? clampRowExtension(
+          Math.round(rowExtension + (event.clientY - current.y) / weeks),
+        )
+      : rowExtension;
+    showHeight(value);
+    if (value !== rowExtension) onRowExtensionChange(value);
+  }
+
   return (
     <div
       className={`calendar-month-grid density-${density}${showWeekNumbers ? " with-week-numbers" : ""}`}
+      ref={grid}
       role="group"
       aria-label="月视图"
+      style={
+        {
+          "--calendar-month-row-extension": `${rowExtension}px`,
+        } as CSSProperties
+      }
+      onTouchStart={(event) => {
+        if (
+          !onSwipeMonth ||
+          event.target === grip.current ||
+          event.touches.length !== 1
+        ) {
+          swipe.current = null;
+          return;
+        }
+        swipe.current = {
+          x: event.touches[0].clientX,
+          y: event.touches[0].clientY,
+          at: Date.now(),
+        };
+      }}
+      onTouchCancel={() => {
+        swipe.current = null;
+      }}
+      onTouchEnd={(event) => {
+        const start = swipe.current;
+        swipe.current = null;
+        if (!onSwipeMonth || !start || event.changedTouches.length !== 1)
+          return;
+        const dx = event.changedTouches[0].clientX - start.x;
+        const dy = event.changedTouches[0].clientY - start.y;
+        if (
+          Date.now() - start.at < 450 &&
+          Math.abs(dx) > 64 &&
+          Math.abs(dx) > Math.abs(dy) * 1.6
+        ) {
+          onSwipeMonth(dx < 0 ? 1 : -1);
+        }
+      }}
     >
       <div className="calendar-week-heading">
         {showWeekNumbers && (
@@ -197,6 +282,54 @@ export function CalendarMonth({
           </div>
         );
       })}
+      <div
+        ref={grip}
+        className="calendar-month-resize"
+        role="slider"
+        tabIndex={0}
+        aria-label="调整月历高度"
+        aria-orientation="vertical"
+        aria-valuemin={0}
+        aria-valuemax={MAX_ROW_EXTENSION}
+        aria-valuenow={rowExtension}
+        onPointerDown={(event) => {
+          if (event.button !== 0 || drag.current) return;
+          drag.current = { id: event.pointerId, y: event.clientY, frame: 0 };
+          event.currentTarget.dataset.resizing = "true";
+          event.currentTarget.setPointerCapture?.(event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          const current = drag.current;
+          if (!current || current.id !== event.pointerId) return;
+          const raw = rowExtension + (event.clientY - current.y) / weeks;
+          const value = clampRowExtension(raw);
+          const pull = Math.max(-12, Math.min(12, (raw - value) * weeks * 0.2));
+          cancelAnimationFrame(current.frame);
+          current.frame = requestAnimationFrame(() => {
+            showHeight(value);
+            grip.current?.style.setProperty(
+              "--calendar-month-pull",
+              `${pull}px`,
+            );
+          });
+        }}
+        onPointerUp={(event) => finishResize(event, true)}
+        onPointerCancel={(event) => finishResize(event, false)}
+        onLostPointerCapture={(event) => finishResize(event, false)}
+        onKeyDown={(event) => {
+          const values = {
+            ArrowUp: rowExtension + 8,
+            ArrowDown: rowExtension - 8,
+            Home: 0,
+            End: MAX_ROW_EXTENSION,
+          };
+          if (!(event.key in values)) return;
+          event.preventDefault();
+          onRowExtensionChange(
+            clampRowExtension(values[event.key as keyof typeof values]),
+          );
+        }}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { plannerTodoValue, plannerTypeVisible } from "@smoke-notes/core";
 import { calendarRange } from "./calendar-dates";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   RecordValidationError,
   TEXT_LIMITS,
@@ -27,6 +27,7 @@ import {
 } from "./CalendarTodoView";
 import SpringCheck from "./spring-check/SpringCheck";
 import { CalendarTodoEditor } from "./CalendarTodoEditor";
+import { getNativeActions } from "../android-host";
 
 export type TodoFilter = "all" | "open" | "done";
 
@@ -42,7 +43,8 @@ interface TodoWorkspaceProps extends CalendarEventActions {
   deletedTodos?: Todo[];
   onPrepareTodo?(todo: Todo): Promise<void>;
   onCalendarDateChange?(date: string | null): void;
-  viewRequest?: { view: "today" | "all" } | null;
+  viewRequest?: { view: "today" | "all" | "calendar" } | null;
+  onRegisterBackHandler?(handler: (() => boolean) | null): void;
   onSetStatus?: (id: string, status: TodoStatus) => Promise<void>;
   onReschedule?: (id: string, date: string) => Promise<void>;
   onUpdateRule?: (id: string, changes: TodoRuleChanges) => Promise<void>;
@@ -249,6 +251,7 @@ function SeriesEditor({
 
 export function TodoWorkspace(props: TodoWorkspaceProps) {
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
+  const [calendarEditorOpen, setCalendarEditorOpen] = useState(false);
   const today = props.today ?? getTodoDay();
   const [view, setView] = useState<TodoView>(
     props.viewRequest?.view ?? "today",
@@ -335,6 +338,13 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
   }
 
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const calendarBackHandlerRef = useRef<(() => boolean) | null>(null);
+  const registerCalendarBackHandler = useCallback(
+    (handler: (() => boolean) | null) => {
+      calendarBackHandlerRef.current = handler;
+    },
+    [],
+  );
   const [lastViewRequest, setLastViewRequest] = useState(props.viewRequest);
   const [actionError, setActionError] = useState("");
   const [errorId, setErrorId] = useState<string | null>(null);
@@ -369,6 +379,33 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
     setLocalFilter("all");
   }
   const filter = props.filter ?? localFilter;
+  const { onEditorOpenChange, onRegisterBackHandler } = props;
+  useEffect(() => {
+    onEditorOpenChange?.(!!editingTodo || calendarEditorOpen);
+    return () => onEditorOpenChange?.(false);
+  }, [calendarEditorOpen, editingTodo, onEditorOpenChange]);
+  useEffect(() => {
+    if (!onRegisterBackHandler) return;
+    onRegisterBackHandler(() => {
+      if (editingTodo) {
+        setEditingTodo(null);
+        return true;
+      }
+      if (view === "calendar" && calendarBackHandlerRef.current?.()) {
+        return true;
+      }
+      if (filtersOpen) {
+        setFiltersOpen(false);
+        return true;
+      }
+      if (view !== "today") {
+        setView("today");
+        return true;
+      }
+      return false;
+    });
+    return () => onRegisterBackHandler(null);
+  }, [onRegisterBackHandler, editingTodo, view, filtersOpen]);
   // Legacy records keep their original Hong Kong date without a writeback.
   const todoDate = getTodoDate;
   const currentTodos = props.todos.filter((todo) => todoDate(todo) === today);
@@ -458,7 +495,14 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
           ? "这次已跳过，记录已保留。"
           : "已放回待办清单。",
     );
-    if (success) setUndo({ id: todo.id, status: previous, text: todo.text });
+    if (success) {
+      setUndo({ id: todo.id, status: previous, text: todo.text });
+      try {
+        getNativeActions()?.haptic?.("confirm");
+      } catch {
+        // The completed change is independent of native feedback.
+      }
+    }
     if (animate) {
       if (!success)
         setLeaving((current) => current.filter((item) => item.id !== todo.id));
@@ -799,6 +843,7 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
       <div className="todo-list-scroll">
         {view === "calendar" && (
           <CalendarTodoView
+            onRegisterBackHandler={registerCalendarBackHandler}
             types={props.types}
             todoTypeIds={props.todoTypeIds}
             todoTimes={props.todoTimes}
@@ -817,7 +862,7 @@ export function TodoWorkspace(props: TodoWorkspaceProps) {
             onMovePlannerTodo={props.onMovePlannerTodo}
             events={props.events}
             onImportPlan={props.onImportPlan}
-            onEditorOpenChange={props.onEditorOpenChange}
+            onEditorOpenChange={setCalendarEditorOpen}
             onSaveEvent={props.onSaveEvent}
             onDeleteEvent={props.onDeleteEvent}
             onUndoEvent={props.onUndoEvent}

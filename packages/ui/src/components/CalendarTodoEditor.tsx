@@ -8,6 +8,7 @@ import {
   type PlannerTodoInput,
   type Todo,
 } from "@smoke-notes/core";
+import { isAndroidApp } from "../android-host";
 import { WebDialog } from "./glass/WebDialog";
 import { SegmentedControl } from "./SegmentedControl";
 import { PlannerDatePicker } from "./PlannerDatePicker";
@@ -156,7 +157,7 @@ export function CalendarTodoEditor({
           <label className="calendar-composer-title">
             内容
             <input
-              autoFocus
+              autoFocus={!isAndroidApp()}
               aria-label="待办内容"
               value={draft.text}
               maxLength={500}

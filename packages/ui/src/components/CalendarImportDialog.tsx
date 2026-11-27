@@ -6,6 +6,7 @@ import {
   type CalendarImportPlan,
   type CalendarImportResult,
 } from "@smoke-notes/core";
+import { getNativeActions } from "../android-host";
 import { WebDialog } from "./glass/WebDialog";
 export function CalendarImportDialog({
   date,
@@ -53,6 +54,15 @@ export function CalendarImportDialog({
     2,
   );
   function download() {
+    const native = getNativeActions();
+    if (native?.saveTextFile) {
+      native.saveTextFile(
+        "Jotday日程规划模板.json",
+        "application/json",
+        template,
+      );
+      return;
+    }
     const url = URL.createObjectURL(
       new Blob([template], { type: "application/json" }),
     );

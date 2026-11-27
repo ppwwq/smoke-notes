@@ -10,6 +10,7 @@ import {
   type CalendarEvent,
   type PlannerTodoInput,
 } from "@smoke-notes/core";
+import { isAndroidApp } from "../android-host";
 import { WebDialog } from "./glass/WebDialog";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { PlannerDatePicker } from "./PlannerDatePicker";
@@ -133,6 +134,8 @@ export function CalendarEventEditor({
     ? addTodoDays(fields.end.slice(0, 10), -1)
     : fields.end.slice(0, 10);
   const composing = !occurrence || copy;
+  const android = isAndroidApp();
+  const composerTitle = android && copy ? "复制日程" : "新建安排";
   if (!occurrence && entryKind === "todo")
     return (
       <CalendarTodoEditor
@@ -152,7 +155,11 @@ export function CalendarEventEditor({
       kind="actions"
       placement={composing ? "top-end" : "center"}
       label={
-        occurrence && !copy ? (editing ? "编辑日程" : "日程详情") : "新建安排"
+        occurrence && !copy
+          ? editing
+            ? "编辑日程"
+            : "日程详情"
+          : composerTitle
       }
       onClose={() => {
         if (!pending.current) onClose();
@@ -262,7 +269,7 @@ export function CalendarEventEditor({
         >
           <header>
             <h2 className={composing ? "calendar-composer-heading" : undefined}>
-              {occurrence && !copy ? "编辑日程" : "新建安排"}
+              {occurrence && !copy ? "编辑日程" : composerTitle}
             </h2>
             <button
               type="button"
@@ -308,7 +315,7 @@ export function CalendarEventEditor({
             <label className="calendar-composer-title">
               标题
               <input
-                autoFocus
+                autoFocus={!android}
                 aria-label="日程标题"
                 value={fields.title}
                 maxLength={240}

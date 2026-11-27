@@ -156,6 +156,7 @@ export function CalendarTodoView({
   onSavePlannerTodo,
   onMovePlannerTodo,
   onEditorOpenChange,
+  onRegisterBackHandler,
 }: CalendarEventActions & {
   onToggleTodo?(todo: Todo): Promise<void>;
   busyTodoIds?: string[];
@@ -170,6 +171,7 @@ export function CalendarTodoView({
   onMonthChange(value: string): void;
   onDateChange(value: string): void;
   onCreate?(): void;
+  onRegisterBackHandler?(handler: (() => boolean) | null): void;
   children: ReactNode;
 }) {
   const timeZone = preferences?.timeZone ?? "Asia/Hong_Kong";
@@ -186,6 +188,7 @@ export function CalendarTodoView({
     null,
   );
   const [hourHeight, setHourHeight] = useState(60);
+  const [monthRowExtension, setMonthRowExtension] = useState(10);
   const [scale, setScale] = useState<Scale>("month");
   const [expandedFrom, setExpandedFrom] = useState<{
     scale: "month" | "week";
@@ -282,6 +285,66 @@ export function CalendarTodoView({
   const [clipboard, setClipboard] = useState<CalendarEventInput | null>(null);
   const [notice, setNotice] = useState("");
   useCalendarContext(root, setContext);
+  useEffect(() => {
+    if (!onRegisterBackHandler) return;
+    onRegisterBackHandler(() => {
+      if (context) {
+        setContext(null);
+        return true;
+      }
+      if (importOpen) {
+        setImportOpen(false);
+        return true;
+      }
+      if (settingsOpen) {
+        setSettingsOpen(false);
+        return true;
+      }
+      if (editor) {
+        setEditor(null);
+        return true;
+      }
+      if (todoEditor) {
+        setTodoEditor(null);
+        return true;
+      }
+      if (toolsOpen) {
+        setToolsOpen(false);
+        return true;
+      }
+      if (query.trim()) {
+        setQuery("");
+        return true;
+      }
+      if (showList) {
+        setShowList(false);
+        return true;
+      }
+      if (expandedFrom && scale === "day") {
+        onMonthChange(expandedFrom.month);
+        onDateChange(expandedFrom.date);
+        setScale(expandedFrom.scale);
+        setExpandedFrom(null);
+        return true;
+      }
+      return false;
+    });
+    return () => onRegisterBackHandler(null);
+  }, [
+    onRegisterBackHandler,
+    context,
+    importOpen,
+    settingsOpen,
+    editor,
+    todoEditor,
+    toolsOpen,
+    query,
+    showList,
+    expandedFrom,
+    scale,
+    onMonthChange,
+    onDateChange,
+  ]);
   const current = calendarDay(month),
     year = current.getFullYear(),
     monthIndex = current.getMonth();
@@ -1067,7 +1130,10 @@ export function CalendarTodoView({
                     if (onSavePlannerTodo) setTodoEditor(todo);
                   }}
                   onExpand={expandDay}
+                  onSwipeMonth={(delta) => select(adjacentDate(delta))}
                   todoColor={todoColor}
+                  rowExtension={monthRowExtension}
+                  onRowExtensionChange={setMonthRowExtension}
                 />
               )}
               {scale === "year" && (

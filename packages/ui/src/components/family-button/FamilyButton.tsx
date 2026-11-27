@@ -17,6 +17,7 @@ import {
 import { Dialog } from "@base-ui/react/dialog";
 import { motion, useReducedMotion } from "motion/react";
 import { PlusIcon, XIcon } from "lucide-react";
+import { isAndroidApp } from "../../android-host";
 import "./family-button.css";
 
 interface FamilyButtonProps {
@@ -41,6 +42,8 @@ export default function FamilyButton({
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? localOpen;
   const reduced = useReducedMotion();
+  const android = isAndroidApp();
+  const immediate = reduced || android;
   const portalHost = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const popup = useRef<HTMLDivElement>(null);
@@ -79,10 +82,14 @@ export default function FamilyButton({
           width: size.width,
           height: size.height,
           borderRadius: open ? 28 : 24,
-          backgroundColor: open ? "var(--canvas, #fbfaf8)" : "#24241f",
+          backgroundColor: open
+            ? android
+              ? "transparent"
+              : "var(--canvas, #fbfaf8)"
+            : "#24241f",
         }}
         transition={
-          reduced
+          immediate
             ? { duration: 0 }
             : {
                 width: {
@@ -121,9 +128,9 @@ export default function FamilyButton({
           <Dialog.Popup
             render={
               <motion.div
-                layout={open && !reduced}
+                layout={open && !immediate}
                 transition={
-                  reduced
+                  immediate
                     ? { duration: 0 }
                     : { type: "spring", stiffness: 400, damping: 28 }
                 }
@@ -133,9 +140,11 @@ export default function FamilyButton({
             className="family-popup"
             aria-labelledby={titleId}
             initialFocus={() =>
-              popup.current?.querySelector<HTMLElement>(
-                "[data-create-focus]:not([hidden])",
-              ) ?? true
+              android
+                ? (popup.current ?? false)
+                : (popup.current?.querySelector<HTMLElement>(
+                    "[data-create-focus]:not([hidden])",
+                  ) ?? true)
             }
             finalFocus={() => {
               const editor = document.querySelector<HTMLElement>(
@@ -143,7 +152,9 @@ export default function FamilyButton({
               );
               return (
                 document.querySelector<HTMLElement>(
-                  ".calendar-composer-panel input[autofocus], .calendar-composer-panel input",
+                  android
+                    ? ".calendar-composer-panel"
+                    : ".calendar-composer-panel input[autofocus], .calendar-composer-panel input",
                 ) ??
                 editor ??
                 trigger.current
@@ -157,8 +168,8 @@ export default function FamilyButton({
               <Dialog.Close className="family-close" aria-label="收起新建面板">
                 <motion.span
                   initial={false}
-                  animate={{ rotate: open || reduced ? 0 : -45 }}
-                  transition={{ duration: reduced ? 0 : 0.22 }}
+                  animate={{ rotate: open || immediate ? 0 : -45 }}
+                  transition={{ duration: immediate ? 0 : 0.22 }}
                 >
                   <XIcon size={20} aria-hidden="true" />
                 </motion.span>
@@ -167,7 +178,7 @@ export default function FamilyButton({
             <motion.div
               initial={false}
               animate={{ opacity: open ? 1 : 0 }}
-              transition={{ duration: reduced ? 0 : 0.18 }}
+              transition={{ duration: immediate ? 0 : 0.18 }}
             >
               {children}
             </motion.div>
